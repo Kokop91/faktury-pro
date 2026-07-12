@@ -47,3 +47,15 @@ class Faktura(Base):
     pozycje: Mapped[list["PozycjaFaktury"]] = relationship(
         back_populates="faktura", cascade="all, delete-orphan"
     )
+
+    @property
+    def suma_netto_grosze(self) -> int:
+        return sum(pozycja.wartosc_netto_grosze for pozycja in self.pozycje)
+
+    @property
+    def suma_vat_grosze(self) -> int:
+        return sum(pozycja.wartosc_vat_grosze for pozycja in self.pozycje)
+
+    @property
+    def suma_brutto_grosze(self) -> int:
+        return sum(pozycja.wartosc_brutto_grosze for pozycja in self.pozycje)

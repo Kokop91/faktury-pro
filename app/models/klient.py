@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -28,6 +28,8 @@ class Klient(Base):
     domyslny_termin_platnosci_dni: Mapped[int] = mapped_column(
         Integer, nullable=False, default=14
     )
+
+    aktywny: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     utworzono: Mapped[datetime] = mapped_column(server_default=func.now())
     zaktualizowano: Mapped[datetime] = mapped_column(
