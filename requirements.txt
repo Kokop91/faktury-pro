@@ -7,3 +7,6 @@ python-dotenv
 pydantic
 jinja2
 weasyprint
+customtkinter
+requests
+pillow
