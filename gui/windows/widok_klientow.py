@@ -1,6 +1,7 @@
 import customtkinter as ctk
 
 from gui import api_client, styl
+from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
 from gui.windows.formularz_klienta import FormularzKlienta
 from gui.windows.tabela import Tabela
@@ -46,7 +47,7 @@ class WidokKlientow(ctk.CTkFrame):
             command=self._otworz_formularz,
         ).grid(row=0, column=1)
 
-        self._tabela = Tabela(self, kolumny=KOLUMNY, on_wiersz_kliknij=None)
+        self._tabela = Tabela(self, kolumny=KOLUMNY, on_wiersz_kliknij=self._otworz_edycji)
         self._tabela.grid(
             row=1,
             column=0,
@@ -56,12 +57,19 @@ class WidokKlientow(ctk.CTkFrame):
         )
 
     def odswiez(self) -> None:
-        try:
-            klienci = api_client.pobierz_klientow(tylko_aktywni=True, limit=200)
-        except api_client.ApiError as e:
+        def zadanie():
+            return api_client.pobierz_klientow(tylko_aktywni=True, limit=200)
+
+        def sukces(klienci: list[dict]) -> None:
+            self._tabela.ustaw_dane(klienci)
+
+        def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
-            return
-        self._tabela.ustaw_dane(klienci)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _otworz_formularz(self) -> None:
         FormularzKlienta(self, on_zapisano=self.odswiez)
+
+    def _otworz_edycji(self, wiersz: dict) -> None:
+        FormularzKlienta(self, on_zapisano=self.odswiez, klient=wiersz)

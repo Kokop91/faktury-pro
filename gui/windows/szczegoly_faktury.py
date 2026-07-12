@@ -1,7 +1,13 @@
+import os
+from tkinter import filedialog, messagebox
+from typing import Callable
+
 import customtkinter as ctk
 
 from gui import api_client, formatowanie, styl
+from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
+from gui.windows.formularz_faktury import FormularzFaktury
 from gui.windows.tabela import Tabela
 
 KOLUMNY_POZYCJI = [
@@ -19,15 +25,24 @@ ETYKIETY_STAWEK_VAT = {"23": "23%", "8": "8%", "5": "5%", "0": "0%", "zw": "zw."
 
 
 class SzczegolyFaktury(ctk.CTkToplevel):
-    def __init__(self, master, faktura_id: int, nazwa_klienta: str | None = None):
+    def __init__(
+        self,
+        master,
+        faktura_id: int,
+        nazwa_klienta: str | None = None,
+        on_zmiana: Callable[[], None] | None = None,
+    ):
         super().__init__(master)
         self.title("Szczegóły faktury")
-        self.geometry("820x620")
+        self.geometry("820x660")
         self.configure(fg_color=styl.KOLOR_TLO)
         self.transient(master)
         self.grab_set()
 
+        self._faktura_id = faktura_id
+        self._faktura: dict | None = None
         self._nazwa_klienta = nazwa_klienta
+        self._on_zmiana = on_zmiana or (lambda: None)
 
         self._etykieta_ladowania = ctk.CTkLabel(
             self,
@@ -37,23 +52,29 @@ class SzczegolyFaktury(ctk.CTkToplevel):
         )
         self._etykieta_ladowania.pack(expand=True)
 
-        # Krotki odstep, zeby Toplevel zdazyl sie narysowac zanim zablokuje go
-        # synchroniczne zapytanie requests (swiadome uproszczenie tej fazy - bez watkow).
-        self.after(50, self._zaladuj, faktura_id)
+        self._zaladuj(faktura_id)
 
     def _zaladuj(self, faktura_id: int) -> None:
-        try:
+        def zadanie():
             faktura = api_client.pobierz_fakture(faktura_id)
-            if self._nazwa_klienta is None:
+            nazwa_klienta = self._nazwa_klienta
+            if nazwa_klienta is None:
                 klient = api_client.pobierz_klienta(faktura["klient_id"])
-                self._nazwa_klienta = klient["nazwa"]
-        except api_client.ApiError as e:
+                nazwa_klienta = klient["nazwa"]
+            return faktura, nazwa_klienta
+
+        def sukces(wynik) -> None:
+            faktura, nazwa_klienta = wynik
+            self._faktura = faktura
+            self._nazwa_klienta = nazwa_klienta
+            self._etykieta_ladowania.destroy()
+            self._zbuduj_widok(faktura)
+
+        def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
             self.destroy()
-            return
 
-        self._etykieta_ladowania.destroy()
-        self._zbuduj_widok(faktura)
+        uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _zbuduj_widok(self, faktura: dict) -> None:
         self.grid_columnconfigure(0, weight=1)
@@ -89,6 +110,9 @@ class SzczegolyFaktury(ctk.CTkToplevel):
             ("Termin płatności", formatowanie.formatuj_date(faktura["termin_platnosci"])),
             ("Waluta", waluta_tekst),
         ]
+        if faktura.get("przyczyna_korekty"):
+            wiersze_info.append(("Przyczyna korekty", faktura["przyczyna_korekty"]))
+
         for etykieta, wartosc in wiersze_info:
             wiersz = ctk.CTkFrame(naglowek, fg_color="transparent")
             wiersz.pack(fill="x", padx=styl.ODSTEP_SREDNI, pady=2)
@@ -106,6 +130,8 @@ class SzczegolyFaktury(ctk.CTkToplevel):
                 font=styl.CZCIONKA_TRESC,
                 text_color=styl.KOLOR_TEKST_GLOWNY,
                 anchor="w",
+                wraplength=500,
+                justify="left",
             ).pack(side="left")
 
         ctk.CTkFrame(naglowek, fg_color="transparent", height=styl.ODSTEP_MALY).pack()
@@ -148,7 +174,7 @@ class SzczegolyFaktury(ctk.CTkToplevel):
             self, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
         )
         podsumowanie.grid(
-            row=3, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY)
+            row=3, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_SREDNI)
         )
         for etykieta, wartosc_grosze in [
             ("Razem netto", faktura["suma_netto_grosze"]),
@@ -170,3 +196,73 @@ class SzczegolyFaktury(ctk.CTkToplevel):
                 text_color=styl.KOLOR_TEKST_GLOWNY,
             ).pack(side="right")
         ctk.CTkFrame(podsumowanie, fg_color="transparent", height=styl.ODSTEP_MALY).pack()
+
+        pasek_akcji = ctk.CTkFrame(self, fg_color="transparent")
+        pasek_akcji.grid(
+            row=4, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY)
+        )
+
+        self._przycisk_pdf = ctk.CTkButton(
+            pasek_akcji,
+            text="Pobierz PDF",
+            font=styl.CZCIONKA_TRESC,
+            fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+            command=self._pobierz_pdf,
+        )
+        self._przycisk_pdf.pack(side="left", padx=(0, styl.ODSTEP_MALY))
+
+        if faktura["status"] == "robocza":
+            ctk.CTkButton(
+                pasek_akcji,
+                text="Edytuj",
+                font=styl.CZCIONKA_TRESC,
+                fg_color="transparent",
+                border_width=1,
+                border_color=styl.KOLOR_OBRAMOWANIE,
+                text_color=styl.KOLOR_TEKST_GLOWNY,
+                hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+                command=self._edytuj,
+            ).pack(side="left")
+
+    def _pobierz_pdf(self) -> None:
+        self._przycisk_pdf.configure(state="disabled")
+
+        def zadanie():
+            return api_client.pobierz_pdf_faktury(self._faktura_id)
+
+        def sukces(tresc: bytes) -> None:
+            self._przycisk_pdf.configure(state="normal")
+            numer_bezpieczny = self._faktura["numer"].replace("/", "_")
+            sciezka = filedialog.asksaveasfilename(
+                parent=self,
+                title="Zapisz fakturę jako PDF",
+                defaultextension=".pdf",
+                initialfile=f"faktura_{numer_bezpieczny}.pdf",
+                filetypes=[("Plik PDF", "*.pdf")],
+            )
+            if not sciezka:
+                return
+            try:
+                with open(sciezka, "wb") as plik:
+                    plik.write(tresc)
+            except OSError as e:
+                komunikat_bledu(self, f"Nie udało się zapisać pliku: {e}")
+                return
+            if messagebox.askyesno(
+                "Zapisano", f"Zapisano plik:\n{sciezka}\n\nOtworzyć go teraz?", parent=self
+            ):
+                os.startfile(sciezka)
+
+        def blad(e: api_client.ApiError) -> None:
+            self._przycisk_pdf.configure(state="normal")
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _edytuj(self) -> None:
+        FormularzFaktury(self, on_zapisano=self._po_edycji, faktura=self._faktura)
+
+    def _po_edycji(self) -> None:
+        self._on_zmiana()
+        self.destroy()

@@ -1,7 +1,9 @@
 import customtkinter as ctk
 
 from gui import api_client, formatowanie, styl
+from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
+from gui.windows.formularz_faktury import FormularzFaktury
 from gui.windows.szczegoly_faktury import SzczegolyFaktury
 from gui.windows.tabela import Tabela
 
@@ -61,7 +63,16 @@ class WidokFaktur(ctk.CTkFrame):
             fg_color=styl.KOLOR_AKCENT,
             button_color=styl.KOLOR_AKCENT,
             button_hover_color=styl.KOLOR_AKCENT_HOVER,
-        ).grid(row=0, column=2)
+        ).grid(row=0, column=2, padx=(0, styl.ODSTEP_SREDNI))
+
+        ctk.CTkButton(
+            pasek_naglowka,
+            text="+ Nowa faktura",
+            font=styl.CZCIONKA_TRESC,
+            fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+            command=self._otworz_formularz,
+        ).grid(row=0, column=3)
 
         self._tabela = Tabela(
             self, kolumny=KOLUMNY, on_wiersz_kliknij=self._otworz_szczegoly
@@ -75,32 +86,46 @@ class WidokFaktur(ctk.CTkFrame):
         )
 
     def odswiez(self) -> None:
-        try:
+        status_klucz = self._klucze_wg_etykiety.get(self._filtr_var.get())
+
+        def zadanie():
             # tylko_aktywni=False celowo - faktura moze odnosic sie do klienta,
             # ktory zostal miedzyczasie dezaktywowany (soft-delete).
             klienci = api_client.pobierz_klientow(tylko_aktywni=False, limit=200)
+            faktury = api_client.pobierz_faktury(status=status_klucz, limit=200)
+            return klienci, faktury
+
+        def sukces(wynik):
+            klienci, faktury = wynik
             self._klienci_wg_id = {k["id"]: k["nazwa"] for k in klienci}
 
-            status_klucz = self._klucze_wg_etykiety.get(self._filtr_var.get())
-            faktury = api_client.pobierz_faktury(status=status_klucz, limit=200)
-        except api_client.ApiError as e:
-            komunikat_bledu(self, e.komunikat)
-            return
+            formatery = {
+                "klient": lambda w: self._klienci_wg_id.get(
+                    w["klient_id"], f"#{w['klient_id']}"
+                ),
+                "data_wystawienia": lambda w: formatowanie.formatuj_date(
+                    w["data_wystawienia"]
+                ),
+                "kwota_brutto": lambda w: formatowanie.formatuj_kwote(
+                    w["suma_brutto_grosze"], w["waluta"]
+                ),
+                "status": lambda w: formatowanie.formatuj_status(w["status"]),
+            }
+            self._tabela.ustaw_dane(faktury, formatery=formatery)
 
-        formatery = {
-            "klient": lambda w: self._klienci_wg_id.get(
-                w["klient_id"], f"#{w['klient_id']}"
-            ),
-            "data_wystawienia": lambda w: formatowanie.formatuj_date(
-                w["data_wystawienia"]
-            ),
-            "kwota_brutto": lambda w: formatowanie.formatuj_kwote(
-                w["suma_brutto_grosze"], w["waluta"]
-            ),
-            "status": lambda w: formatowanie.formatuj_status(w["status"]),
-        }
-        self._tabela.ustaw_dane(faktury, formatery=formatery)
+        def blad(e: api_client.ApiError) -> None:
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _otworz_szczegoly(self, wiersz: dict) -> None:
         nazwa_klienta = self._klienci_wg_id.get(wiersz["klient_id"])
-        SzczegolyFaktury(self, faktura_id=wiersz["id"], nazwa_klienta=nazwa_klienta)
+        SzczegolyFaktury(
+            self,
+            faktura_id=wiersz["id"],
+            nazwa_klienta=nazwa_klienta,
+            on_zmiana=self.odswiez,
+        )
+
+    def _otworz_formularz(self) -> None:
+        FormularzFaktury(self, on_zapisano=self.odswiez)

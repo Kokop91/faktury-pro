@@ -78,7 +78,11 @@ class Tabela(ctk.CTkScrollableFrame):
             etykiety_w_wierszu = []
             for indeks_kolumny, (klucz, _etykieta, _waga) in enumerate(self.kolumny):
                 formater = formatery.get(klucz)
-                tekst = formater(wiersz) if formater else str(wiersz.get(klucz, ""))
+                if formater:
+                    tekst = formater(wiersz)
+                else:
+                    wartosc = wiersz.get(klucz)
+                    tekst = "" if wartosc is None else str(wartosc)
                 etykieta = ctk.CTkLabel(
                     self,
                     text=tekst,

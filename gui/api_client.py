@@ -3,6 +3,7 @@ import requests
 BASE_URL = "http://127.0.0.1:8000"
 TIMEOUT_ODCZYT = 5.0
 TIMEOUT_ZAPIS = 10.0
+TIMEOUT_PDF = 30.0
 
 
 class ApiError(Exception):
@@ -105,3 +106,30 @@ def pobierz_klienta(klient_id: int) -> dict:
 
 def utworz_klienta(dane: dict) -> dict:
     return _wykonaj("POST", "/klienci", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def aktualizuj_klienta(klient_id: int, dane: dict) -> dict:
+    return _wykonaj("PUT", f"/klienci/{klient_id}", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def usun_klienta(klient_id: int) -> None:
+    # DELETE zwraca 204 bez tresci - nie wolno wolac .json() na tej odpowiedzi.
+    _wykonaj("DELETE", f"/klienci/{klient_id}", TIMEOUT_ZAPIS)
+
+
+def utworz_fakture(dane: dict) -> dict:
+    return _wykonaj("POST", "/faktury", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def aktualizuj_fakture(faktura_id: int, dane: dict) -> dict:
+    return _wykonaj("PUT", f"/faktury/{faktura_id}", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def zmien_status_faktury(faktura_id: int, status: str) -> dict:
+    return _wykonaj(
+        "PATCH", f"/faktury/{faktura_id}/status", TIMEOUT_ZAPIS, json={"status": status}
+    ).json()
+
+
+def pobierz_pdf_faktury(faktura_id: int) -> bytes:
+    return _wykonaj("GET", f"/faktury/{faktura_id}/pdf", TIMEOUT_PDF).content
