@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: faktury-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: haslo123
+      POSTGRES_DB: faktury_pro
+    ports:
+      - "5432:5432"
+    volumes:
+      - faktury_pgdata:/var/lib/postgresql/data
+
+volumes:
+  faktury_pgdata:

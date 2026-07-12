@@ -1,0 +1,54 @@
+# CLAUDE.md — Kontekst projektu dla Claude Code
+
+Ten plik jest czytany automatycznie na starcie każdej sesji Claude Code w tym repozytorium.
+Zawiera kontekst, którego NIE trzeba powtarzać w każdym prompt.
+
+## Nazwa projektu
+Faktury Pro (roboczo) — aplikacja webowa do fakturowania i gospodarki magazynowej dla małej firmy.
+
+## Stack technologiczny
+- **Backend:** Python, FastAPI
+- **Baza danych:** PostgreSQL
+- **ORM/migracje:** SQLAlchemy + Alembic
+- **PDF:** WeasyPrint (HTML → PDF)
+- **Frontend:** Jinja2 + HTMX (server-rendered, minimalny JS)
+- **Auth:** JWT (sesja jednej firmy na start)
+- **Kursy walut:** publiczne API NBP
+- **Dane firm po NIP:** API GUS/REGON
+
+## Struktura katalogów (docelowa)
+```
+app/
+  models/         # modele SQLAlchemy
+  schemas/        # Pydantic schemas
+  api/            # routery FastAPI
+  services/       # logika biznesowa (osobno od routerów!)
+  templates/      # Jinja2 (UI + szablony PDF)
+  static/         # CSS/JS
+alembic/          # migracje
+tests/
+```
+
+## KRYTYCZNE reguły biznesowe — nie łam ich
+
+1. **Kwoty pieniężne zawsze jako integer w groszach**, nigdy `float`. Konwersja na złotówki tylko w warstwie prezentacji.
+2. **Faktury i magazyn są modelami ROZŁĄCZNYMI (Model B).** Stan magazynowy zmienia się WYŁĄCZNIE przez dokumenty magazynowe (PZ/WZ/PW/RW/MM). Wystawienie faktury NIE zmienia stanu magazynowego automatycznie. WZ może mieć opcjonalne pole referencyjne do numeru faktury, ale to tylko informacja, nie transakcja.
+3. **Numeracja dokumentów** (faktur, WZ, PZ itd.) musi być konfigurowalna co do formatu i resetu (miesięczny/roczny), ale zawsze ciągła i bez dziur w ramach jednego roku/rejestru.
+4. **Stawki VAT** to zamknięty, konfigurowalny słownik (23%, 8%, 5%, 0%, zw.) — nie hardkoduj wartości w logice, trzymaj w tabeli/enumie.
+5. **Towar magazynowy vs usługa** — usługi NIGDY nie przechodzą przez dokumenty magazynowe i nie mają stanu.
+6. Każda faza implementowana jest w **izolacji** — nie dotykaj kodu z późniejszych faz, dopóki nie dojdziemy do nich w planie (patrz `PLAN_PROJEKTU.md`).
+
+## Konwencje kodu
+- Logika biznesowa w `services/`, routery w `api/` mają być cienkie (walidacja + wywołanie serwisu)
+- Nazwy zmiennych/funkcji w kodzie: angielski. Komunikaty dla użytkownika (UI, błędy walidacji): polski.
+- Każda migracja Alembic ma opisową nazwę (`add_invoice_status_field`, nie `update1`)
+- Commit po każdej zakończonej, działającej funkcjonalności — commit message opisowy po polsku lub angielsku, konsekwentnie
+
+## Zasady pracy w tej sesji
+- Nie implementuj więcej niż jedną fazę na raz (patrz `PLAN_PROJEKTU.md` za zakresem faz)
+- Przed dużymi zmianami strukturalnymi zaproponuj plan (Plan Mode), poczekaj na akceptację
+- Po zakończeniu fazy: podsumuj co zostało zrobione i co należy ręcznie przetestować przed przejściem dalej
+- Jeśli napotkasz niejednoznaczność w regułach biznesowych, zapytaj — nie zgaduj (szczególnie przy VAT, numeracji, stanach magazynowych)
+
+## Pełny plan projektu
+Zobacz `PLAN_PROJEKTU.md` w tym repozytorium — zawiera pełny zakres funkcjonalny, model danych i harmonogram faz.
