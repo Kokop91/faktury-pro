@@ -1,7 +1,7 @@
 # Faktury Pro — Dokumentacja projektowa
 
-Wersja: 1.0
-Status: planowanie / gotowe do rozpoczęcia Fazy 1
+Wersja: 1.1 (aktualizacja: zmiana architektury na aplikację desktopową po Fazie 2)
+Status: w realizacji — Fazy 1-2 ukończone, w trakcie Fazy 3
 
 ---
 
@@ -114,12 +114,21 @@ na różnice po zapisaniu.
 
 ## 4. Architektura techniczna
 
-- **Backend:** FastAPI (Python)
+> **Decyzja zmieniona po Fazie 2:** aplikacja jest **desktopowa**, nie webowa (patrz sekcja 8
+> w Historii decyzji). Backend FastAPI z Faz 1-2 pozostaje bez zmian — zmienia się wyłącznie
+> warstwa interfejsu użytkownika.
+
+- **Backend (lokalny serwer API):** FastAPI (Python) — działa lokalnie, na tym samym
+  komputerze co aplikacja, nie jest wystawiony publicznie
 - **Baza danych:** PostgreSQL
 - **ORM / migracje:** SQLAlchemy + Alembic
 - **Generowanie PDF:** WeasyPrint (szablony HTML)
-- **Frontend:** Jinja2 + HTMX (server-rendered)
-- **Auth:** JWT
+- **Interfejs użytkownika:** **customtkinter** (aplikacja desktopowa), komunikacja z backendem
+  przez `requests` — analogicznie do wcześniejszego projektu autora, SecureChat
+- **Uruchamianie:** aplikacja customtkinter sama odpala serwer FastAPI jako proces w tle przy
+  starcie i zamyka go przy wyjściu — dla użytkownika końcowego to jeden, spójny program
+- **Auth:** do ustalenia w Fazie 6 — appka jednostanowiskowa, rozważane uproszczenie względem
+  pełnego JWT (patrz sekcja 2.10)
 - **Integracje zewnętrzne:** API NBP (kursy walut), API GUS/REGON (dane firm po NIP), SMTP (e-mail)
 
 ### Kluczowe reguły implementacyjne
@@ -131,22 +140,27 @@ na różnice po zapisaniu.
 
 ## 5. Harmonogram faz
 
-| Faza | Zakres | Szacowany czas | Sesje Claude Code |
-|---|---|---|---|
-| 0 | Przygotowanie: wymagania szczegółowe, wybór stacku | 0.5-1h | — |
-| 1 | Modele danych + baza (faktury: Firma, Klient, Faktura, PozycjaFaktury) | 2-3h | 1 |
-| 2 | CRUD API faktur | 4-6h | 1-2 |
-| 3 | Generowanie PDF faktur | 3-5h | 1 |
-| 4 | Interfejs użytkownika (faktury) | 5-7h | 2 |
-| 5 | Statusy i płatności | 2-3h | 1 |
-| 6 | Autoryzacja (auth) | 1-2h | częściowo |
-| 7 | Modele magazynowe (towary ze stanem, magazyny, dokumenty PZ/WZ/PW/RW/MM) | 3-4h | 1 |
-| 8 | Logika stanów magazynowych (przyjęcia/wydania, walidacja, blokady) | 4-5h | 1-2 |
-| 9 | UI dokumentów magazynowych + pole referencyjne do faktury | 4-5h | 2 |
-| 10 | Inwentaryzacja + raporty magazynowe | 3-4h | 1 |
-| 11 | Testowanie całości i poprawki | 3-4h | 1-2 |
+> **Zmiana architektury po Fazie 2:** aplikacja jest desktopowa (customtkinter), nie webowa.
+> Fazy 1-2 (backend FastAPI) pozostają bez zmian i są już ukończone. Fazy UI (4, 9) zmieniają
+> technologię z web (Jinja2+HTMX) na customtkinter — patrz sekcja 8, Historia decyzji.
 
-**Suma: ~33-47h pracy, 12-17 sesji Claude Code.**
+| Faza | Zakres | Szacowany czas | Sesje Claude Code | Status |
+|---|---|---|---|---|
+| 0 | Przygotowanie: wymagania szczegółowe, wybór stacku | 0.5-1h | — | ✅ zrobione |
+| 1 | Modele danych + baza (faktury: Firma, Klient, Faktura, PozycjaFaktury) | 2-3h | 1 | ✅ zrobione |
+| 2 | CRUD API faktur i klientów | 4-6h | 1-2 | ✅ zrobione |
+| 3 | Generowanie PDF faktur | 3-5h | 1 | |
+| 4 | **Interfejs desktopowy (customtkinter)**: lista faktur, formularz, kartoteka klientów, auto-start/stop lokalnego serwera FastAPI z poziomu appki | 6-8h | 2-3 | zmieniony zakres |
+| 5 | Statusy i płatności (UI w customtkinter) | 2-3h | 1 | |
+| 6 | Autoryzacja — wersja uproszczona jednostanowiskowa (do ustalenia: lokalne hasło vs JWT) | 1-2h | częściowo | zmieniony zakres |
+| 7 | Modele magazynowe (towary ze stanem, magazyny, dokumenty PZ/WZ/PW/RW/MM) | 3-4h | 1 | |
+| 8 | Logika stanów magazynowych (przyjęcia/wydania, walidacja, blokady) | 4-5h | 1-2 | |
+| 9 | **UI magazynowe (customtkinter)** + pole referencyjne do faktury | 4-5h | 2 | zmieniony zakres |
+| 10 | Inwentaryzacja + raporty magazynowe | 3-4h | 1 | |
+| 11 | Testowanie całości i poprawki | 3-4h | 1-2 | |
+
+**Suma: ~35-50h pracy, 13-18 sesji Claude Code** (nieznacznie więcej niż pierwotnie ze względu
+na dodatkową pracę nad zarządzaniem procesem serwera z poziomu aplikacji desktopowej).
 Przy 3-4 sesjach tygodniowo: realnie **4-6 tygodni kalendarzowych** do wersji testowej.
 
 > Uwaga o limitach Claude Code: 5-godzinne okno sesji i osobny limit tygodniowy są dzielone
@@ -191,3 +205,4 @@ Przy 3-4 sesjach tygodniowo: realnie **4-6 tygodni kalendarzowych** do wersji te
 | Etap planowania | Model B (faktura i magazyn rozłączne) | Mniej logiki transakcyjnej, łatwiejsze testowanie, prostsze wdrożenie na start |
 | Etap planowania | Kwoty jako integer w groszach | Unikanie błędów zaokrągleń typowych dla float w kontekście finansowym |
 | Etap planowania | KSeF i JPK poza MVP | Duża złożoność prawna/integracyjna, nie blokuje testów wewnętrznych |
+| Po Fazie 2 | Zmiana architektury z aplikacji webowej na desktopową: FastAPI zostaje jako lokalny serwer API, interfejs budowany w customtkinter (wzorem projektu SecureChat), appka sama zarządza uruchomieniem/zatrzymaniem serwera | Aplikacja jednostanowiskowa dla jednej firmy — desktop lepiej pasuje do sposobu pracy niż przeglądarka; autor ma już doświadczenie z tym stackiem z poprzedniego projektu |

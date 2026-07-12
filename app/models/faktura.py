@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, Enum, ForeignKey, Numeric, String
+from sqlalchemy import Date, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -38,6 +38,14 @@ class Faktura(Base):
         default=StatusFaktury.ROBOCZA,
     )
 
+    # Odniesienie do innego dokumentu: dla FAKTURA_KORYGUJACA/NOTA_KORYGUJACA to dokument
+    # pierwotny ktory jest korygowany; dla FAKTURA_KONCOWA to rozliczana faktura zaliczkowa.
+    dokument_powiazany_id: Mapped[int | None] = mapped_column(
+        ForeignKey("faktury.id", name="fk_faktury_dokument_powiazany_id_faktury"),
+        nullable=True,
+    )
+    przyczyna_korekty: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     utworzono: Mapped[datetime] = mapped_column(server_default=func.now())
     zaktualizowano: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()
@@ -46,6 +54,15 @@ class Faktura(Base):
     klient: Mapped["Klient"] = relationship(back_populates="faktury")
     pozycje: Mapped[list["PozycjaFaktury"]] = relationship(
         back_populates="faktura", cascade="all, delete-orphan"
+    )
+
+    dokument_powiazany: Mapped["Faktura | None"] = relationship(
+        remote_side=[id],
+        foreign_keys=[dokument_powiazany_id],
+        back_populates="korekty_i_rozliczenia",
+    )
+    korekty_i_rozliczenia: Mapped[list["Faktura"]] = relationship(
+        back_populates="dokument_powiazany"
     )
 
     @property

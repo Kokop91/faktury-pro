@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>{{ tytul_dokumentu }} {{ faktura.numer }}</title>
+<style>
+{% block styl %}{% endblock %}
+</style>
+</head>
+<body>
+{% block tresc %}
+<header class="naglowek">
+    {% if logo_uri %}<img class="logo" src="{{ logo_uri }}" alt="logo">{% endif %}
+    <div class="tytul">
+        <h1>{{ tytul_dokumentu }}</h1>
+        <p class="numer">nr {{ faktura.numer }}</p>
+    </div>
+</header>
+
+<section class="strony">
+    <div class="sprzedawca">
+        <h2>Sprzedawca</h2>
+        <p>{{ firma.nazwa }}</p>
+        <p>NIP: {{ firma.nip }}</p>
+        {% if firma.ulica %}<p>{{ firma.ulica }}</p>{% endif %}
+        {% if firma.kod_pocztowy or firma.miejscowosc %}
+            <p>{{ firma.kod_pocztowy }} {{ firma.miejscowosc }}</p>
+        {% endif %}
+        {% if firma.email %}<p>{{ firma.email }}</p>{% endif %}
+        {% if firma.telefon %}<p>{{ firma.telefon }}</p>{% endif %}
+        {% if firma.bank_nazwa or firma.bank_numer_konta %}
+            <p>{{ firma.bank_nazwa or "" }} {{ firma.bank_numer_konta or "" }}</p>
+        {% endif %}
+    </div>
+    <div class="nabywca">
+        <h2>Nabywca</h2>
+        <p>{{ klient.nazwa }}</p>
+        {% if klient.nip %}<p>NIP: {{ klient.nip }}</p>{% endif %}
+        {% if klient.ulica %}<p>{{ klient.ulica }}</p>{% endif %}
+        {% if klient.kod_pocztowy or klient.miejscowosc %}
+            <p>{{ klient.kod_pocztowy }} {{ klient.miejscowosc }}</p>
+        {% endif %}
+        {% if klient.email %}<p>{{ klient.email }}</p>{% endif %}
+    </div>
+</section>
+
+<section class="daty">
+    <p>Data wystawienia: {{ faktura.data_wystawienia.strftime("%d.%m.%Y") }}</p>
+    <p>Data sprzedaży: {{ faktura.data_sprzedazy.strftime("%d.%m.%Y") }}</p>
+    <p>Termin płatności: {{ faktura.termin_platnosci.strftime("%d.%m.%Y") }}</p>
+    <p>Waluta: {{ faktura.waluta }}{% if faktura.waluta != "PLN" %} (kurs: {{ faktura.kurs_waluty }}){% endif %}</p>
+</section>
+
+{% if pokaz_dokument_powiazany %}
+<section class="dokument-powiazany">
+    <p>Dokument, którego dotyczy: {{ faktura.dokument_powiazany.numer }}
+        z dnia {{ faktura.dokument_powiazany.data_wystawienia.strftime("%d.%m.%Y") }}</p>
+</section>
+{% endif %}
+
+{% if pokaz_przyczyne_korekty %}
+<section class="przyczyna-korekty">
+    <h2>Treść korekty</h2>
+    <p>{{ faktura.przyczyna_korekty }}</p>
+</section>
+{% endif %}
+
+{% if pokaz_tabele_pozycji %}
+<table class="pozycje">
+    <thead>
+        <tr>
+            <th>Lp.</th>
+            <th>Nazwa</th>
+            <th>Ilość</th>
+            <th>J.m.</th>
+            <th>Cena netto</th>
+            {% if pokaz_kolumny_vat %}<th>Stawka VAT</th>{% endif %}
+            <th>Wartość netto</th>
+            {% if pokaz_kolumny_vat %}<th>Kwota VAT</th>{% endif %}
+            <th>Wartość brutto</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for pozycja in faktura.pozycje %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ pozycja.nazwa }}</td>
+            <td>{{ pozycja.ilosc }}</td>
+            <td>{{ pozycja.jednostka_miary }}</td>
+            <td>{{ pozycja.cena_netto_grosze | grosze_na_zlote }}</td>
+            {% if pokaz_kolumny_vat %}<td>{{ pozycja.stawka_vat | etykieta_stawki_vat }}</td>{% endif %}
+            <td>{{ pozycja.wartosc_netto_grosze | grosze_na_zlote }}</td>
+            {% if pokaz_kolumny_vat %}<td>{{ pozycja.wartosc_vat_grosze | grosze_na_zlote }}</td>{% endif %}
+            <td>{{ pozycja.wartosc_brutto_grosze | grosze_na_zlote }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<section class="podsumowanie">
+    <p>Razem netto: {{ faktura.suma_netto_grosze | grosze_na_zlote }} {{ faktura.waluta }}</p>
+    {% if pokaz_kolumny_vat %}
+        <p>Razem VAT: {{ faktura.suma_vat_grosze | grosze_na_zlote }} {{ faktura.waluta }}</p>
+    {% endif %}
+    <p class="brutto">Razem brutto: {{ faktura.suma_brutto_grosze | grosze_na_zlote }} {{ faktura.waluta }}</p>
+</section>
+{% endif %}
+
+{% if pokaz_podsumowanie_vat %}
+<table class="podsumowanie-vat">
+    <thead>
+        <tr><th>Stawka VAT</th><th>Netto</th><th>VAT</th><th>Brutto</th></tr>
+    </thead>
+    <tbody>
+        {% for wpis in podsumowanie_vat %}
+        <tr>
+            <td>{{ wpis.stawka_vat | etykieta_stawki_vat }}</td>
+            <td>{{ wpis.netto_grosze | grosze_na_zlote }}</td>
+            <td>{{ wpis.vat_grosze | grosze_na_zlote }}</td>
+            <td>{{ wpis.brutto_grosze | grosze_na_zlote }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if zaliczka_wplacona_grosze is not none %}
+<section class="rozliczenie-zaliczki">
+    <p>Wpłacona zaliczka: {{ zaliczka_wplacona_grosze | grosze_na_zlote }} {{ faktura.waluta }}</p>
+    <p>Pozostało do zapłaty: {{ pozostalo_do_zaplaty_grosze | grosze_na_zlote }} {{ faktura.waluta }}</p>
+</section>
+{% endif %}
+{% endblock %}
+</body>
+</html>

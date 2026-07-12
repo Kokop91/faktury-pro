@@ -7,12 +7,24 @@ Zawiera kontekst, którego NIE trzeba powtarzać w każdym prompt.
 Faktury Pro (roboczo) — aplikacja webowa do fakturowania i gospodarki magazynowej dla małej firmy.
 
 ## Stack technologiczny
-- **Backend:** Python, FastAPI
+
+**WAŻNE — zmiana architektury (decyzja podjęta po Fazie 2):** aplikacja jest DESKTOPOWA,
+nie webowa. Poniższy backend to nie jest "serwer do przeglądarki" — to lokalny serwer API,
+z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym samym komputerze.
+
+- **Backend (lokalny serwer API):** Python, FastAPI — bez zmian względem Faz 1-2, ten kod zostaje
 - **Baza danych:** PostgreSQL
 - **ORM/migracje:** SQLAlchemy + Alembic
 - **PDF:** WeasyPrint (HTML → PDF)
-- **Frontend:** Jinja2 + HTMX (server-rendered, minimalny JS)
-- **Auth:** JWT (sesja jednej firmy na start)
+- **Frontend/UI:** **customtkinter** — aplikacja desktopowa komunikująca się z FastAPI przez
+  bibliotekę `requests` (ten sam wzorzec co w projekcie SecureChat autora: FastAPI backend +
+  customtkinter GUI)
+- **Uruchamianie serwera:** aplikacja customtkinter odpala FastAPI/uvicorn jako subprocess
+  przy starcie i zatrzymuje go przy zamknięciu okna — użytkownik końcowy nie widzi ani nie
+  obsługuje serwera bezpośrednio, dla niego ma to wyglądać jak zwykły, pojedynczy program
+- **Auth:** DO USTALENIA w Fazie 6 — appka jest jednostanowiskowa (jeden użytkownik, jeden
+  komputer), więc pełny JWT może być nadmiarowy; rozważyć prostsze lokalne zabezpieczenie
+  (np. hasło do appki przy starcie) zamiast tokenów sesji jak w wielo-użytkownikowej appce webowej
 - **Kursy walut:** publiczne API NBP
 - **Dane firm po NIP:** API GUS/REGON
 
@@ -21,10 +33,13 @@ Faktury Pro (roboczo) — aplikacja webowa do fakturowania i gospodarki magazyno
 app/
   models/         # modele SQLAlchemy
   schemas/        # Pydantic schemas
-  api/            # routery FastAPI
+  api/            # routery FastAPI (lokalny serwer, nie publiczny)
   services/       # logika biznesowa (osobno od routerów!)
-  templates/      # Jinja2 (UI + szablony PDF)
-  static/         # CSS/JS
+  templates/      # szablony PDF (WeasyPrint)
+gui/
+  main.py         # punkt startowy aplikacji desktopowej, odpala/zatrzymuje serwer FastAPI
+  windows/        # okna customtkinter (lista faktur, formularz faktury, klienci, magazyn)
+  api_client.py   # cienka warstwa `requests` do komunikacji z lokalnym FastAPI
 alembic/          # migracje
 tests/
 ```

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -10,6 +10,7 @@ from app.schemas.faktura import (
     FakturaUpdate,
 )
 from app.services import faktury as faktury_service
+from app.services import pdf as pdf_service
 
 router = APIRouter(prefix="/faktury", tags=["faktury"])
 
@@ -33,6 +34,19 @@ def lista_faktur(
 @router.get("/{faktura_id}", response_model=FakturaOut)
 def szczegoly_faktury(faktura_id: int, db: Session = Depends(get_db)):
     return faktury_service.pobierz_fakture(db, faktura_id)
+
+
+@router.get("/{faktura_id}/pdf")
+def pobierz_pdf_faktury(faktura_id: int, db: Session = Depends(get_db)):
+    pdf_bytes, numer = pdf_service.generuj_pdf_faktury(db, faktura_id)
+    nazwa_pliku = numer.replace("/", "_")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="faktura_{nazwa_pliku}.pdf"'
+        },
+    )
 
 
 @router.put("/{faktura_id}", response_model=FakturaOut)

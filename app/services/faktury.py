@@ -6,8 +6,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Faktura, Klient, PozycjaFaktury
-from app.models.enums import StatusFaktury, StawkaVat
-from app.schemas.faktura import FakturaCreate, FakturaUpdate, PozycjaFakturyCreate
+from app.models.enums import (
+    DOZWOLONE_TYPY_DOKUMENTU_KORYGOWANEGO,
+    StatusFaktury,
+    StawkaVat,
+    TypDokumentu,
+)
+from app.schemas.faktura import (
+    FakturaCreate,
+    FakturaUpdate,
+    PozycjaFakturyCreate,
+    znajdz_blad_zgodnosci_typu_dokumentu,
+)
 from app.services.numeracja import nastepny_numer_faktury
 
 UDZIAL_STAWKI_VAT: dict[StawkaVat, Decimal] = {
@@ -98,6 +108,90 @@ def _pobierz_klienta_lub_404(db: Session, klient_id: int) -> Klient:
     return klient
 
 
+def podsumowanie_wg_stawek(pozycje: list[PozycjaFaktury]) -> list[dict]:
+    """Grupuje pozycje faktury wg stawki VAT, sumujac netto/vat/brutto w groszach.
+    Uzywane przez PDF (Faza 3) i docelowo przez rejestr sprzedazy VAT (Faza 8).
+    """
+    podsumowanie: dict[StawkaVat, dict[str, int]] = {}
+    for pozycja in pozycje:
+        wpis = podsumowanie.setdefault(
+            pozycja.stawka_vat, {"netto_grosze": 0, "vat_grosze": 0, "brutto_grosze": 0}
+        )
+        wpis["netto_grosze"] += pozycja.wartosc_netto_grosze
+        wpis["vat_grosze"] += pozycja.wartosc_vat_grosze
+        wpis["brutto_grosze"] += pozycja.wartosc_brutto_grosze
+
+    return [
+        {"stawka_vat": stawka, **wartosci}
+        for stawka, wartosci in sorted(podsumowanie.items(), key=lambda kv: kv[0].value)
+    ]
+
+
+def _pobierz_dokument_powiazany_lub_404(db: Session, dokument_powiazany_id: int) -> Faktura:
+    dokument = db.get(Faktura, dokument_powiazany_id)
+    if dokument is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nie znaleziono dokumentu powiązanego o podanym id.",
+        )
+    return dokument
+
+
+def _waliduj_dokument_powiazany(
+    db: Session,
+    typ_dokumentu: TypDokumentu,
+    dokument_powiazany_id: int | None,
+    faktura_id: int | None,
+) -> None:
+    if dokument_powiazany_id is None:
+        return
+    if dokument_powiazany_id == faktura_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dokument nie może wskazywać samego siebie jako dokument powiązany.",
+        )
+
+    dokument_powiazany = _pobierz_dokument_powiazany_lub_404(db, dokument_powiazany_id)
+
+    if typ_dokumentu == TypDokumentu.FAKTURA_KONCOWA:
+        if dokument_powiazany.typ_dokumentu != TypDokumentu.FAKTURA_ZALICZKOWA:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Faktura końcowa musi wskazywać fakturę zaliczkową "
+                    "jako dokument powiązany."
+                ),
+            )
+    elif dokument_powiazany.typ_dokumentu not in DOZWOLONE_TYPY_DOKUMENTU_KORYGOWANEGO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Nie można korygować dokumentu typu "
+                f"'{dokument_powiazany.typ_dokumentu.value}'."
+            ),
+        )
+
+
+def _waliduj_zgodnosc_dokumentu(
+    db: Session,
+    typ_dokumentu: TypDokumentu,
+    pozycje: list,
+    dokument_powiazany_id: int | None,
+    przyczyna_korekty: str | None,
+    faktura_id: int | None = None,
+) -> None:
+    """Zrodlo prawdy dla regul biznesowych zwiazanych z typ_dokumentu - wolane zarowno
+    przy tworzeniu jak i edycji (na efektywnym stanie, patrz aktualizuj_fakture).
+    """
+    blad = znajdz_blad_zgodnosci_typu_dokumentu(
+        typ_dokumentu, pozycje, dokument_powiazany_id, przyczyna_korekty
+    )
+    if blad is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=blad)
+
+    _waliduj_dokument_powiazany(db, typ_dokumentu, dokument_powiazany_id, faktura_id)
+
+
 def pobierz_fakture(db: Session, faktura_id: int) -> Faktura:
     zapytanie = (
         select(Faktura)
@@ -131,6 +225,13 @@ def lista_faktur(
 
 def utworz_fakture(db: Session, dane: FakturaCreate) -> Faktura:
     klient = _pobierz_klienta_lub_404(db, dane.klient_id)
+    _waliduj_zgodnosc_dokumentu(
+        db,
+        dane.typ_dokumentu,
+        dane.pozycje,
+        dane.dokument_powiazany_id,
+        dane.przyczyna_korekty,
+    )
 
     termin_platnosci = dane.termin_platnosci or (
         dane.data_wystawienia + timedelta(days=klient.domyslny_termin_platnosci_dni)
@@ -148,6 +249,8 @@ def utworz_fakture(db: Session, dane: FakturaCreate) -> Faktura:
         waluta=waluta,
         kurs_waluty=dane.kurs_waluty,
         status=StatusFaktury.ROBOCZA,
+        dokument_powiazany_id=dane.dokument_powiazany_id,
+        przyczyna_korekty=dane.przyczyna_korekty,
         pozycje=_przelicz_pozycje(dane.pozycje),
     )
 
@@ -171,6 +274,22 @@ def aktualizuj_fakture(db: Session, faktura_id: int, dane: FakturaUpdate) -> Fak
     zmiany = dane.model_dump(exclude_unset=True, exclude={"pozycje"})
     if "klient_id" in zmiany:
         _pobierz_klienta_lub_404(db, zmiany["klient_id"])
+
+    typ_docelowy = zmiany.get("typ_dokumentu", faktura.typ_dokumentu)
+    pozycje_docelowe = dane.pozycje if dane.pozycje is not None else faktura.pozycje
+    dokument_powiazany_docelowy = zmiany.get(
+        "dokument_powiazany_id", faktura.dokument_powiazany_id
+    )
+    przyczyna_docelowa = zmiany.get("przyczyna_korekty", faktura.przyczyna_korekty)
+    _waliduj_zgodnosc_dokumentu(
+        db,
+        typ_docelowy,
+        pozycje_docelowe,
+        dokument_powiazany_docelowy,
+        przyczyna_docelowa,
+        faktura_id=faktura.id,
+    )
+
     for pole, wartosc in zmiany.items():
         setattr(faktura, pole, wartosc)
 

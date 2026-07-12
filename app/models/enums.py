@@ -27,3 +27,26 @@ class StatusFaktury(str, enum.Enum):
     OPLACONA = "oplacona"
     PO_TERMINIE = "po_terminie"
     ANULOWANA = "anulowana"
+
+
+# Klasyfikacja typow dokumentu wg wymagan co do dokument_powiazany_id/przyczyna_korekty.
+# Wspoldzielone przez schematy (szybka walidacja 422) i serwis (zrodlo prawdy, patrz
+# app/services/faktury.py) - stad zyja tutaj, a nie w jednej z tych warstw.
+TYPY_WYMAGAJACE_DOKUMENTU_POWIAZANEGO: frozenset[TypDokumentu] = frozenset(
+    {
+        TypDokumentu.FAKTURA_KORYGUJACA,
+        TypDokumentu.NOTA_KORYGUJACA,
+        TypDokumentu.FAKTURA_KONCOWA,
+    }
+)
+TYPY_WYMAGAJACE_PRZYCZYNY_KOREKTY: frozenset[TypDokumentu] = frozenset(
+    {TypDokumentu.FAKTURA_KORYGUJACA, TypDokumentu.NOTA_KORYGUJACA}
+)
+DOZWOLONE_TYPY_DOKUMENTU_KORYGOWANEGO: frozenset[TypDokumentu] = frozenset(
+    {
+        TypDokumentu.FAKTURA_VAT,
+        TypDokumentu.FAKTURA_ZALICZKOWA,
+        TypDokumentu.FAKTURA_KONCOWA,
+        TypDokumentu.RACHUNEK,
+    }
+)
