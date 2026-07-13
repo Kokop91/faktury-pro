@@ -152,7 +152,7 @@ na różnice po zapisaniu.
 | 3 | Generowanie PDF faktur | 3-5h | 1 | |
 | 4 | **Interfejs desktopowy (customtkinter)**: lista faktur, formularz, kartoteka klientów, auto-start/stop lokalnego serwera FastAPI z poziomu appki | 6-8h | 2-3 | zmieniony zakres |
 | 5 | Statusy i płatności (UI w customtkinter) | 2-3h | 1 | |
-| 6 | Autoryzacja — wersja uproszczona jednostanowiskowa (do ustalenia: lokalne hasło vs JWT) | 1-2h | częściowo | zmieniony zakres |
+| 6 | Autoryzacja — wersja uproszczona jednostanowiskowa (lokalne hasło + bcrypt, bez JWT) | 1-2h | 1 | ✅ zrobione |
 | 7 | Modele magazynowe (towary ze stanem, magazyny, dokumenty PZ/WZ/PW/RW/MM) | 3-4h | 1 | |
 | 8 | Logika stanów magazynowych (przyjęcia/wydania, walidacja, blokady) | 4-5h | 1-2 | |
 | 9 | **UI magazynowe (customtkinter)** + pole referencyjne do faktury | 4-5h | 2 | zmieniony zakres |

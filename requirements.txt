@@ -10,3 +10,4 @@ weasyprint
 customtkinter
 requests
 pillow
+bcrypt

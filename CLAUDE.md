@@ -22,9 +22,12 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
 - **Uruchamianie serwera:** aplikacja customtkinter odpala FastAPI/uvicorn jako subprocess
   przy starcie i zatrzymuje go przy zamknięciu okna — użytkownik końcowy nie widzi ani nie
   obsługuje serwera bezpośrednio, dla niego ma to wyglądać jak zwykły, pojedynczy program
-- **Auth:** DO USTALENIA w Fazie 6 — appka jest jednostanowiskowa (jeden użytkownik, jeden
-  komputer), więc pełny JWT może być nadmiarowy; rozważyć prostsze lokalne zabezpieczenie
-  (np. hasło do appki przy starcie) zamiast tokenów sesji jak w wielo-użytkownikowej appce webowej
+- **Auth (Faza 6, zrobione):** appka jest jednostanowiskowa, więc zamiast JWT/sesji jest ekran
+  logowania hasłem przy starcie (`gui/windows/ekran_logowania.py`). Hash hasła (bcrypt) leży
+  lokalnie w `%APPDATA%/FakturyPro/auth.json` — poza bazą PostgreSQL i poza repozytorium.
+  Endpointy FastAPI NIE mają JWT ani żadnej autoryzacji — serwer nasłuchuje tylko na
+  127.0.0.1, więc dostęp do niego już wymaga dostępu do tego samego komputera/konta.
+  Zmiana hasła: widok Ustawienia (`gui/windows/widok_ustawien.py`).
 - **Kursy walut:** publiczne API NBP
 - **Dane firm po NIP:** API GUS/REGON
 

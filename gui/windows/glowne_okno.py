@@ -5,6 +5,7 @@ from gui.windows.widok_faktur import WidokFaktur
 from gui.windows.widok_klientow import WidokKlientow
 from gui.windows.widok_magazynu import WidokMagazynu
 from gui.windows.widok_naleznosci import WidokNaleznosci
+from gui.windows.widok_ustawien import WidokUstawien
 
 
 class GlowneOkno(ctk.CTk):
@@ -41,7 +42,7 @@ class GlowneOkno(ctk.CTk):
         if klucz == "magazyn":
             return WidokMagazynu(self._kontener)
         if klucz == "ustawienia":
-            return _WidokUstawien(self._kontener)
+            return WidokUstawien(self._kontener)
         raise ValueError(f"Nieznany widok: {klucz}")
 
     def _pokaz_widok(self, klucz: str) -> None:
@@ -114,18 +115,3 @@ class _PasekBoczny(ctk.CTkFrame):
                 if klucz_przycisku == klucz
                 else "transparent"
             )
-
-
-class _WidokUstawien(ctk.CTkFrame):
-    def __init__(self, master):
-        super().__init__(master, fg_color=styl.KOLOR_TLO)
-        etykieta = ctk.CTkLabel(
-            self,
-            text="Ustawienia — dostępne w kolejnej fazie.",
-            font=styl.NAGLOWEK_2,
-            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
-        )
-        etykieta.place(relx=0.5, rely=0.5, anchor="center")
-
-    def odswiez(self) -> None:
-        pass

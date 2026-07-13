@@ -91,6 +91,11 @@ def _pokaz_blad_startu(tekst: str) -> None:
 def main() -> None:
     ctk.set_appearance_mode("Light")
 
+    from gui.windows.ekran_logowania import pokaz_ekran_logowania
+
+    if not pokaz_ekran_logowania():
+        return
+
     proces = _uruchom_serwer()
     if not _czekaj_na_serwer(proces):
         zatrzymaj_serwer(proces)
