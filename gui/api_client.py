@@ -224,3 +224,72 @@ def pobierz_stany_magazynowe(magazyn_id: int | None = None) -> list[dict]:
     return _wykonaj(
         "GET", "/stany-magazynowe", TIMEOUT_ODCZYT, params=parametry
     ).json()
+
+
+def pobierz_inwentaryzacje(
+    magazyn_id: int | None = None,
+    status: str | None = None,
+    skip: int = 0,
+    limit: int = 200,
+) -> list[dict]:
+    parametry: dict = {"skip": skip, "limit": limit}
+    if magazyn_id is not None:
+        parametry["magazyn_id"] = magazyn_id
+    if status:
+        parametry["status"] = status
+    return _wykonaj(
+        "GET", "/inwentaryzacje", TIMEOUT_ODCZYT, params=parametry
+    ).json()
+
+
+def pobierz_inwentaryzacje_szczegoly(inwentaryzacja_id: int) -> dict:
+    return _wykonaj(
+        "GET", f"/inwentaryzacje/{inwentaryzacja_id}", TIMEOUT_ODCZYT
+    ).json()
+
+
+def utworz_inwentaryzacje(magazyn_id: int) -> dict:
+    return _wykonaj(
+        "POST", "/inwentaryzacje", TIMEOUT_ZAPIS, json={"magazyn_id": magazyn_id}
+    ).json()
+
+
+def zapisz_pozycje_inwentaryzacji(inwentaryzacja_id: int, pozycje: list[dict]) -> dict:
+    return _wykonaj(
+        "PUT",
+        f"/inwentaryzacje/{inwentaryzacja_id}/pozycje",
+        TIMEOUT_ZAPIS,
+        json={"pozycje": pozycje},
+    ).json()
+
+
+def zamknij_inwentaryzacje(inwentaryzacja_id: int) -> dict:
+    return _wykonaj(
+        "POST", f"/inwentaryzacje/{inwentaryzacja_id}/zamknij", TIMEOUT_ZAPIS
+    ).json()
+
+
+def pobierz_raport_historii_ruchow(
+    magazyn_id: int | None = None,
+    data_od: str | None = None,
+    data_do: str | None = None,
+) -> list[dict]:
+    parametry: dict = {}
+    if magazyn_id is not None:
+        parametry["magazyn_id"] = magazyn_id
+    if data_od:
+        parametry["data_od"] = data_od
+    if data_do:
+        parametry["data_do"] = data_do
+    return _wykonaj(
+        "GET", "/raporty/historia-ruchow", TIMEOUT_ODCZYT, params=parametry
+    ).json()
+
+
+def pobierz_raport_ponizej_minimum(magazyn_id: int | None = None) -> list[dict]:
+    parametry: dict = {}
+    if magazyn_id is not None:
+        parametry["magazyn_id"] = magazyn_id
+    return _wykonaj(
+        "GET", "/raporty/ponizej-minimum", TIMEOUT_ODCZYT, params=parametry
+    ).json()

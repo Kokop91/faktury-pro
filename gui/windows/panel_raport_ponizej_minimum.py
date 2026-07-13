@@ -19,26 +19,22 @@ KOLUMNY_CSV = [
     ("magazyn_nazwa", "Magazyn"),
     ("ilosc", "Ilość"),
     ("stan_minimalny", "Stan minimalny"),
-    ("ponizej_minimum", "Poniżej minimum"),
 ]
 
 WSZYSTKIE_MAGAZYNY = "Wszystkie magazyny"
 
 
-class PanelStanowMagazynowych(ctk.CTkFrame):
+class PanelRaportPonizejMinimum(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color="transparent")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        self._magazyny_wg_id: dict[int, dict] = {}
         self._klucze_wg_etykiety_magazynu: dict[str, int] = {}
         self._stany: list[dict] = []
 
         pasek_naglowka = ctk.CTkFrame(self, fg_color="transparent")
-        pasek_naglowka.grid(
-            row=0, column=0, sticky="ew", pady=(0, styl.ODSTEP_SREDNI)
-        )
+        pasek_naglowka.grid(row=0, column=0, sticky="ew", pady=(0, styl.ODSTEP_SREDNI))
         pasek_naglowka.grid_columnconfigure(2, weight=1)
 
         ctk.CTkLabel(
@@ -80,11 +76,8 @@ class PanelStanowMagazynowych(ctk.CTkFrame):
             return api_client.pobierz_magazyny(tylko_aktywne=True, limit=200)
 
         def sukces(magazyny: list[dict]) -> None:
-            self._magazyny_wg_id = {m["id"]: m for m in magazyny}
             etykiety = [WSZYSTKIE_MAGAZYNY] + [m["nazwa"] for m in magazyny]
-            self._klucze_wg_etykiety_magazynu = {
-                m["nazwa"]: m["id"] for m in magazyny
-            }
+            self._klucze_wg_etykiety_magazynu = {m["nazwa"]: m["id"] for m in magazyny}
             self._menu_magazyn.configure(values=etykiety)
             if self._var_magazyn.get() not in etykiety:
                 self._var_magazyn.set(WSZYSTKIE_MAGAZYNY)
@@ -99,7 +92,7 @@ class PanelStanowMagazynowych(ctk.CTkFrame):
         magazyn_id = self._klucze_wg_etykiety_magazynu.get(self._var_magazyn.get())
 
         def zadanie():
-            return api_client.pobierz_stany_magazynowe(magazyn_id=magazyn_id)
+            return api_client.pobierz_raport_ponizej_minimum(magazyn_id=magazyn_id)
 
         def sukces(stany: list[dict]) -> None:
             self._stany = stany
@@ -107,20 +100,12 @@ class PanelStanowMagazynowych(ctk.CTkFrame):
                 "ilosc": lambda s: formatowanie.formatuj_ilosc(
                     s["ilosc"], s["jednostka_miary"]
                 ),
-                "stan_minimalny": lambda s: (
-                    formatowanie.formatuj_ilosc(
-                        s["stan_minimalny"], s["jednostka_miary"]
-                    )
-                    if s["stan_minimalny"] is not None
-                    else "—"
+                "stan_minimalny": lambda s: formatowanie.formatuj_ilosc(
+                    s["stan_minimalny"], s["jednostka_miary"]
                 ),
             }
             kolory = {
-                klucz: (
-                    lambda s: styl.KOLOR_OSTRZEZENIE
-                    if s["ponizej_minimum"]
-                    else styl.KOLOR_TEKST_GLOWNY
-                )
+                klucz: (lambda s: styl.KOLOR_OSTRZEZENIE)
                 for klucz, _etykieta, _waga in KOLUMNY
             }
             self._tabela.ustaw_dane(stany, formatery=formatery, kolory=kolory)
@@ -133,13 +118,8 @@ class PanelStanowMagazynowych(ctk.CTkFrame):
     def _eksportuj(self) -> None:
         formatery = {
             "ilosc": lambda s: formatowanie.formatuj_ilosc(s["ilosc"]),
-            "stan_minimalny": lambda s: (
-                formatowanie.formatuj_ilosc(s["stan_minimalny"])
-                if s["stan_minimalny"] is not None
-                else ""
-            ),
-            "ponizej_minimum": lambda s: "tak" if s["ponizej_minimum"] else "nie",
+            "stan_minimalny": lambda s: formatowanie.formatuj_ilosc(s["stan_minimalny"]),
         }
         eksportuj_do_csv(
-            self, self._stany, KOLUMNY_CSV, "stany_magazynowe.csv", formatery=formatery
+            self, self._stany, KOLUMNY_CSV, "ponizej_minimum.csv", formatery=formatery
         )

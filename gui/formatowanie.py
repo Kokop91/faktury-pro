@@ -58,6 +58,11 @@ WYMAGANE_MAGAZYNY_DOKUMENTU: dict[str, tuple[bool, bool]] = {
     "mm": (True, True),
 }
 
+ETYKIETY_STATUSU_INWENTARYZACJI: dict[str, str] = {
+    "w_trakcie": "W trakcie",
+    "zakonczona": "Zakończona",
+}
+
 KOLEJNOSC_STAWEK_VAT: list[str] = ["23", "8", "5", "0", "zw"]
 
 ETYKIETY_STAWEK_VAT: dict[str, str] = {
@@ -93,6 +98,14 @@ def formatuj_typ_dokumentu(typ: str) -> str:
 
 def formatuj_typ_dokumentu_magazynowego(typ: str) -> str:
     return ETYKIETY_TYPU_DOKUMENTU_MAGAZYNOWEGO.get(typ, typ)
+
+
+def formatuj_status_inwentaryzacji(status: str) -> str:
+    return ETYKIETY_STATUSU_INWENTARYZACJI.get(status, status)
+
+
+def kolor_statusu_inwentaryzacji(status: str) -> str:
+    return styl.KOLOR_OSTRZEZENIE if status == "w_trakcie" else styl.KOLOR_SUKCES
 
 
 def formatuj_kwote(grosze: int, waluta: str = "PLN") -> str:
@@ -157,9 +170,13 @@ def parsuj_kwote(tekst: str, wymagaj_dodatniej: bool = True) -> int:
     return grosze
 
 
-def parsuj_liczbe_dodatnia(tekst: str, nazwa_pola: str = "wartość") -> Decimal:
-    """Ogolny parser dodatniej liczby dziesietnej ('2' / '2,5' / '2.5') z komunikatem
-    bledu dopasowanym do nazwy pola (np. 'ilość', 'kurs waluty'). Rzuca ValueError."""
+def parsuj_liczbe_dodatnia(
+    tekst: str, nazwa_pola: str = "wartość", wymagaj_dodatniej: bool = True
+) -> Decimal:
+    """Ogolny parser liczby dziesietnej ('2' / '2,5' / '2.5') z komunikatem bledu
+    dopasowanym do nazwy pola (np. 'ilość', 'kurs waluty'). Domyslnie wymaga > 0;
+    `wymagaj_dodatniej=False` dopuszcza takze 0 (np. stan faktyczny przy spisie
+    inwentaryzacyjnym - produkt moze byc calkowicie wyczerpany). Rzuca ValueError."""
     tekst = tekst.strip().replace(" ", "").replace(",", ".")
     if not tekst:
         raise ValueError(f"{nazwa_pola} jest wymagana(y)")
@@ -167,8 +184,10 @@ def parsuj_liczbe_dodatnia(tekst: str, nazwa_pola: str = "wartość") -> Decimal
         wartosc = Decimal(tekst)
     except InvalidOperation:
         raise ValueError(f"nieprawidłowa wartość pola „{nazwa_pola}”") from None
-    if wartosc <= 0:
+    if wymagaj_dodatniej and wartosc <= 0:
         raise ValueError(f"{nazwa_pola} musi być większa(y) od zera")
+    if wartosc < 0:
+        raise ValueError(f"{nazwa_pola} nie może być ujemna(y)")
     return wartosc
 
 

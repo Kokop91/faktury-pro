@@ -2,8 +2,10 @@ import customtkinter as ctk
 
 from gui import styl
 from gui.windows.panel_dokumentow_magazynowych import PanelDokumentowMagazynowych
+from gui.windows.panel_inwentaryzacji import PanelInwentaryzacji
 from gui.windows.panel_magazynow import PanelMagazynow
 from gui.windows.panel_produktow import PanelProduktow
+from gui.windows.panel_raportow import PanelRaportow
 from gui.windows.panel_stanow_magazynowych import PanelStanowMagazynowych
 
 
@@ -48,7 +50,16 @@ class WidokMagazynu(ctk.CTkFrame):
         tab_magazyny = self._tabview.add("Magazyny")
         tab_dokumenty = self._tabview.add("Dokumenty")
         tab_stany = self._tabview.add("Stany magazynowe")
-        for tab in (tab_produkty, tab_magazyny, tab_dokumenty, tab_stany):
+        tab_inwentaryzacja = self._tabview.add("Inwentaryzacja")
+        tab_raporty = self._tabview.add("Raporty")
+        for tab in (
+            tab_produkty,
+            tab_magazyny,
+            tab_dokumenty,
+            tab_stany,
+            tab_inwentaryzacja,
+            tab_raporty,
+        ):
             tab.grid_columnconfigure(0, weight=1)
             tab.grid_rowconfigure(0, weight=1)
 
@@ -64,11 +75,19 @@ class WidokMagazynu(ctk.CTkFrame):
         self._panel_stanow = PanelStanowMagazynowych(tab_stany)
         self._panel_stanow.grid(row=0, column=0, sticky="nsew")
 
+        self._panel_inwentaryzacji = PanelInwentaryzacji(tab_inwentaryzacja)
+        self._panel_inwentaryzacji.grid(row=0, column=0, sticky="nsew")
+
+        self._panel_raportow = PanelRaportow(tab_raporty)
+        self._panel_raportow.grid(row=0, column=0, sticky="nsew")
+
     def odswiez(self) -> None:
-        # Wszystkie 4 panele naraz - lokalne API jest szybkie, a to gwarantuje
+        # Wszystkie panele naraz - lokalne API jest szybkie, a to gwarantuje
         # swieze dane niezaleznie od tego, ktora zakladka jest aktualnie widoczna
         # (np. Dokumenty potrzebuja swiezej listy Magazynow do filtra).
         self._panel_produktow.odswiez()
         self._panel_magazynow.odswiez()
         self._panel_dokumentow.odswiez()
         self._panel_stanow.odswiez()
+        self._panel_inwentaryzacji.odswiez()
+        self._panel_raportow.odswiez()

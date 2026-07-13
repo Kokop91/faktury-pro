@@ -42,6 +42,11 @@ class TrybBlokadyStanu(str, enum.Enum):
     OSTRZEGAJ = "ostrzegaj"
 
 
+class StatusInwentaryzacji(str, enum.Enum):
+    W_TRAKCIE = "w_trakcie"
+    ZAKONCZONA = "zakonczona"
+
+
 # Klasyfikacja typow dokumentu wg wymagan co do dokument_powiazany_id/przyczyna_korekty.
 # Wspoldzielone przez schematy (szybka walidacja 422) i serwis (zrodlo prawdy, patrz
 # app/services/faktury.py) - stad zyja tutaj, a nie w jednej z tych warstw.

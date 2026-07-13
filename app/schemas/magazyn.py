@@ -117,6 +117,8 @@ class RuchMagazynowyOut(BaseModel):
     typ_dokumentu: TypDokumentuMagazynowego
     numer_dokumentu: str
     data_dokumentu: date
+    produkt_id: int
+    produkt_nazwa: str
     magazyn_id: int
     magazyn_nazwa: str
     zmiana_ilosci: Decimal

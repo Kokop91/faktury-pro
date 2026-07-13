@@ -402,7 +402,7 @@ def historia_ruchow_produktu(db: Session, produkt_id: int) -> list[RuchMagazynow
     "kto" - appka jest jednostanowiskowa i auth nie jest jeszcze zaimplementowane
     (Faza 6), wiec ta kolumna z sekcji 3.7 planu jest tu celowo pominieta.
     """
-    pobierz_produkt(db, produkt_id)  # 404, jesli produkt nie istnieje
+    produkt = pobierz_produkt(db, produkt_id)  # 404, jesli produkt nie istnieje
 
     zapytanie = (
         select(PozycjaDokumentuMagazynowego)
@@ -428,6 +428,8 @@ def historia_ruchow_produktu(db: Session, produkt_id: int) -> list[RuchMagazynow
             "typ_dokumentu": dokument.typ,
             "numer_dokumentu": dokument.numer,
             "data_dokumentu": dokument.data_dokumentu,
+            "produkt_id": produkt.id,
+            "produkt_nazwa": produkt.nazwa,
             "notatka": pozycja.notatka,
             "utworzono": dokument.utworzono,
         }
