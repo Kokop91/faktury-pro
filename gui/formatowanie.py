@@ -36,6 +36,28 @@ DOZWOLONE_TYPY_DOKUMENTU_KORYGOWANEGO: frozenset[str] = frozenset(
     {"faktura_vat", "faktura_zaliczkowa", "faktura_koncowa", "rachunek"}
 )
 
+ETYKIETY_TYPU_DOKUMENTU_MAGAZYNOWEGO: dict[str, str] = {
+    "pz": "PZ — Przyjęcie zewnętrzne",
+    "wz": "WZ — Wydanie zewnętrzne",
+    "pw": "PW — Przyjęcie wewnętrzne",
+    "rw": "RW — Rozchód wewnętrzny",
+    "mm": "MM — Przesunięcie międzymagazynowe",
+}
+
+KOLEJNOSC_TYPOW_DOKUMENTU_MAGAZYNOWEGO: list[str] = ["pz", "wz", "pw", "rw", "mm"]
+
+# Ktory z (magazyn_zrodlowy, magazyn_docelowy) jest wymagany dla danego typu -
+# mirror app/services/magazyn_service.py WYMAGANE_MAGAZYNY, zduplikowane w GUI
+# (osobny proces), zeby formularz mogl pokazywac/ukrywac wlasciwe pola bez
+# czekania na blad z backendu.
+WYMAGANE_MAGAZYNY_DOKUMENTU: dict[str, tuple[bool, bool]] = {
+    "pz": (False, True),
+    "wz": (True, False),
+    "pw": (False, True),
+    "rw": (True, False),
+    "mm": (True, True),
+}
+
 KOLEJNOSC_STAWEK_VAT: list[str] = ["23", "8", "5", "0", "zw"]
 
 ETYKIETY_STAWEK_VAT: dict[str, str] = {
@@ -67,6 +89,10 @@ def kolor_statusu(status: str) -> str:
 
 def formatuj_typ_dokumentu(typ: str) -> str:
     return ETYKIETY_TYPU_DOKUMENTU.get(typ, typ)
+
+
+def formatuj_typ_dokumentu_magazynowego(typ: str) -> str:
+    return ETYKIETY_TYPU_DOKUMENTU_MAGAZYNOWEGO.get(typ, typ)
 
 
 def formatuj_kwote(grosze: int, waluta: str = "PLN") -> str:
@@ -111,9 +137,11 @@ def oblicz_podglad_pozycji(
     return netto, vat, brutto
 
 
-def parsuj_kwote(tekst: str) -> int:
-    """Parsuje '1234,56' / '1234.56' / '1234' na grosze (int, > 0). Rzuca ValueError
-    z czytelnym polskim komunikatem przy nieprawidlowych danych."""
+def parsuj_kwote(tekst: str, wymagaj_dodatniej: bool = True) -> int:
+    """Parsuje '1234,56' / '1234.56' / '1234' na grosze (int). Domyslnie wymaga
+    kwoty > 0 (faktury/platnosci); `wymagaj_dodatniej=False` dopuszcza takze 0
+    (np. domyslna cena produktu w katalogu, gdzie backend przyjmuje ge=0).
+    Rzuca ValueError z czytelnym polskim komunikatem przy nieprawidlowych danych."""
     tekst = tekst.strip().replace(" ", "").replace(",", ".")
     if not tekst:
         raise ValueError("kwota jest wymagana")
@@ -122,8 +150,10 @@ def parsuj_kwote(tekst: str) -> int:
     except InvalidOperation:
         raise ValueError("nieprawidłowa kwota") from None
     grosze = _zaokraglij_do_grosza(wartosc * 100)
-    if grosze <= 0:
+    if wymagaj_dodatniej and grosze <= 0:
         raise ValueError("kwota musi być większa od zera")
+    if grosze < 0:
+        raise ValueError("kwota nie może być ujemna")
     return grosze
 
 
@@ -145,6 +175,22 @@ def parsuj_liczbe_dodatnia(tekst: str, nazwa_pola: str = "wartość") -> Decimal
 def parsuj_ilosc(tekst: str) -> Decimal:
     """Parsuje ilość ('2' / '2,5' / '2.5') na Decimal > 0. Rzuca ValueError."""
     return parsuj_liczbe_dodatnia(tekst, "ilość")
+
+
+def formatuj_ilosc(wartosc, jednostka: str | None = None) -> str:
+    """Formatuje ilosc (Decimal albo string z API, np. '100.000') do postaci
+    '100' / '2,5' - bez zbednych zer, z przecinkiem zamiast kropki."""
+    try:
+        liczba = Decimal(str(wartosc))
+    except InvalidOperation:
+        return str(wartosc)
+    tekst = format(liczba.normalize(), "f")
+    if "." not in tekst:
+        tekst_wynik = tekst
+    else:
+        calosc, ulamek = tekst.split(".")
+        tekst_wynik = f"{calosc},{ulamek}" if int(ulamek) != 0 else calosc
+    return f"{tekst_wynik} {jednostka}" if jednostka else tekst_wynik
 
 
 def parsuj_date_pl(tekst: str) -> date:

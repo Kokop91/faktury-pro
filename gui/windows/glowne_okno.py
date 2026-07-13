@@ -3,6 +3,7 @@ import customtkinter as ctk
 from gui import styl
 from gui.windows.widok_faktur import WidokFaktur
 from gui.windows.widok_klientow import WidokKlientow
+from gui.windows.widok_magazynu import WidokMagazynu
 from gui.windows.widok_naleznosci import WidokNaleznosci
 
 
@@ -37,6 +38,8 @@ class GlowneOkno(ctk.CTk):
             return WidokNaleznosci(self._kontener)
         if klucz == "klienci":
             return WidokKlientow(self._kontener)
+        if klucz == "magazyn":
+            return WidokMagazynu(self._kontener)
         if klucz == "ustawienia":
             return _WidokUstawien(self._kontener)
         raise ValueError(f"Nieznany widok: {klucz}")
@@ -60,6 +63,7 @@ class _PasekBoczny(ctk.CTkFrame):
         ("faktury", "Faktury"),
         ("naleznosci", "Należności"),
         ("klienci", "Klienci"),
+        ("magazyn", "Magazyn"),
         ("ustawienia", "Ustawienia"),
     ]
 

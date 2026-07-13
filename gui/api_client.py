@@ -149,3 +149,78 @@ def dodaj_platnosc(faktura_id: int, dane: dict) -> dict:
 
 def pobierz_naleznosci() -> dict:
     return _wykonaj("GET", "/faktury/naleznosci", TIMEOUT_ODCZYT).json()
+
+
+def pobierz_produkty(
+    tylko_aktywne: bool = True, skip: int = 0, limit: int = 200
+) -> list[dict]:
+    parametry = {"tylko_aktywne": tylko_aktywne, "skip": skip, "limit": limit}
+    return _wykonaj("GET", "/produkty", TIMEOUT_ODCZYT, params=parametry).json()
+
+
+def pobierz_produkt(produkt_id: int) -> dict:
+    return _wykonaj("GET", f"/produkty/{produkt_id}", TIMEOUT_ODCZYT).json()
+
+
+def utworz_produkt(dane: dict) -> dict:
+    return _wykonaj("POST", "/produkty", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def pobierz_historie_ruchow_produktu(produkt_id: int) -> list[dict]:
+    return _wykonaj(
+        "GET", f"/produkty/{produkt_id}/historia-ruchow", TIMEOUT_ODCZYT
+    ).json()
+
+
+def pobierz_magazyny(
+    tylko_aktywne: bool = True, skip: int = 0, limit: int = 200
+) -> list[dict]:
+    parametry = {"tylko_aktywne": tylko_aktywne, "skip": skip, "limit": limit}
+    return _wykonaj("GET", "/magazyny", TIMEOUT_ODCZYT, params=parametry).json()
+
+
+def utworz_magazyn(dane: dict) -> dict:
+    return _wykonaj("POST", "/magazyny", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def pobierz_dokumenty_magazynowe(
+    typ: str | None = None,
+    magazyn_id: int | None = None,
+    data_od: str | None = None,
+    data_do: str | None = None,
+    skip: int = 0,
+    limit: int = 200,
+) -> list[dict]:
+    parametry: dict = {"skip": skip, "limit": limit}
+    if typ:
+        parametry["typ"] = typ
+    if magazyn_id is not None:
+        parametry["magazyn_id"] = magazyn_id
+    if data_od:
+        parametry["data_od"] = data_od
+    if data_do:
+        parametry["data_do"] = data_do
+    return _wykonaj(
+        "GET", "/dokumenty-magazynowe", TIMEOUT_ODCZYT, params=parametry
+    ).json()
+
+
+def pobierz_dokument_magazynowy(dokument_id: int) -> dict:
+    return _wykonaj(
+        "GET", f"/dokumenty-magazynowe/{dokument_id}", TIMEOUT_ODCZYT
+    ).json()
+
+
+def utworz_dokument_magazynowy(dane: dict) -> dict:
+    return _wykonaj(
+        "POST", "/dokumenty-magazynowe", TIMEOUT_ZAPIS, json=dane
+    ).json()
+
+
+def pobierz_stany_magazynowe(magazyn_id: int | None = None) -> list[dict]:
+    parametry = {}
+    if magazyn_id is not None:
+        parametry["magazyn_id"] = magazyn_id
+    return _wykonaj(
+        "GET", "/stany-magazynowe", TIMEOUT_ODCZYT, params=parametry
+    ).json()

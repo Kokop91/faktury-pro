@@ -14,6 +14,7 @@ KOLOR_NAGLOWEK_TABELI = "#EEF0F7"
 KOLOR_BLAD = "#DC2626"
 KOLOR_SUKCES = "#16A34A"
 KOLOR_OSTRZEZENIE = "#D97706"
+KOLOR_OSTRZEZENIE_TLO = "#FEF3C7"
 
 # Kolor tekstu statusu (status_efektywny) w tabelach/szczegolach faktury.
 KOLORY_STATUSU: dict[str, str] = {
