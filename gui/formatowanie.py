@@ -1,6 +1,8 @@
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
+from gui import styl
+
 ETYKIETY_STATUSU: dict[str, str] = {
     "robocza": "Robocza",
     "wystawiona": "Wystawiona",
@@ -57,6 +59,10 @@ UDZIAL_STAWKI_VAT: dict[str, Decimal] = {
 
 def formatuj_status(status: str) -> str:
     return ETYKIETY_STATUSU.get(status, status)
+
+
+def kolor_statusu(status: str) -> str:
+    return styl.KOLORY_STATUSU.get(status, styl.KOLOR_TEKST_GLOWNY)
 
 
 def formatuj_typ_dokumentu(typ: str) -> str:

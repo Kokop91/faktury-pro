@@ -12,6 +12,19 @@ KOLOR_WIERSZ_NIEPARZYSTY = "#F7F8FC"
 KOLOR_WIERSZ_ZAZNACZONY = "#E8ECFF"
 KOLOR_NAGLOWEK_TABELI = "#EEF0F7"
 KOLOR_BLAD = "#DC2626"
+KOLOR_SUKCES = "#16A34A"
+KOLOR_OSTRZEZENIE = "#D97706"
+
+# Kolor tekstu statusu (status_efektywny) w tabelach/szczegolach faktury.
+KOLORY_STATUSU: dict[str, str] = {
+    "robocza": KOLOR_TEKST_DRUGORZEDNY,
+    "wystawiona": KOLOR_TEKST_GLOWNY,
+    "wyslana": KOLOR_TEKST_GLOWNY,
+    "oplacona_czesciowo": KOLOR_OSTRZEZENIE,
+    "oplacona": KOLOR_SUKCES,
+    "po_terminie": KOLOR_BLAD,
+    "anulowana": KOLOR_TEKST_DRUGORZEDNY,
+}
 
 SZEROKOSC_SIDEBAR = 220
 ODSTEP_MALY = 8

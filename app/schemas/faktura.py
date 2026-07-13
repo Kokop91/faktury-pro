@@ -128,6 +128,23 @@ class FakturaStatusUpdate(BaseModel):
     status: StatusFaktury
 
 
+class PlatnoscCreate(BaseModel):
+    data_platnosci: date
+    kwota_grosze: int = Field(gt=0)
+    notatka: str | None = Field(default=None, max_length=500)
+
+
+class PlatnoscOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    faktura_id: int
+    data_platnosci: date
+    kwota_grosze: int
+    notatka: str | None
+    utworzono: datetime
+
+
 class FakturaOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -141,11 +158,19 @@ class FakturaOut(BaseModel):
     waluta: str
     kurs_waluty: Decimal
     status: StatusFaktury
+    status_efektywny: StatusFaktury
     dokument_powiazany_id: int | None
     przyczyna_korekty: str | None
     pozycje: list[PozycjaFakturyOut]
     suma_netto_grosze: int
     suma_vat_grosze: int
     suma_brutto_grosze: int
+    suma_wplat_grosze: int
+    kwota_pozostala_grosze: int
     utworzono: datetime
     zaktualizowano: datetime
+
+
+class NaleznosciOut(BaseModel):
+    suma_naleznosci_grosze: int
+    faktury: list[FakturaOut]

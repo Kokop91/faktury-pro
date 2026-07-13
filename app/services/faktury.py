@@ -195,7 +195,7 @@ def _waliduj_zgodnosc_dokumentu(
 def pobierz_fakture(db: Session, faktura_id: int) -> Faktura:
     zapytanie = (
         select(Faktura)
-        .options(selectinload(Faktura.pozycje))
+        .options(selectinload(Faktura.pozycje), selectinload(Faktura.platnosci))
         .where(Faktura.id == faktura_id)
     )
     faktura = db.execute(zapytanie).scalar_one_or_none()
@@ -214,7 +214,9 @@ def lista_faktur(
     status_filtr: StatusFaktury | None,
     klient_id_filtr: int | None,
 ) -> list[Faktura]:
-    zapytanie = select(Faktura).options(selectinload(Faktura.pozycje))
+    zapytanie = select(Faktura).options(
+        selectinload(Faktura.pozycje), selectinload(Faktura.platnosci)
+    )
     if status_filtr is not None:
         zapytanie = zapytanie.where(Faktura.status == status_filtr)
     if klient_id_filtr is not None:

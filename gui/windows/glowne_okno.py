@@ -3,6 +3,7 @@ import customtkinter as ctk
 from gui import styl
 from gui.windows.widok_faktur import WidokFaktur
 from gui.windows.widok_klientow import WidokKlientow
+from gui.windows.widok_naleznosci import WidokNaleznosci
 
 
 class GlowneOkno(ctk.CTk):
@@ -32,6 +33,8 @@ class GlowneOkno(ctk.CTk):
     def _utworz_widok(self, klucz: str) -> ctk.CTkFrame:
         if klucz == "faktury":
             return WidokFaktur(self._kontener)
+        if klucz == "naleznosci":
+            return WidokNaleznosci(self._kontener)
         if klucz == "klienci":
             return WidokKlientow(self._kontener)
         if klucz == "ustawienia":
@@ -55,6 +58,7 @@ class GlowneOkno(ctk.CTk):
 class _PasekBoczny(ctk.CTkFrame):
     POZYCJE = [
         ("faktury", "Faktury"),
+        ("naleznosci", "Należności"),
         ("klienci", "Klienci"),
         ("ustawienia", "Ustawienia"),
     ]

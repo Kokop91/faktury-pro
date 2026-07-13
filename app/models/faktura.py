@@ -55,6 +55,9 @@ class Faktura(Base):
     pozycje: Mapped[list["PozycjaFaktury"]] = relationship(
         back_populates="faktura", cascade="all, delete-orphan"
     )
+    platnosci: Mapped[list["PlatnoscFaktury"]] = relationship(
+        back_populates="faktura", cascade="all, delete-orphan"
+    )
 
     dokument_powiazany: Mapped["Faktura | None"] = relationship(
         remote_side=[id],
@@ -76,3 +79,11 @@ class Faktura(Base):
     @property
     def suma_brutto_grosze(self) -> int:
         return sum(pozycja.wartosc_brutto_grosze for pozycja in self.pozycje)
+
+    @property
+    def suma_wplat_grosze(self) -> int:
+        return sum(platnosc.kwota_grosze for platnosc in self.platnosci)
+
+    @property
+    def kwota_pozostala_grosze(self) -> int:
+        return max(self.suma_brutto_grosze - self.suma_wplat_grosze, 0)

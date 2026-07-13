@@ -133,3 +133,19 @@ def zmien_status_faktury(faktura_id: int, status: str) -> dict:
 
 def pobierz_pdf_faktury(faktura_id: int) -> bytes:
     return _wykonaj("GET", f"/faktury/{faktura_id}/pdf", TIMEOUT_PDF).content
+
+
+def pobierz_platnosci_faktury(faktura_id: int) -> list[dict]:
+    return _wykonaj(
+        "GET", f"/faktury/{faktura_id}/platnosci", TIMEOUT_ODCZYT
+    ).json()
+
+
+def dodaj_platnosc(faktura_id: int, dane: dict) -> dict:
+    return _wykonaj(
+        "POST", f"/faktury/{faktura_id}/platnosci", TIMEOUT_ZAPIS, json=dane
+    ).json()
+
+
+def pobierz_naleznosci() -> dict:
+    return _wykonaj("GET", "/faktury/naleznosci", TIMEOUT_ODCZYT).json()

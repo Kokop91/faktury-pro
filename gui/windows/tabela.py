@@ -49,8 +49,10 @@ class Tabela(ctk.CTkScrollableFrame):
         self,
         wiersze: list[dict],
         formatery: dict[str, Callable[[dict], str]] | None = None,
+        kolory: dict[str, Callable[[dict], str]] | None = None,
     ) -> None:
         formatery = formatery or {}
+        kolory = kolory or {}
 
         for wiersz_etykiet in self._wiersze:
             for etykieta in wiersz_etykiet:
@@ -83,11 +85,15 @@ class Tabela(ctk.CTkScrollableFrame):
                 else:
                     wartosc = wiersz.get(klucz)
                     tekst = "" if wartosc is None else str(wartosc)
+                kolor_formater = kolory.get(klucz)
+                kolor_tekstu = (
+                    kolor_formater(wiersz) if kolor_formater else styl.KOLOR_TEKST_GLOWNY
+                )
                 etykieta = ctk.CTkLabel(
                     self,
                     text=tekst,
                     font=styl.CZCIONKA_TRESC,
-                    text_color=styl.KOLOR_TEKST_GLOWNY,
+                    text_color=kolor_tekstu,
                     fg_color=kolor_tla,
                     anchor="w",
                     padx=styl.ODSTEP_MALY,
