@@ -29,6 +29,14 @@ class StatusFaktury(str, enum.Enum):
     ANULOWANA = "anulowana"
 
 
+class TypDokumentuMagazynowego(str, enum.Enum):
+    PZ = "pz"  # Przyjecie Zewnetrzne
+    WZ = "wz"  # Wydanie Zewnetrzne
+    PW = "pw"  # Przyjecie Wewnetrzne
+    RW = "rw"  # Rozchod Wewnetrzny
+    MM = "mm"  # Przesuniecie Miedzymagazynowe
+
+
 # Klasyfikacja typow dokumentu wg wymagan co do dokument_powiazany_id/przyczyna_korekty.
 # Wspoldzielone przez schematy (szybka walidacja 422) i serwis (zrodlo prawdy, patrz
 # app/services/faktury.py) - stad zyja tutaj, a nie w jednej z tych warstw.
