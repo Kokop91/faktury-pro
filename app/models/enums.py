@@ -37,6 +37,11 @@ class TypDokumentuMagazynowego(str, enum.Enum):
     MM = "mm"  # Przesuniecie Miedzymagazynowe
 
 
+class TrybBlokadyStanu(str, enum.Enum):
+    BLOKUJ = "blokuj"
+    OSTRZEGAJ = "ostrzegaj"
+
+
 # Klasyfikacja typow dokumentu wg wymagan co do dokument_powiazany_id/przyczyna_korekty.
 # Wspoldzielone przez schematy (szybka walidacja 422) i serwis (zrodlo prawdy, patrz
 # app/services/faktury.py) - stad zyja tutaj, a nie w jednej z tych warstw.
