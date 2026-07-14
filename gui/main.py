@@ -5,7 +5,6 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox
 
-import customtkinter as ctk
 import requests
 
 PROJEKT_ROOT = Path(__file__).resolve().parent.parent
@@ -89,7 +88,13 @@ def _pokaz_blad_startu(tekst: str) -> None:
 
 
 def main() -> None:
-    ctk.set_appearance_mode("Light")
+    # customtkinter wlacza automatyczne DPI awareness (SetProcessDpiAwareness) na
+    # Windows juz przy imporcie modulu (patrz ScalingTracker.deactivate_automatic_dpi_awareness
+    # = False domyslnie) - dla ostrego renderowania na ekranach skalowanych NIE wolno
+    # wywolywac ctk.deactivate_automatic_dpi_awareness() nigdzie w kodzie appki.
+    from gui import nastawienia
+
+    nastawienia.zastosuj_tryb_wygladu()
 
     from gui.windows.ekran_logowania import pokaz_ekran_logowania
 
@@ -111,6 +116,7 @@ def main() -> None:
     okno = GlowneOkno()
 
     def _przy_zamknieciu() -> None:
+        okno.zapisz_geometrie()
         zatrzymaj_serwer(proces)
         okno.destroy()
 

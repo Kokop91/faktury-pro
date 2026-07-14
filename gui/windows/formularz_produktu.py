@@ -4,7 +4,8 @@ import customtkinter as ctk
 
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu
+from gui.widgets_pomocnicze import Banner, komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
+from gui.windows.baza_formularza import OknoFormularza
 
 _ETYKIETY_STAWEK = [
     formatowanie.ETYKIETY_STAWEK_VAT[s] for s in formatowanie.KOLEJNOSC_STAWEK_VAT
@@ -14,16 +15,13 @@ _KLUCZE_WG_ETYKIETY_STAWKI = {
 }
 
 
-class FormularzProduktu(ctk.CTkToplevel):
+class FormularzProduktu(OknoFormularza):
     """Wylacznie tworzenie - backend (Faza 8) nie ma jeszcze PUT /produkty/{id}."""
 
     def __init__(self, master, on_zapisano: Callable[[], None]):
         super().__init__(master)
         self.title("Dodaj produkt")
         self.geometry("420x520")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
 
         self._on_zapisano = on_zapisano
 
@@ -32,13 +30,20 @@ class FormularzProduktu(ctk.CTkToplevel):
             fill="both", expand=True, padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY
         )
 
-        ctk.CTkLabel(
+        etykieta_nazwa = ctk.CTkLabel(
             kontener,
             text="Nazwa *",
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, 2))
+        )
+        etykieta_nazwa.pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
+        self._banner = Banner(kontener)
+        self._banner.ustaw_geometrie(
+            lambda: self._banner.pack(
+                fill="x", pady=(0, styl.ODSTEP_MALY), before=etykieta_nazwa
+            )
+        )
         self._pole_nazwa = ctk.CTkEntry(kontener, font=styl.CZCIONKA_TRESC)
         self._pole_nazwa.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
 
@@ -48,7 +53,7 @@ class FormularzProduktu(ctk.CTkToplevel):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, 2))
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
         self._pole_jednostka = ctk.CTkEntry(kontener, font=styl.CZCIONKA_TRESC)
         self._pole_jednostka.insert(0, "szt")
         self._pole_jednostka.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
@@ -59,7 +64,7 @@ class FormularzProduktu(ctk.CTkToplevel):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, 2))
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
         self._pole_cena = ctk.CTkEntry(kontener, font=styl.CZCIONKA_TRESC)
         self._pole_cena.insert(0, "0,00")
         self._pole_cena.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
@@ -70,7 +75,7 @@ class FormularzProduktu(ctk.CTkToplevel):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, 2))
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
         self._var_stawka = ctk.StringVar(value=_ETYKIETY_STAWEK[0])
         ctk.CTkOptionMenu(
             kontener,
@@ -102,7 +107,7 @@ class FormularzProduktu(ctk.CTkToplevel):
             border_color=styl.KOLOR_OBRAMOWANIE,
             text_color=styl.KOLOR_TEKST_GLOWNY,
             hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
-            command=self.destroy,
+            command=self._zamknij_z_potwierdzeniem,
         ).pack(side="left", expand=True, fill="x", padx=(0, styl.ODSTEP_MALY))
         self._przycisk_zapisz = ctk.CTkButton(
             przyciski,
@@ -112,16 +117,19 @@ class FormularzProduktu(ctk.CTkToplevel):
             command=self._zapisz,
         )
         self._przycisk_zapisz.pack(side="left", expand=True, fill="x")
+        self.ustaw_akcje_zapisu(self._zapisz, self._przycisk_zapisz)
+
+        self.zapamietaj_stan_poczatkowy()
 
     def _zebrane_dane(self) -> dict | None:
         nazwa = self._pole_nazwa.get().strip()
         if not nazwa:
-            komunikat_bledu(self, "Nazwa produktu jest wymagana.")
+            self._banner.pokaz("Nazwa produktu jest wymagana.")
             return None
 
         jednostka = self._pole_jednostka.get().strip()
         if not jednostka:
-            komunikat_bledu(self, "Jednostka miary jest wymagana.")
+            self._banner.pokaz("Jednostka miary jest wymagana.")
             return None
 
         try:
@@ -129,11 +137,12 @@ class FormularzProduktu(ctk.CTkToplevel):
                 self._pole_cena.get(), wymagaj_dodatniej=False
             )
         except ValueError as e:
-            komunikat_bledu(self, f"Nieprawidłowa cena netto: {e}")
+            self._banner.pokaz(f"Nieprawidłowa cena netto: {e}")
             return None
 
         stawka = _KLUCZE_WG_ETYKIETY_STAWKI.get(self._var_stawka.get(), "23")
 
+        self._banner.ukryj()
         return {
             "nazwa": nazwa,
             "jednostka_miary": jednostka,
@@ -147,17 +156,18 @@ class FormularzProduktu(ctk.CTkToplevel):
         if dane is None:
             return
 
-        self._przycisk_zapisz.configure(state="disabled")
+        ustaw_tekst_ladowania(self._przycisk_zapisz, True, "Zapisz")
 
         def zadanie():
             return api_client.utworz_produkt(dane)
 
-        def sukces(_wynik) -> None:
+        def sukces(wynik) -> None:
             self._on_zapisano()
             self.destroy()
+            pokaz_toast(self.master, f"Produkt „{wynik['nazwa']}” zapisany.")
 
         def blad(e: api_client.ApiError) -> None:
-            self._przycisk_zapisz.configure(state="normal")
+            ustaw_tekst_ladowania(self._przycisk_zapisz, False, "Zapisz")
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)

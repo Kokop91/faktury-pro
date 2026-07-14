@@ -11,3 +11,5 @@ customtkinter
 requests
 pillow
 bcrypt
+matplotlib
+lxml

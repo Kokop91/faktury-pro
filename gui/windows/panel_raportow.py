@@ -3,6 +3,7 @@ import customtkinter as ctk
 from gui import styl
 from gui.windows.panel_raport_historii_ruchow import PanelRaportHistoriiRuchow
 from gui.windows.panel_raport_ponizej_minimum import PanelRaportPonizejMinimum
+from gui.windows.panel_raportu_jpk import PanelRaportuJPK
 from gui.windows.panel_stanow_magazynowych import PanelStanowMagazynowych
 
 
@@ -33,7 +34,8 @@ class PanelRaportow(ctk.CTkFrame):
         tab_stany = self._tabview.add("Stany aktualne")
         tab_historia = self._tabview.add("Historia ruchów")
         tab_ponizej = self._tabview.add("Poniżej minimum")
-        for tab in (tab_stany, tab_historia, tab_ponizej):
+        tab_jpk = self._tabview.add("JPK_V7")
+        for tab in (tab_stany, tab_historia, tab_ponizej, tab_jpk):
             tab.grid_columnconfigure(0, weight=1)
             tab.grid_rowconfigure(0, weight=1)
 
@@ -46,7 +48,11 @@ class PanelRaportow(ctk.CTkFrame):
         self._panel_ponizej = PanelRaportPonizejMinimum(tab_ponizej)
         self._panel_ponizej.grid(row=0, column=0, sticky="nsew")
 
+        self._panel_jpk = PanelRaportuJPK(tab_jpk)
+        self._panel_jpk.grid(row=0, column=0, sticky="nsew")
+
     def odswiez(self) -> None:
         self._panel_stany.odswiez()
         self._panel_historia.odswiez()
         self._panel_ponizej.odswiez()
+        self._panel_jpk.odswiez()

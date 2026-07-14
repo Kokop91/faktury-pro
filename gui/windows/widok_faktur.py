@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-from gui import api_client, formatowanie, styl
+from gui import api_client, formatowanie, ikony, nastawienia, styl
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
 from gui.windows.formularz_faktury import FormularzFaktury
@@ -15,6 +15,9 @@ KOLUMNY = [
     ("status", "Status", 2),
 ]
 
+_KLUCZ_FILTR_STATUS = "filtr_status_faktur"
+_KLUCZ_SORTOWANIE = "sortowanie_faktury"
+
 
 class WidokFaktur(ctk.CTkFrame):
     def __init__(self, master):
@@ -23,6 +26,7 @@ class WidokFaktur(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
 
         self._klienci_wg_id: dict[int, str] = {}
+        self._ostatnie_faktury: list[dict] = []
         self._etykiety_statusow = ["Wszystkie"] + list(
             formatowanie.ETYKIETY_STATUSU.values()
         )
@@ -47,35 +51,63 @@ class WidokFaktur(ctk.CTkFrame):
             text_color=styl.KOLOR_TEKST_GLOWNY,
         ).grid(row=0, column=0, sticky="w")
 
+        self._pole_szukaj = ctk.CTkEntry(
+            pasek_naglowka,
+            font=styl.CZCIONKA_TRESC,
+            width=220,
+            placeholder_text="Szukaj po numerze lub kliencie...",
+        )
+        self._pole_szukaj.grid(row=0, column=1, padx=(0, styl.ODSTEP_SREDNI))
+        self._pole_szukaj.bind("<KeyRelease>", lambda _z: self._odswiez_tabele())
+
         ctk.CTkLabel(
             pasek_naglowka,
             text="Status:",
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
-        ).grid(row=0, column=1, padx=(0, styl.ODSTEP_MALY))
+        ).grid(row=0, column=2, padx=(0, styl.ODSTEP_MALY))
 
-        self._filtr_var = ctk.StringVar(value="Wszystkie")
+        status_zapisany = nastawienia.wczytaj(_KLUCZ_FILTR_STATUS)
+        etykieta_startowa = (
+            formatowanie.ETYKIETY_STATUSU.get(status_zapisany, "Wszystkie")
+            if status_zapisany
+            else "Wszystkie"
+        )
+        self._filtr_var = ctk.StringVar(value=etykieta_startowa)
         ctk.CTkOptionMenu(
             pasek_naglowka,
             values=self._etykiety_statusow,
             variable=self._filtr_var,
-            command=lambda _wartosc: self.odswiez(),
+            command=lambda _wartosc: self._na_zmiane_filtra(),
             fg_color=styl.KOLOR_AKCENT,
             button_color=styl.KOLOR_AKCENT,
             button_hover_color=styl.KOLOR_AKCENT_HOVER,
-        ).grid(row=0, column=2, padx=(0, styl.ODSTEP_SREDNI))
+        ).grid(row=0, column=3, padx=(0, styl.ODSTEP_SREDNI))
 
         ctk.CTkButton(
             pasek_naglowka,
-            text="+ Nowa faktura",
+            text="Nowa faktura",
+            image=ikony.ikona_stala("plus"),
+            compound="left",
             font=styl.CZCIONKA_TRESC,
             fg_color=styl.KOLOR_AKCENT,
             hover_color=styl.KOLOR_AKCENT_HOVER,
             command=self._otworz_formularz,
-        ).grid(row=0, column=3)
+        ).grid(row=0, column=4)
 
+        sortowanie_zapisane = nastawienia.wczytaj(_KLUCZ_SORTOWANIE)
+        sortowanie_poczatkowe = (
+            tuple(sortowanie_zapisane) if isinstance(sortowanie_zapisane, list) else None
+        )
         self._tabela = Tabela(
-            self, kolumny=KOLUMNY, on_wiersz_kliknij=self._otworz_szczegoly
+            self,
+            kolumny=KOLUMNY,
+            on_wiersz_kliknij=self._otworz_szczegoly,
+            sortowalne=True,
+            sortowanie_poczatkowe=sortowanie_poczatkowe,
+            on_zmiana_sortowania=lambda klucz, malejaco: nastawienia.zapisz(
+                _KLUCZ_SORTOWANIE, [klucz, malejaco]
+            ),
         )
         self._tabela.grid(
             row=1,
@@ -84,6 +116,24 @@ class WidokFaktur(ctk.CTkFrame):
             padx=styl.ODSTEP_DUZY,
             pady=(0, styl.ODSTEP_DUZY),
         )
+
+    def fokus_wyszukiwania(self) -> None:
+        self._pole_szukaj.focus_set()
+
+    def ustaw_filtr_status(self, status_klucz: str | None) -> None:
+        """Wywolywane z zewnatrz (np. przez kafelek dashboardu) - ustawia
+        dropdown filtra, bez samodzielnego odswiezania (o to dba wolajacy)."""
+        etykieta = (
+            formatowanie.ETYKIETY_STATUSU.get(status_klucz, "Wszystkie")
+            if status_klucz
+            else "Wszystkie"
+        )
+        self._filtr_var.set(etykieta)
+
+    def _na_zmiane_filtra(self) -> None:
+        status_klucz = self._klucze_wg_etykiety.get(self._filtr_var.get())
+        nastawienia.zapisz(_KLUCZ_FILTR_STATUS, status_klucz)
+        self.odswiez()
 
     def odswiez(self) -> None:
         status_klucz = self._klucze_wg_etykiety.get(self._filtr_var.get())
@@ -98,30 +148,52 @@ class WidokFaktur(ctk.CTkFrame):
         def sukces(wynik):
             klienci, faktury = wynik
             self._klienci_wg_id = {k["id"]: k["nazwa"] for k in klienci}
-
-            formatery = {
-                "klient": lambda w: self._klienci_wg_id.get(
-                    w["klient_id"], f"#{w['klient_id']}"
-                ),
-                "data_wystawienia": lambda w: formatowanie.formatuj_date(
-                    w["data_wystawienia"]
-                ),
-                "kwota_brutto": lambda w: formatowanie.formatuj_kwote(
-                    w["suma_brutto_grosze"], w["waluta"]
-                ),
-                "status": lambda w: formatowanie.formatuj_status(
-                    w["status_efektywny"]
-                ),
-            }
-            kolory = {
-                "status": lambda w: formatowanie.kolor_statusu(w["status_efektywny"]),
-            }
-            self._tabela.ustaw_dane(faktury, formatery=formatery, kolory=kolory)
+            self._ostatnie_faktury = faktury
+            self._odswiez_tabele()
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
-        uruchom_w_tle(self, zadanie, sukces, blad)
+        uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
+
+    def _odswiez_tabele(self) -> None:
+        szukana_fraza = self._pole_szukaj.get().strip().lower()
+        if szukana_fraza:
+            faktury = [
+                f
+                for f in self._ostatnie_faktury
+                if szukana_fraza in f["numer"].lower()
+                or szukana_fraza
+                in self._klienci_wg_id.get(f["klient_id"], "").lower()
+            ]
+        else:
+            faktury = self._ostatnie_faktury
+
+        formatery = {
+            "klient": lambda w: self._klienci_wg_id.get(
+                w["klient_id"], f"#{w['klient_id']}"
+            ),
+            "data_wystawienia": lambda w: formatowanie.formatuj_date(
+                w["data_wystawienia"]
+            ),
+            "kwota_brutto": lambda w: formatowanie.formatuj_kwote(
+                w["suma_brutto_grosze"], w["waluta"]
+            ),
+            "status": lambda w: formatowanie.formatuj_status(
+                w["status_efektywny"]
+            ),
+        }
+        kolory = {
+            "status": lambda w: formatowanie.kolor_statusu(w["status_efektywny"]),
+        }
+        klucze_sortowania = {
+            "klient": lambda w: self._klienci_wg_id.get(w["klient_id"], ""),
+            "kwota_brutto": lambda w: w["suma_brutto_grosze"],
+            "status": lambda w: w["status_efektywny"],
+        }
+        self._tabela.ustaw_dane(
+            faktury, formatery=formatery, kolory=kolory, klucze_sortowania=klucze_sortowania
+        )
 
     def _otworz_szczegoly(self, wiersz: dict) -> None:
         nazwa_klienta = self._klienci_wg_id.get(wiersz["klient_id"])

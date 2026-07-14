@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-from gui import api_client, styl
+from gui import api_client, ikony, styl
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
 from gui.windows.formularz_magazynu import FormularzMagazynu
@@ -26,7 +26,9 @@ class PanelMagazynow(ctk.CTkFrame):
 
         ctk.CTkButton(
             pasek_naglowka,
-            text="+ Dodaj magazyn",
+            text="Dodaj magazyn",
+            image=ikony.ikona_stala("plus"),
+            compound="left",
             font=styl.CZCIONKA_TRESC,
             fg_color=styl.KOLOR_AKCENT,
             hover_color=styl.KOLOR_AKCENT_HOVER,
@@ -46,7 +48,7 @@ class PanelMagazynow(ctk.CTkFrame):
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
-        uruchom_w_tle(self, zadanie, sukces, blad)
+        uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
 
     def _otworz_formularz(self) -> None:
         FormularzMagazynu(self, on_zapisano=self.odswiez)

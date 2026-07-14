@@ -23,6 +23,7 @@ class WidokNaleznosci(ctk.CTkFrame):
         self.grid_rowconfigure(2, weight=1)
 
         self._klienci_wg_id: dict[int, str] = {}
+        self._tylko_po_terminie = False
 
         pasek_naglowka = ctk.CTkFrame(self, fg_color="transparent")
         pasek_naglowka.grid(
@@ -61,6 +62,14 @@ class WidokNaleznosci(ctk.CTkFrame):
             pady=(0, styl.ODSTEP_DUZY),
         )
 
+    def ustaw_filtr_status(self, status_klucz: str | None) -> None:
+        """Wywolywane z zewnatrz (np. przez kafelek dashboardu) - filtruje
+        liste do samych naleznosci po terminie, bez samodzielnego odswiezania
+        (o to dba wolajacy). Filtrowanie po stronie klienta (nie API), bo
+        opiera sie na tym samym dynamicznie liczonym status_efektywny, ktory
+        i tak juz sluzy do kolorowania tej listy."""
+        self._tylko_po_terminie = status_klucz == "po_terminie"
+
     def odswiez(self) -> None:
         def zadanie():
             # tylko_aktywni=False celowo - faktura moze odnosic sie do klienta,
@@ -73,12 +82,17 @@ class WidokNaleznosci(ctk.CTkFrame):
             klienci, naleznosci = wynik
             self._klienci_wg_id = {k["id"]: k["nazwa"] for k in klienci}
 
-            self._etykieta_sumy.configure(
-                text=(
+            faktury = naleznosci["faktury"]
+            if self._tylko_po_terminie:
+                faktury = [f for f in faktury if f["status_efektywny"] == "po_terminie"]
+                suma_grosze = sum(f["kwota_pozostala_grosze"] for f in faktury)
+                etykieta_sumy = f"Należności po terminie: {formatowanie.formatuj_kwote(suma_grosze)}"
+            else:
+                etykieta_sumy = (
                     "Suma należności: "
                     f"{formatowanie.formatuj_kwote(naleznosci['suma_naleznosci_grosze'])}"
                 )
-            )
+            self._etykieta_sumy.configure(text=etykieta_sumy)
 
             formatery = {
                 "klient": lambda w: self._klienci_wg_id.get(
@@ -100,14 +114,12 @@ class WidokNaleznosci(ctk.CTkFrame):
             kolory = {
                 "status": lambda w: formatowanie.kolor_statusu(w["status_efektywny"]),
             }
-            self._tabela.ustaw_dane(
-                naleznosci["faktury"], formatery=formatery, kolory=kolory
-            )
+            self._tabela.ustaw_dane(faktury, formatery=formatery, kolory=kolory)
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
-        uruchom_w_tle(self, zadanie, sukces, blad)
+        uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
 
     def _otworz_szczegoly(self, wiersz: dict) -> None:
         nazwa_klienta = self._klienci_wg_id.get(wiersz["klient_id"])

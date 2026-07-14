@@ -1,10 +1,12 @@
 import customtkinter as ctk
 
-from gui import api_client, formatowanie, styl
+from gui import api_client, formatowanie, nastawienia, styl
 from gui.eksport_csv import eksportuj_do_csv
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
 from gui.windows.tabela import Tabela
+
+_KLUCZ_FILTR = "filtr_magazyn_ponizej_minimum"
 
 KOLUMNY = [
     ("produkt_nazwa", "Produkt", 3),
@@ -32,6 +34,7 @@ class PanelRaportPonizejMinimum(ctk.CTkFrame):
 
         self._klucze_wg_etykiety_magazynu: dict[str, int] = {}
         self._stany: list[dict] = []
+        self._filtr_przywrocony = False
 
         pasek_naglowka = ctk.CTkFrame(self, fg_color="transparent")
         pasek_naglowka.grid(row=0, column=0, sticky="ew", pady=(0, styl.ODSTEP_SREDNI))
@@ -49,7 +52,7 @@ class PanelRaportPonizejMinimum(ctk.CTkFrame):
             pasek_naglowka,
             values=[WSZYSTKIE_MAGAZYNY],
             variable=self._var_magazyn,
-            command=lambda _wartosc: self._odswiez_stany(),
+            command=lambda wartosc: self._na_zmiane_magazyn(wartosc),
             fg_color=styl.KOLOR_AKCENT,
             button_color=styl.KOLOR_AKCENT,
             button_hover_color=styl.KOLOR_AKCENT_HOVER,
@@ -71,6 +74,10 @@ class PanelRaportPonizejMinimum(ctk.CTkFrame):
         self._tabela = Tabela(self, kolumny=KOLUMNY)
         self._tabela.grid(row=1, column=0, sticky="nsew")
 
+    def _na_zmiane_magazyn(self, wartosc: str) -> None:
+        nastawienia.zapisz(_KLUCZ_FILTR, wartosc)
+        self._odswiez_stany()
+
     def odswiez(self) -> None:
         def zadanie():
             return api_client.pobierz_magazyny(tylko_aktywne=True, limit=200)
@@ -79,14 +86,19 @@ class PanelRaportPonizejMinimum(ctk.CTkFrame):
             etykiety = [WSZYSTKIE_MAGAZYNY] + [m["nazwa"] for m in magazyny]
             self._klucze_wg_etykiety_magazynu = {m["nazwa"]: m["id"] for m in magazyny}
             self._menu_magazyn.configure(values=etykiety)
-            if self._var_magazyn.get() not in etykiety:
+            if not self._filtr_przywrocony:
+                self._filtr_przywrocony = True
+                zapisany = nastawienia.wczytaj(_KLUCZ_FILTR)
+                if zapisany in etykiety:
+                    self._var_magazyn.set(zapisany)
+            elif self._var_magazyn.get() not in etykiety:
                 self._var_magazyn.set(WSZYSTKIE_MAGAZYNY)
             self._odswiez_stany()
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
-        uruchom_w_tle(self, zadanie, sukces, blad)
+        uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
 
     def _odswiez_stany(self) -> None:
         magazyn_id = self._klucze_wg_etykiety_magazynu.get(self._var_magazyn.get())
@@ -113,7 +125,7 @@ class PanelRaportPonizejMinimum(ctk.CTkFrame):
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
-        uruchom_w_tle(self, zadanie, sukces, blad)
+        uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
 
     def _eksportuj(self) -> None:
         formatery = {

@@ -47,6 +47,41 @@ class StatusInwentaryzacji(str, enum.Enum):
     ZAKONCZONA = "zakonczona"
 
 
+class CzestotliwoscCykliczna(str, enum.Enum):
+    MIESIECZNA = "miesieczna"
+    KWARTALNA = "kwartalna"
+    ROCZNA = "roczna"
+
+
+class StatusSzablonuCyklicznego(str, enum.Enum):
+    AKTYWNY = "aktywny"
+    WSTRZYMANY = "wstrzymany"
+
+
+class TypPodatnika(str, enum.Enum):
+    """Forma prawna firmy (Faza 13 - wplywa na ksztalt sekcji Podmiot1 w
+    JPK_V7: osoba fizyczna wymaga imienia/nazwiska/daty urodzenia, osoba
+    niefizyczna - pelnej nazwy). Konfigurowalne, bo appka ma obslugiwac
+    zarowno JDG jak i spolki."""
+
+    OSOBA_FIZYCZNA = "osoba_fizyczna"
+    OSOBA_NIEFIZYCZNA = "osoba_niefizyczna"
+
+
+# Typy dokumentu dozwolone jako szablon cykliczny (Faza 15) - wylacznie
+# dokumenty "samodzielne", ktore nie odnosza sie do innego konkretnego
+# dokumentu (korekty/nota/koncowa z definicji nie moga byc cykliczne, bo
+# kazda z nich koryguje/rozlicza JEDEN konkretny wczesniejszy dokument).
+DOZWOLONE_TYPY_SZABLONU_CYKLICZNEGO: frozenset[TypDokumentu] = frozenset(
+    {
+        TypDokumentu.FAKTURA_VAT,
+        TypDokumentu.PROFORMA,
+        TypDokumentu.FAKTURA_ZALICZKOWA,
+        TypDokumentu.RACHUNEK,
+    }
+)
+
+
 # Klasyfikacja typow dokumentu wg wymagan co do dokument_powiazany_id/przyczyna_korekty.
 # Wspoldzielone przez schematy (szybka walidacja 422) i serwis (zrodlo prawdy, patrz
 # app/services/faktury.py) - stad zyja tutaj, a nie w jednej z tych warstw.

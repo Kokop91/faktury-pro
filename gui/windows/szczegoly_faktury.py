@@ -5,8 +5,10 @@ from typing import Callable
 import customtkinter as ctk
 
 from gui import api_client, formatowanie, styl
+from gui.integracje_gui import sprawdz_biala_liste
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu
+from gui.widgets_pomocnicze import komunikat_bledu, ustaw_tekst_ladowania
+from gui.windows.baza_formularza import OknoFormularza
 from gui.windows.formularz_faktury import FormularzFaktury
 from gui.windows.formularz_platnosci import FormularzPlatnosci
 from gui.windows.tabela import Tabela
@@ -35,7 +37,7 @@ ETYKIETY_STAWEK_VAT = {"23": "23%", "8": "8%", "5": "5%", "0": "0%", "zw": "zw."
 STATUSY_BLOKUJACE_PLATNOSC = frozenset({"robocza", "anulowana"})
 
 
-class SzczegolyFaktury(ctk.CTkToplevel):
+class SzczegolyFaktury(OknoFormularza):
     def __init__(
         self,
         master,
@@ -46,13 +48,11 @@ class SzczegolyFaktury(ctk.CTkToplevel):
         super().__init__(master)
         self.title("Szczegóły faktury")
         self.geometry("820x780")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
 
         self._faktura_id = faktura_id
         self._faktura: dict | None = None
         self._platnosci: list[dict] = []
+        self._firma: dict | None = None
         self._nazwa_klienta = nazwa_klienta
         self._on_zmiana = on_zmiana or (lambda: None)
 
@@ -74,13 +74,21 @@ class SzczegolyFaktury(ctk.CTkToplevel):
                 klient = api_client.pobierz_klienta(faktura["klient_id"])
                 nazwa_klienta = klient["nazwa"]
             platnosci = api_client.pobierz_platnosci_faktury(faktura_id)
-            return faktura, nazwa_klienta, platnosci
+            try:
+                firma = api_client.pobierz_firme()
+            except api_client.ApiError:
+                # Dane firmy moga byc jeszcze nieuzupelnione (patrz Ustawienia) -
+                # to nie powinno blokowac wyswietlenia samej faktury, po prostu
+                # przycisk sprawdzenia bialej listy sie wtedy nie pojawi.
+                firma = None
+            return faktura, nazwa_klienta, platnosci, firma
 
         def sukces(wynik) -> None:
-            faktura, nazwa_klienta, platnosci = wynik
+            faktura, nazwa_klienta, platnosci, firma = wynik
             self._faktura = faktura
             self._nazwa_klienta = nazwa_klienta
             self._platnosci = platnosci
+            self._firma = firma
             self._etykieta_ladowania.destroy()
             self._zbuduj_widok(faktura)
 
@@ -302,6 +310,44 @@ class SzczegolyFaktury(ctk.CTkToplevel):
                 command=self._dodaj_platnosc,
             ).pack(side="left", padx=(styl.ODSTEP_MALY, 0))
 
+        if self._firma is not None and self._firma.get("nip"):
+            pasek_bialej_listy = ctk.CTkFrame(self, fg_color="transparent")
+            pasek_bialej_listy.grid(
+                row=7, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY)
+            )
+            self._przycisk_biala_lista = ctk.CTkButton(
+                pasek_bialej_listy,
+                text="Sprawdź w białej liście",
+                font=styl.CZCIONKA_TRESC,
+                fg_color="transparent",
+                border_width=1,
+                border_color=styl.KOLOR_OBRAMOWANIE,
+                text_color=styl.KOLOR_TEKST_GLOWNY,
+                hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+                command=self._sprawdz_biala_liste,
+            )
+            self._przycisk_biala_lista.pack(side="left")
+            self._etykieta_biala_lista = ctk.CTkLabel(
+                pasek_bialej_listy,
+                text="Sprawdza NIP i konto bankowe własnej firmy wydrukowane na tej fakturze.",
+                font=styl.CZCIONKA_DROBNA,
+                text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+                anchor="w",
+                wraplength=560,
+                justify="left",
+            )
+            self._etykieta_biala_lista.pack(side="left", padx=(styl.ODSTEP_MALY, 0))
+
+    def _sprawdz_biala_liste(self) -> None:
+        sprawdz_biala_liste(
+            self,
+            self._firma["nip"],
+            self._przycisk_biala_lista,
+            self._etykieta_biala_lista,
+            numer_konta=self._firma.get("bank_numer_konta"),
+            faktura_id=self._faktura_id,
+        )
+
     def _dodaj_platnosc(self) -> None:
         FormularzPlatnosci(
             self,
@@ -330,13 +376,13 @@ class SzczegolyFaktury(ctk.CTkToplevel):
         )
 
     def _pobierz_pdf(self) -> None:
-        self._przycisk_pdf.configure(state="disabled")
+        ustaw_tekst_ladowania(self._przycisk_pdf, True, "Pobierz PDF", "Generowanie PDF...")
 
         def zadanie():
             return api_client.pobierz_pdf_faktury(self._faktura_id)
 
         def sukces(tresc: bytes) -> None:
-            self._przycisk_pdf.configure(state="normal")
+            ustaw_tekst_ladowania(self._przycisk_pdf, False, "Pobierz PDF")
             numer_bezpieczny = self._faktura["numer"].replace("/", "_")
             sciezka = filedialog.asksaveasfilename(
                 parent=self,
@@ -359,7 +405,7 @@ class SzczegolyFaktury(ctk.CTkToplevel):
                 os.startfile(sciezka)
 
         def blad(e: api_client.ApiError) -> None:
-            self._przycisk_pdf.configure(state="normal")
+            ustaw_tekst_ladowania(self._przycisk_pdf, False, "Pobierz PDF")
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)

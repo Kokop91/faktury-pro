@@ -3,143 +3,16 @@ from typing import Callable
 
 import customtkinter as ctk
 
-from gui import api_client, formatowanie, styl
+from gui import api_client, formatowanie, ikony, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu
+from gui.widgets_pomocnicze import Banner, komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
+from gui.windows.baza_formularza import OknoFormularza
+from gui.windows.wiersz_pozycji import WierszPozycji
 
 TYPY_DOKUMENTU_KOLEJNOSC = list(formatowanie.ETYKIETY_TYPU_DOKUMENTU.keys())
 
-_ETYKIETY_STAWEK = [
-    formatowanie.ETYKIETY_STAWEK_VAT[s] for s in formatowanie.KOLEJNOSC_STAWEK_VAT
-]
-_KLUCZE_WG_ETYKIETY_STAWKI = {
-    formatowanie.ETYKIETY_STAWEK_VAT[s]: s for s in formatowanie.KOLEJNOSC_STAWEK_VAT
-}
 
-
-class _WierszPozycji(ctk.CTkFrame):
-    def __init__(
-        self,
-        master,
-        on_usun: Callable[["_WierszPozycji"], None],
-        on_zmiana: Callable[[], None],
-    ):
-        super().__init__(master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA)
-        self._on_usun = on_usun
-        self._on_zmiana = on_zmiana
-
-        for kolumna, waga in enumerate([3, 1, 1, 1, 1, 1, 0]):
-            self.grid_columnconfigure(kolumna, weight=waga)
-
-        self.pole_nazwa = ctk.CTkEntry(self, placeholder_text="Nazwa", font=styl.CZCIONKA_TRESC)
-        self.pole_nazwa.grid(row=0, column=0, sticky="ew", padx=(styl.ODSTEP_MALY, 4), pady=styl.ODSTEP_MALY)
-
-        self.pole_ilosc = ctk.CTkEntry(self, placeholder_text="Ilość", font=styl.CZCIONKA_TRESC)
-        self.pole_ilosc.insert(0, "1")
-        self.pole_ilosc.grid(row=0, column=1, sticky="ew", padx=4, pady=styl.ODSTEP_MALY)
-
-        self.pole_jednostka = ctk.CTkEntry(self, placeholder_text="J.m.", font=styl.CZCIONKA_TRESC)
-        self.pole_jednostka.insert(0, "szt.")
-        self.pole_jednostka.grid(row=0, column=2, sticky="ew", padx=4, pady=styl.ODSTEP_MALY)
-
-        self.pole_cena = ctk.CTkEntry(self, placeholder_text="Cena netto", font=styl.CZCIONKA_TRESC)
-        self.pole_cena.grid(row=0, column=3, sticky="ew", padx=4, pady=styl.ODSTEP_MALY)
-
-        self.stawka_var = ctk.StringVar(value=_ETYKIETY_STAWEK[0])
-        self.menu_stawka = ctk.CTkOptionMenu(
-            self,
-            values=_ETYKIETY_STAWEK,
-            variable=self.stawka_var,
-            command=lambda _wartosc: self._wywolaj_zmiane(),
-            width=70,
-        )
-        self.menu_stawka.grid(row=0, column=4, sticky="ew", padx=4, pady=styl.ODSTEP_MALY)
-
-        self.etykieta_wartosc = ctk.CTkLabel(
-            self, text="—", font=styl.CZCIONKA_TRESC, text_color=styl.KOLOR_TEKST_DRUGORZEDNY, anchor="e"
-        )
-        self.etykieta_wartosc.grid(row=0, column=5, sticky="ew", padx=4)
-
-        ctk.CTkButton(
-            self,
-            text="✕",
-            width=28,
-            fg_color="transparent",
-            text_color=styl.KOLOR_BLAD,
-            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
-            command=lambda: self._on_usun(self),
-        ).grid(row=0, column=6, padx=(4, styl.ODSTEP_MALY))
-
-        for pole in (self.pole_nazwa, self.pole_ilosc, self.pole_jednostka, self.pole_cena):
-            pole.bind("<KeyRelease>", lambda _zdarzenie: self._wywolaj_zmiane())
-
-        self._odswiez_podglad()
-
-    def _wywolaj_zmiane(self) -> None:
-        self._odswiez_podglad()
-        self._on_zmiana()
-
-    def _odswiez_podglad(self) -> None:
-        _netto, _vat, brutto = self.podsumowanie_grosze()
-        self.etykieta_wartosc.configure(
-            text=formatowanie.grosze_do_wpisu(brutto) if brutto else "—"
-        )
-
-    def podsumowanie_grosze(self) -> tuple[int, int, int]:
-        """Best-effort podglad (netto, vat, brutto) - (0, 0, 0) gdy wiersz niekompletny."""
-        try:
-            cena_grosze = formatowanie.parsuj_kwote(self.pole_cena.get())
-            ilosc = formatowanie.parsuj_ilosc(self.pole_ilosc.get())
-            stawka = _KLUCZE_WG_ETYKIETY_STAWKI.get(self.stawka_var.get(), "23")
-            return formatowanie.oblicz_podglad_pozycji(cena_grosze, ilosc, stawka)
-        except ValueError:
-            return 0, 0, 0
-
-    def ustaw_ograniczenie_zw(self, wlaczone: bool) -> None:
-        if wlaczone:
-            etykieta_zw = formatowanie.ETYKIETY_STAWEK_VAT["zw"]
-            self.stawka_var.set(etykieta_zw)
-            self.menu_stawka.configure(values=[etykieta_zw], state="disabled")
-        else:
-            self.menu_stawka.configure(values=_ETYKIETY_STAWEK, state="normal")
-        self._odswiez_podglad()
-
-    def pobierz_dane(self) -> dict:
-        nazwa = self.pole_nazwa.get().strip()
-        if not nazwa:
-            raise ValueError("nazwa jest wymagana")
-        ilosc = formatowanie.parsuj_ilosc(self.pole_ilosc.get())
-        jednostka = self.pole_jednostka.get().strip()
-        if not jednostka:
-            raise ValueError("jednostka miary jest wymagana")
-        cena_grosze = formatowanie.parsuj_kwote(self.pole_cena.get())
-        stawka = _KLUCZE_WG_ETYKIETY_STAWKI.get(self.stawka_var.get())
-        if stawka is None:
-            raise ValueError("wybierz stawkę VAT")
-        return {
-            "nazwa": nazwa,
-            "ilosc": str(ilosc),
-            "jednostka_miary": jednostka,
-            "cena_netto_grosze": cena_grosze,
-            "stawka_vat": stawka,
-        }
-
-    def wczytaj_dane(self, pozycja: dict) -> None:
-        self.pole_nazwa.delete(0, "end")
-        self.pole_nazwa.insert(0, pozycja["nazwa"])
-        self.pole_ilosc.delete(0, "end")
-        self.pole_ilosc.insert(0, str(pozycja["ilosc"]).replace(".", ","))
-        self.pole_jednostka.delete(0, "end")
-        self.pole_jednostka.insert(0, pozycja["jednostka_miary"])
-        self.pole_cena.delete(0, "end")
-        self.pole_cena.insert(0, formatowanie.grosze_do_wpisu(pozycja["cena_netto_grosze"]))
-        etykieta = formatowanie.ETYKIETY_STAWEK_VAT.get(pozycja["stawka_vat"])
-        if etykieta:
-            self.stawka_var.set(etykieta)
-        self._odswiez_podglad()
-
-
-class FormularzFaktury(ctk.CTkToplevel):
+class FormularzFaktury(OknoFormularza):
     def __init__(self, master, on_zapisano: Callable[[], None], faktura: dict | None = None):
         super().__init__(master)
         self._tryb_edycji = faktura is not None
@@ -147,17 +20,16 @@ class FormularzFaktury(ctk.CTkToplevel):
         self._faktura_zrodlowa = faktura
         self.title("Edytuj fakturę" if self._tryb_edycji else "Nowa faktura")
         self.geometry("940x780")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
 
         self._on_zapisano = on_zapisano
         self._klienci: list[dict] = []
         self._klienci_wg_id: dict[int, dict] = {}
         self._faktury_kandydaci: list[dict] = []
-        self._wiersze_pozycji: list[_WierszPozycji] = []
+        self._wiersze_pozycji: list[WierszPozycji] = []
         self._termin_platnosci_edytowany_recznie = False
         self._waluta_edytowana_recznie = False
+        self._kurs_edytowany_recznie = False
+        self._ostatnia_waluta_pobranego_kursu: str | None = None
 
         self._etykieta_ladowania = ctk.CTkLabel(
             self, text="Ładowanie...", font=styl.CZCIONKA_TRESC, text_color=styl.KOLOR_TEKST_DRUGORZEDNY
@@ -204,7 +76,7 @@ class FormularzFaktury(ctk.CTkToplevel):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, 2))
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
         widget = widget_fabryka(ramka)
         widget.pack(fill="x")
         return widget
@@ -213,10 +85,17 @@ class FormularzFaktury(ctk.CTkToplevel):
 
     def _zbuduj_formularz(self) -> None:
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        self._banner = Banner(self)
+        self._banner.ustaw_geometrie(
+            lambda: self._banner.grid(
+                row=0, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(styl.ODSTEP_DUZY, 0)
+            )
+        )
 
         przewijany = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        przewijany.grid(row=0, column=0, sticky="nsew", padx=styl.ODSTEP_DUZY, pady=(styl.ODSTEP_DUZY, 0))
+        przewijany.grid(row=1, column=0, sticky="nsew", padx=styl.ODSTEP_DUZY, pady=(styl.ODSTEP_DUZY, 0))
         przewijany.grid_columnconfigure(0, weight=1)
         przewijany.grid_columnconfigure(1, weight=1)
 
@@ -269,6 +148,9 @@ class FormularzFaktury(ctk.CTkToplevel):
             lambda m: ctk.CTkEntry(m, font=styl.CZCIONKA_TRESC),
         )
         self._pole_data_wystawienia.insert(0, dzis)
+        self._pole_data_wystawienia.bind(
+            "<FocusOut>", lambda _z: self._pobierz_kurs_automatycznie()
+        )
 
         self._pole_data_sprzedazy = self._pole(
             przewijany, 1, 1, "Data sprzedaży * (DD.MM.RRRR)",
@@ -291,12 +173,26 @@ class FormularzFaktury(ctk.CTkToplevel):
         self._pole_waluta.bind(
             "<KeyRelease>", lambda _z: setattr(self, "_waluta_edytowana_recznie", True)
         )
+        self._pole_waluta.bind(
+            "<FocusOut>", lambda _z: self._pobierz_kurs_automatycznie(), add="+"
+        )
 
         self._pole_kurs = self._pole(
             przewijany, 3, 0, "Kurs waluty",
             lambda m: ctk.CTkEntry(m, font=styl.CZCIONKA_TRESC),
         )
         self._pole_kurs.insert(0, "1")
+        self._pole_kurs.bind(
+            "<KeyRelease>", lambda _z: setattr(self, "_kurs_edytowany_recznie", True)
+        )
+        self._etykieta_kurs_zrodlo = ctk.CTkLabel(
+            self._pole_kurs.master,
+            text="",
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            anchor="w",
+        )
+        self._etykieta_kurs_zrodlo.pack(fill="x", pady=(2, 0))
 
         # Dokument powiazany (widoczny tylko dla korygujaca/nota/koncowa)
         self._ramka_dokument_powiazany = ctk.CTkFrame(przewijany, fg_color="transparent")
@@ -310,7 +206,7 @@ class FormularzFaktury(ctk.CTkToplevel):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).grid(row=0, column=0, sticky="w", pady=(0, 2))
+        ).grid(row=0, column=0, sticky="w", pady=(0, styl.ODSTEP_ETYKIETA))
         self._var_dokument_powiazany = ctk.StringVar(value="")
         self._klucze_wg_etykiety_dokumentu: dict[str, int] = {}
         self._menu_dokument_powiazany = ctk.CTkOptionMenu(
@@ -335,7 +231,7 @@ class FormularzFaktury(ctk.CTkToplevel):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).grid(row=0, column=0, sticky="w", pady=(0, 2))
+        ).grid(row=0, column=0, sticky="w", pady=(0, styl.ODSTEP_ETYKIETA))
         self._pole_przyczyna_korekty = ctk.CTkTextbox(
             self._ramka_przyczyna_korekty, height=60, font=styl.CZCIONKA_TRESC
         )
@@ -354,7 +250,9 @@ class FormularzFaktury(ctk.CTkToplevel):
         self._kontener_wierszy.grid(row=1, column=0, sticky="ew")
         ctk.CTkButton(
             self._ramka_pozycji,
-            text="+ Dodaj pozycję",
+            text="Dodaj pozycję",
+            image=ikony.ikona_adaptacyjna("plus"),
+            compound="left",
             font=styl.CZCIONKA_TRESC,
             fg_color="transparent",
             border_width=1,
@@ -380,7 +278,7 @@ class FormularzFaktury(ctk.CTkToplevel):
 
         # Przyciski akcji - poza przewijanym obszarem, zawsze widoczne
         pasek_przyciskow = ctk.CTkFrame(self, fg_color="transparent")
-        pasek_przyciskow.grid(row=1, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY)
+        pasek_przyciskow.grid(row=2, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY)
         pasek_przyciskow.grid_columnconfigure((0, 1, 2), weight=1)
 
         ctk.CTkButton(
@@ -391,7 +289,7 @@ class FormularzFaktury(ctk.CTkToplevel):
             border_color=styl.KOLOR_OBRAMOWANIE,
             text_color=styl.KOLOR_TEKST_GLOWNY,
             hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
-            command=self.destroy,
+            command=self._zamknij_z_potwierdzeniem,
         ).grid(row=0, column=0, sticky="ew", padx=(0, styl.ODSTEP_MALY))
         self._przycisk_robocza = ctk.CTkButton(
             pasek_przyciskow,
@@ -409,6 +307,9 @@ class FormularzFaktury(ctk.CTkToplevel):
             command=lambda: self._zapisz(wystaw=True),
         )
         self._przycisk_wystaw.grid(row=0, column=2, sticky="ew")
+        self.ustaw_akcje_zapisu(
+            lambda: self._zapisz(wystaw=False), self._przycisk_robocza
+        )
 
         if self._tryb_edycji:
             self._wypelnij_z_faktury(self._faktura_zrodlowa)
@@ -416,6 +317,7 @@ class FormularzFaktury(ctk.CTkToplevel):
             self._dodaj_wiersz_pozycji()
 
         self._na_zmiane_typu(self._var_typ.get())
+        self.zapamietaj_stan_poczatkowy()
 
     def _wiersz_podsumowania(self, master, etykieta_tekst: str, pogrubione: bool = False) -> ctk.CTkLabel:
         wiersz = ctk.CTkFrame(master, fg_color="transparent")
@@ -452,8 +354,49 @@ class FormularzFaktury(ctk.CTkToplevel):
         if not self._waluta_edytowana_recznie and not self._pole_waluta.get().strip():
             self._pole_waluta.delete(0, "end")
             self._pole_waluta.insert(0, klient.get("domyslna_waluta", "PLN"))
+            self._pobierz_kurs_automatycznie()
 
         self._odswiez_podsumowanie()
+
+    def _pobierz_kurs_automatycznie(self) -> None:
+        """Faza 14: pobiera z NBP kurs sredni (tabela A) z ostatniego dnia
+        roboczego przed data wystawienia, gdy wybrana jest waluta inna niz
+        PLN. Nie nadpisuje kursu wpisanego recznie przez uzytkownika dla TEJ
+        SAMEJ waluty - ale zmiana waluty zawsze wyzwala nowe pobranie, bo
+        stary kurs (recznie wpisany czy nie) na pewno juz nie pasuje."""
+        waluta = self._pole_waluta.get().strip().upper()
+        if len(waluta) != 3 or not waluta.isalpha() or waluta == "PLN":
+            return
+
+        try:
+            data_wystawienia = formatowanie.parsuj_date_pl(self._pole_data_wystawienia.get())
+        except ValueError:
+            return
+
+        waluta_zmieniona = waluta != self._ostatnia_waluta_pobranego_kursu
+        if not waluta_zmieniona and self._kurs_edytowany_recznie:
+            return
+
+        def zadanie():
+            return api_client.pobierz_kurs_nbp(waluta, data_wystawienia.isoformat())
+
+        def sukces(wynik: dict) -> None:
+            self._pole_kurs.delete(0, "end")
+            self._pole_kurs.insert(0, wynik["kurs"].replace(".", ","))
+            self._kurs_edytowany_recznie = False
+            self._ostatnia_waluta_pobranego_kursu = waluta
+            data_efektywna = formatowanie.formatuj_date(wynik["data_efektywna"])
+            self._etykieta_kurs_zrodlo.configure(
+                text=f"Kurs NBP z {data_efektywna}", text_color=styl.KOLOR_TEKST_DRUGORZEDNY
+            )
+
+        def blad(e: api_client.ApiError) -> None:
+            self._etykieta_kurs_zrodlo.configure(
+                text="Brak połączenia z NBP — wpisz kurs ręcznie.",
+                text_color=styl.KOLOR_OSTRZEZENIE,
+            )
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _na_zmiane_typu(self, etykieta: str) -> None:
         typ = self._klucze_wg_etykiety_typu.get(etykieta, "faktura_vat")
@@ -506,7 +449,7 @@ class FormularzFaktury(ctk.CTkToplevel):
     # -- pozycje --------------------------------------------------
 
     def _dodaj_wiersz_pozycji(self) -> None:
-        wiersz = _WierszPozycji(
+        wiersz = WierszPozycji(
             self._kontener_wierszy, on_usun=self._usun_wiersz_pozycji, on_zmiana=self._odswiez_podsumowanie
         )
         wiersz.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
@@ -516,7 +459,7 @@ class FormularzFaktury(ctk.CTkToplevel):
         self._wiersze_pozycji.append(wiersz)
         self._odswiez_podsumowanie()
 
-    def _usun_wiersz_pozycji(self, wiersz: _WierszPozycji) -> None:
+    def _usun_wiersz_pozycji(self, wiersz: WierszPozycji) -> None:
         wiersz.destroy()
         self._wiersze_pozycji.remove(wiersz)
         self._odswiez_podsumowanie()
@@ -556,12 +499,14 @@ class FormularzFaktury(ctk.CTkToplevel):
         self._waluta_edytowana_recznie = True
         self._pole_kurs.delete(0, "end")
         self._pole_kurs.insert(0, str(faktura["kurs_waluty"]).replace(".", ","))
+        self._kurs_edytowany_recznie = True
+        self._ostatnia_waluta_pobranego_kursu = faktura["waluta"].upper()
 
         if faktura.get("przyczyna_korekty"):
             self._pole_przyczyna_korekty.insert("1.0", faktura["przyczyna_korekty"])
 
         for pozycja in faktura.get("pozycje", []):
-            wiersz = _WierszPozycji(
+            wiersz = WierszPozycji(
                 self._kontener_wierszy,
                 on_usun=self._usun_wiersz_pozycji,
                 on_zmiana=self._odswiez_podsumowanie,
@@ -645,8 +590,9 @@ class FormularzFaktury(ctk.CTkToplevel):
                 bledy.append("Podaj przyczynę korekty.")
 
         if bledy:
-            komunikat_bledu(self, "\n".join(bledy))
+            self._banner.pokaz("\n".join(bledy))
             return None
+        self._banner.ukryj()
 
         dane: dict = {
             "typ_dokumentu": typ,
@@ -680,9 +626,10 @@ class FormularzFaktury(ctk.CTkToplevel):
                 wynik = api_client.zmien_status_faktury(wynik["id"], "wystawiona")
             return wynik
 
-        def sukces(_wynik) -> None:
+        def sukces(wynik) -> None:
             self._on_zapisano()
             self.destroy()
+            pokaz_toast(self.master, f"Faktura {wynik['numer']} zapisana.")
 
         def blad(e: api_client.ApiError) -> None:
             self._ustaw_przyciski_aktywne(True)
@@ -691,6 +638,7 @@ class FormularzFaktury(ctk.CTkToplevel):
         uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _ustaw_przyciski_aktywne(self, aktywne: bool) -> None:
-        stan = "normal" if aktywne else "disabled"
-        self._przycisk_robocza.configure(state=stan)
-        self._przycisk_wystaw.configure(state=stan)
+        ustaw_tekst_ladowania(
+            self._przycisk_robocza, not aktywne, "Zapisz jako robocza"
+        )
+        ustaw_tekst_ladowania(self._przycisk_wystaw, not aktywne, "Wystaw")

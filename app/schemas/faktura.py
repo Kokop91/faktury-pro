@@ -161,6 +161,8 @@ class FakturaOut(BaseModel):
     status_efektywny: StatusFaktury
     dokument_powiazany_id: int | None
     przyczyna_korekty: str | None
+    szablon_cykliczny_id: int | None
+    okres_cykliczny: date | None
     pozycje: list[PozycjaFakturyOut]
     suma_netto_grosze: int
     suma_vat_grosze: int

@@ -63,6 +63,26 @@ ETYKIETY_STATUSU_INWENTARYZACJI: dict[str, str] = {
     "zakonczona": "Zakończona",
 }
 
+ETYKIETY_CZESTOTLIWOSCI: dict[str, str] = {
+    "miesieczna": "Miesięczna",
+    "kwartalna": "Kwartalna",
+    "roczna": "Roczna",
+}
+KOLEJNOSC_CZESTOTLIWOSCI: list[str] = ["miesieczna", "kwartalna", "roczna"]
+
+ETYKIETY_STATUSU_SZABLONU: dict[str, str] = {
+    "aktywny": "Aktywny",
+    "wstrzymany": "Wstrzymany",
+}
+
+# Typy dozwolone jako szablon cykliczny (mirror
+# app/models/enums.py DOZWOLONE_TYPY_SZABLONU_CYKLICZNEGO) - korekty/noty/
+# faktury koncowe odnosza sie zawsze do jednego, konkretnego dokumentu, wiec
+# nie moga byc szablonem.
+DOZWOLONE_TYPY_SZABLONU_CYKLICZNEGO: frozenset[str] = frozenset(
+    {"faktura_vat", "proforma", "faktura_zaliczkowa", "rachunek"}
+)
+
 KOLEJNOSC_STAWEK_VAT: list[str] = ["23", "8", "5", "0", "zw"]
 
 ETYKIETY_STAWEK_VAT: dict[str, str] = {
@@ -108,6 +128,20 @@ def kolor_statusu_inwentaryzacji(status: str) -> str:
     return styl.KOLOR_OSTRZEZENIE if status == "w_trakcie" else styl.KOLOR_SUKCES
 
 
+def formatuj_czestotliwosc(czestotliwosc: str) -> str:
+    return ETYKIETY_CZESTOTLIWOSCI.get(czestotliwosc, czestotliwosc)
+
+
+def formatuj_status_szablonu(status: str) -> str:
+    return ETYKIETY_STATUSU_SZABLONU.get(status, status)
+
+
+def kolor_statusu_szablonu(status: str) -> str:
+    # Wstrzymanie jest normalnym, celowym dzialaniem uzytkownika - nie
+    # ostrzegawczy kolor, tylko neutralny (w odroznieniu np. od "po terminie").
+    return styl.KOLOR_SUKCES if status == "aktywny" else styl.KOLOR_TEKST_DRUGORZEDNY
+
+
 def formatuj_kwote(grosze: int, waluta: str = "PLN") -> str:
     """Formatuje grosze (int) do postaci '1 234,56 PLN'. Arytmetyka calkowita
     (bez dzielenia float), zeby pieniadze nie stracily precyzji nawet w prezentacji.
@@ -132,6 +166,19 @@ def formatuj_date(wartosc) -> str:
     if isinstance(wartosc, datetime):
         wartosc = wartosc.date()
     return wartosc.strftime("%d.%m.%Y")
+
+
+def formatuj_data_czas(wartosc) -> str:
+    """Data + godzina (Faza 14: znacznik czasu weryfikacji bialej listy VAT -
+    ma znaczenie dowodowe, wiec sama data bez godziny by nie wystarczyla)."""
+    if wartosc is None:
+        return ""
+    if isinstance(wartosc, str):
+        try:
+            wartosc = datetime.fromisoformat(wartosc)
+        except ValueError:
+            return wartosc
+    return wartosc.strftime("%d.%m.%Y %H:%M")
 
 
 def _zaokraglij_do_grosza(wartosc: Decimal) -> int:

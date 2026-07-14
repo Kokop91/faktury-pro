@@ -4,8 +4,10 @@ from typing import Callable
 import customtkinter as ctk
 
 from gui import api_client, styl
+from gui.integracje_gui import pobierz_z_gus, sprawdz_biala_liste
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu
+from gui.widgets_pomocnicze import Banner, komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
+from gui.windows.baza_formularza import OknoFormularza
 
 # (klucz, etykieta, wartosc_domyslna)
 POLA = [
@@ -22,16 +24,13 @@ POLA = [
 ]
 
 
-class FormularzKlienta(ctk.CTkToplevel):
+class FormularzKlienta(OknoFormularza):
     def __init__(self, master, on_zapisano: Callable[[], None], klient: dict | None = None):
         super().__init__(master)
         self._tryb_edycji = klient is not None
         self._klient = klient
         self.title("Edytuj klienta" if self._tryb_edycji else "Dodaj klienta")
         self.geometry("420x660" if self._tryb_edycji else "420x600")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
 
         self._on_zapisano = on_zapisano
         self._pola: dict[str, ctk.CTkEntry] = {}
@@ -41,24 +40,83 @@ class FormularzKlienta(ctk.CTkToplevel):
             fill="both", expand=True, padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY
         )
 
+        self._banner = Banner(kontener)
+        self._banner.ustaw_geometrie(
+            lambda: self._banner.pack(
+                fill="x", pady=(0, styl.ODSTEP_MALY), before=self._pierwsza_etykieta
+            )
+        )
+        self._pierwsza_etykieta = None
+
         for klucz, etykieta, wartosc_domyslna in POLA:
-            ctk.CTkLabel(
+            etykieta_pola = ctk.CTkLabel(
                 kontener,
                 text=etykieta,
                 font=styl.CZCIONKA_ETYKIETA,
                 text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
                 anchor="w",
-            ).pack(fill="x", pady=(styl.ODSTEP_MALY, 2))
-            wpis = ctk.CTkEntry(kontener, font=styl.CZCIONKA_TRESC)
+            )
+            etykieta_pola.pack(fill="x", pady=(styl.ODSTEP_MALY, 2))
+            if self._pierwsza_etykieta is None:
+                self._pierwsza_etykieta = etykieta_pola
+
             wartosc_startowa = wartosc_domyslna
             if self._tryb_edycji:
                 wartosc_z_klienta = klient.get(klucz)
                 wartosc_startowa = (
                     str(wartosc_z_klienta) if wartosc_z_klienta not in (None, "") else ""
                 )
+
+            if klucz == "nip":
+                # NIP dostaje wlasny wiersz z przyciskami integracji (Faza 14) -
+                # pobranie danych z GUS wypelnia reszte pol, sprawdzenie w
+                # bialej liscie dziala na tym, co akurat jest wpisane w pole.
+                wiersz_nip = ctk.CTkFrame(kontener, fg_color="transparent")
+                wiersz_nip.pack(fill="x")
+                wiersz_nip.grid_columnconfigure(0, weight=1)
+                wpis = ctk.CTkEntry(wiersz_nip, font=styl.CZCIONKA_TRESC)
+                wpis.grid(row=0, column=0, sticky="ew", padx=(0, styl.ODSTEP_MALY))
+                self._przycisk_gus = ctk.CTkButton(
+                    wiersz_nip,
+                    text="Pobierz z GUS",
+                    font=styl.CZCIONKA_DROBNA,
+                    width=110,
+                    fg_color="transparent",
+                    border_width=1,
+                    border_color=styl.KOLOR_OBRAMOWANIE,
+                    text_color=styl.KOLOR_TEKST_GLOWNY,
+                    hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+                    command=self._pobierz_z_gus,
+                )
+                self._przycisk_gus.grid(row=0, column=1)
+
+                self._etykieta_biala_lista = ctk.CTkLabel(
+                    kontener,
+                    text="",
+                    font=styl.CZCIONKA_DROBNA,
+                    anchor="w",
+                    wraplength=360,
+                    justify="left",
+                )
+                self._etykieta_biala_lista.pack(fill="x", pady=(styl.ODSTEP_MIKRO, 0))
+                self._przycisk_biala_lista = ctk.CTkButton(
+                    kontener,
+                    text="Sprawdź w białej liście",
+                    font=styl.CZCIONKA_DROBNA,
+                    fg_color="transparent",
+                    border_width=1,
+                    border_color=styl.KOLOR_OBRAMOWANIE,
+                    text_color=styl.KOLOR_TEKST_GLOWNY,
+                    hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+                    command=self._sprawdz_biala_liste,
+                )
+                self._przycisk_biala_lista.pack(anchor="w", pady=(styl.ODSTEP_MIKRO, 0))
+            else:
+                wpis = ctk.CTkEntry(kontener, font=styl.CZCIONKA_TRESC)
+                wpis.pack(fill="x")
+
             if wartosc_startowa:
                 wpis.insert(0, wartosc_startowa)
-            wpis.pack(fill="x")
             self._pola[klucz] = wpis
 
         przyciski = ctk.CTkFrame(self, fg_color="transparent")
@@ -72,7 +130,7 @@ class FormularzKlienta(ctk.CTkToplevel):
             border_color=styl.KOLOR_OBRAMOWANIE,
             text_color=styl.KOLOR_TEKST_GLOWNY,
             hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
-            command=self.destroy,
+            command=self._zamknij_z_potwierdzeniem,
         ).pack(side="left", expand=True, fill="x", padx=(0, styl.ODSTEP_MALY))
         self._przycisk_zapisz = ctk.CTkButton(
             przyciski,
@@ -82,6 +140,7 @@ class FormularzKlienta(ctk.CTkToplevel):
             command=self._zapisz,
         )
         self._przycisk_zapisz.pack(side="left", expand=True, fill="x")
+        self.ustaw_akcje_zapisu(self._zapisz, self._przycisk_zapisz)
 
         if self._tryb_edycji:
             self._przycisk_dezaktywuj = ctk.CTkButton(
@@ -98,10 +157,39 @@ class FormularzKlienta(ctk.CTkToplevel):
                 fill="x", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY)
             )
 
+        self.zapamietaj_stan_poczatkowy()
+
+    def _pobierz_z_gus(self) -> None:
+        def wypelnij(podmiot: dict) -> None:
+            mapowanie = {
+                "nazwa": "nazwa",
+                "ulica": "ulica",
+                "kod_pocztowy": "kod_pocztowy",
+                "miejscowosc": "miejscowosc",
+            }
+            for klucz_podmiotu, klucz_pola in mapowanie.items():
+                wartosc = podmiot.get(klucz_podmiotu)
+                if wartosc:
+                    self._pola[klucz_pola].delete(0, "end")
+                    self._pola[klucz_pola].insert(0, wartosc)
+
+        pobierz_z_gus(
+            self, self._pola["nip"].get(), self._przycisk_gus, self._banner, wypelnij
+        )
+
+    def _sprawdz_biala_liste(self) -> None:
+        sprawdz_biala_liste(
+            self,
+            self._pola["nip"].get(),
+            self._przycisk_biala_lista,
+            self._etykieta_biala_lista,
+            klient_id=self._klient["id"] if self._tryb_edycji else None,
+        )
+
     def _zebrane_dane(self) -> dict | None:
         nazwa = self._pola["nazwa"].get().strip()
         if not nazwa:
-            komunikat_bledu(self, "Nazwa klienta jest wymagana.")
+            self._banner.pokaz("Nazwa klienta jest wymagana.")
             return None
 
         dane: dict = {"nazwa": nazwa}
@@ -124,9 +212,10 @@ class FormularzKlienta(ctk.CTkToplevel):
             try:
                 dane["domyslny_termin_platnosci_dni"] = int(termin_tekst)
             except ValueError:
-                komunikat_bledu(self, "Termin płatności musi być liczbą całkowitą dni.")
+                self._banner.pokaz("Termin płatności musi być liczbą całkowitą dni.")
                 return None
 
+        self._banner.ukryj()
         return dane
 
     def _zapisz(self) -> None:
@@ -141,9 +230,10 @@ class FormularzKlienta(ctk.CTkToplevel):
                 return api_client.aktualizuj_klienta(self._klient["id"], dane)
             return api_client.utworz_klienta(dane)
 
-        def sukces(_wynik) -> None:
+        def sukces(wynik) -> None:
             self._on_zapisano()
             self.destroy()
+            pokaz_toast(self.master, f"Klient „{wynik['nazwa']}” zapisany.")
 
         def blad(e: api_client.ApiError) -> None:
             self._ustaw_przyciski_aktywne(True)
@@ -168,7 +258,9 @@ class FormularzKlienta(ctk.CTkToplevel):
 
         def sukces(_wynik) -> None:
             self._on_zapisano()
+            nazwa_klienta = self._klient["nazwa"]
             self.destroy()
+            pokaz_toast(self.master, f"Klient „{nazwa_klienta}” dezaktywowany.")
 
         def blad(e: api_client.ApiError) -> None:
             self._ustaw_przyciski_aktywne(True)
@@ -177,7 +269,7 @@ class FormularzKlienta(ctk.CTkToplevel):
         uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _ustaw_przyciski_aktywne(self, aktywne: bool) -> None:
-        stan = "normal" if aktywne else "disabled"
-        self._przycisk_zapisz.configure(state=stan)
+        ustaw_tekst_ladowania(self._przycisk_zapisz, not aktywne, "Zapisz")
         if self._tryb_edycji:
+            stan = "normal" if aktywne else "disabled"
             self._przycisk_dezaktywuj.configure(state=stan)

@@ -46,6 +46,16 @@ class Faktura(Base):
     )
     przyczyna_korekty: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Faza 15 - wypelnione wylacznie dla faktur powstalych automatycznie z
+    # szablonu cyklicznego. okres_cykliczny to termin (okres) ktory ta faktura
+    # rozlicza - trzymany OSOBNO od data_wystawienia, bo ta ostatnia jest
+    # edytowalna dopoki faktura jest robocza, a okres musi zostac niezmienny
+    # (uzywany do wykrywania, ktore terminy szablonu sa juz pokryte).
+    szablon_cykliczny_id: Mapped[int | None] = mapped_column(
+        ForeignKey("szablony_cykliczne.id"), nullable=True
+    )
+    okres_cykliczny: Mapped[date | None] = mapped_column(Date, nullable=True)
+
     utworzono: Mapped[datetime] = mapped_column(server_default=func.now())
     zaktualizowano: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()
@@ -66,6 +76,10 @@ class Faktura(Base):
     )
     korekty_i_rozliczenia: Mapped[list["Faktura"]] = relationship(
         back_populates="dokument_powiazany"
+    )
+
+    szablon_cykliczny: Mapped["SzablonCykliczny | None"] = relationship(
+        back_populates="faktury_wygenerowane"
     )
 
     @property

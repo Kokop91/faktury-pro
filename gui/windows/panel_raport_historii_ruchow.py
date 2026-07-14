@@ -2,11 +2,13 @@ from decimal import Decimal
 
 import customtkinter as ctk
 
-from gui import api_client, formatowanie, styl
+from gui import api_client, formatowanie, nastawienia, styl
 from gui.eksport_csv import eksportuj_do_csv
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
 from gui.windows.tabela import Tabela
+
+_KLUCZ_FILTR = "filtr_historia_ruchow"
 
 KOLUMNY = [
     ("data_dokumentu", "Data", 1),
@@ -38,6 +40,8 @@ class PanelRaportHistoriiRuchow(ctk.CTkFrame):
 
         self._klucze_wg_etykiety_magazynu: dict[str, int] = {}
         self._ruchy: list[dict] = []
+        self._filtr_przywrocony = False
+        filtr_zapisany = nastawienia.wczytaj(_KLUCZ_FILTR) or {}
 
         pasek_naglowka = ctk.CTkFrame(self, fg_color="transparent")
         pasek_naglowka.grid(row=0, column=0, sticky="ew", pady=(0, styl.ODSTEP_SREDNI))
@@ -69,6 +73,7 @@ class PanelRaportHistoriiRuchow(ctk.CTkFrame):
         self._pole_data_od = ctk.CTkEntry(
             pasek_naglowka, font=styl.CZCIONKA_TRESC, width=110, placeholder_text="DD.MM.RRRR"
         )
+        self._pole_data_od.insert(0, filtr_zapisany.get("data_od", ""))
         self._pole_data_od.pack(side="left", padx=(0, styl.ODSTEP_MALY))
 
         ctk.CTkLabel(
@@ -80,6 +85,7 @@ class PanelRaportHistoriiRuchow(ctk.CTkFrame):
         self._pole_data_do = ctk.CTkEntry(
             pasek_naglowka, font=styl.CZCIONKA_TRESC, width=110, placeholder_text="DD.MM.RRRR"
         )
+        self._pole_data_do.insert(0, filtr_zapisany.get("data_do", ""))
         self._pole_data_do.pack(side="left", padx=(0, styl.ODSTEP_SREDNI))
 
         ctk.CTkButton(
@@ -117,14 +123,19 @@ class PanelRaportHistoriiRuchow(ctk.CTkFrame):
             etykiety = [WSZYSTKIE_MAGAZYNY] + [m["nazwa"] for m in magazyny]
             self._klucze_wg_etykiety_magazynu = {m["nazwa"]: m["id"] for m in magazyny}
             self._menu_magazyn.configure(values=etykiety)
-            if self._var_magazyn.get() not in etykiety:
+            if not self._filtr_przywrocony:
+                self._filtr_przywrocony = True
+                zapisany = (nastawienia.wczytaj(_KLUCZ_FILTR) or {}).get("magazyn")
+                if zapisany in etykiety:
+                    self._var_magazyn.set(zapisany)
+            elif self._var_magazyn.get() not in etykiety:
                 self._var_magazyn.set(WSZYSTKIE_MAGAZYNY)
             self._odswiez_ruchy()
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
-        uruchom_w_tle(self, zadanie, sukces, blad)
+        uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
 
     def _odswiez_ruchy(self) -> None:
         magazyn_id = self._klucze_wg_etykiety_magazynu.get(self._var_magazyn.get())
@@ -146,6 +157,11 @@ class PanelRaportHistoriiRuchow(ctk.CTkFrame):
             except ValueError as e:
                 komunikat_bledu(self, f"Data do: {e}")
                 return
+
+        nastawienia.zapisz(
+            _KLUCZ_FILTR,
+            {"magazyn": self._var_magazyn.get(), "data_od": tekst_od, "data_do": tekst_do},
+        )
 
         def zadanie():
             return api_client.pobierz_raport_historii_ruchow(
@@ -178,7 +194,7 @@ class PanelRaportHistoriiRuchow(ctk.CTkFrame):
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
-        uruchom_w_tle(self, zadanie, sukces, blad)
+        uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
 
     def _eksportuj(self) -> None:
         formatery = {

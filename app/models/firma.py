@@ -1,11 +1,11 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Enum, String
+from sqlalchemy import Date, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.database import Base
-from app.models.enums import StawkaVat, TrybBlokadyStanu
+from app.models.enums import StawkaVat, TrybBlokadyStanu, TypPodatnika
 
 
 class Firma(Base):
@@ -28,6 +28,20 @@ class Firma(Base):
     bank_numer_konta: Mapped[str | None] = mapped_column(String(34))
 
     logo_path: Mapped[str | None] = mapped_column(String(500))
+
+    # Faza 13 (JPK_V7) - forma prawna firmy okresla ksztalt sekcji Podmiot1:
+    # osoba fizyczna (JDG) potrzebuje imie/nazwisko/data urodzenia, osoba
+    # niefizyczna (spolka) - samej nazwy (juz w polu "nazwa"). Brak pola REGON -
+    # lokalna definicja Podmiot1 w schemacie JPK_V7 nie ma tego pola.
+    typ_podatnika: Mapped[TypPodatnika] = mapped_column(
+        Enum(TypPodatnika, name="typ_podatnika"),
+        nullable=False,
+        default=TypPodatnika.OSOBA_NIEFIZYCZNA,
+    )
+    imie_pierwsze: Mapped[str | None] = mapped_column(String(30))
+    nazwisko: Mapped[str | None] = mapped_column(String(81))
+    data_urodzenia: Mapped[date | None] = mapped_column(Date)
+    kod_urzedu_skarbowego: Mapped[str | None] = mapped_column(String(4))
 
     domyslna_stawka_vat: Mapped[StawkaVat] = mapped_column(
         Enum(StawkaVat, name="stawka_vat"),

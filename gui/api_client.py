@@ -293,3 +293,157 @@ def pobierz_raport_ponizej_minimum(magazyn_id: int | None = None) -> list[dict]:
     return _wykonaj(
         "GET", "/raporty/ponizej-minimum", TIMEOUT_ODCZYT, params=parametry
     ).json()
+
+
+def sprawdz_gotowosc_jpk(rok: int, miesiac: int) -> dict:
+    return _wykonaj(
+        "GET",
+        "/raporty/jpk-v7/sprawdz",
+        TIMEOUT_ODCZYT,
+        params={"rok": rok, "miesiac": miesiac},
+    ).json()
+
+
+def pobierz_jpk_v7(rok: int, miesiac: int, wariant: str) -> bytes:
+    return _wykonaj(
+        "GET",
+        "/raporty/jpk-v7",
+        TIMEOUT_PDF,
+        params={"rok": rok, "miesiac": miesiac, "wariant": wariant},
+    ).content
+
+
+def pobierz_dashboard() -> dict:
+    return _wykonaj("GET", "/dashboard", TIMEOUT_ODCZYT).json()
+
+
+def pobierz_firme() -> dict:
+    return _wykonaj("GET", "/firma", TIMEOUT_ODCZYT).json()
+
+
+def utworz_firme(dane: dict) -> dict:
+    return _wykonaj("POST", "/firma", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def aktualizuj_firme(dane: dict) -> dict:
+    return _wykonaj("PUT", "/firma", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def pobierz_urzedy_skarbowe() -> list[dict]:
+    return _wykonaj("GET", "/firma/urzedy-skarbowe", TIMEOUT_ODCZYT).json()
+
+
+# -- integracje zewnetrzne (Faza 14: GUS, NBP, biala lista VAT) --------------
+# Wywolania zewnetrznych API (przez backend) moga trwac dluzej niz lokalne
+# zapytania do wlasnego serwera - stad wlasny, dluzszy timeout.
+TIMEOUT_INTEGRACJA = 15.0
+
+
+def pobierz_ustawienia_gus() -> dict:
+    return _wykonaj("GET", "/integracje/gus/ustawienia", TIMEOUT_ODCZYT).json()
+
+
+def zapisz_ustawienia_gus(dane: dict) -> dict:
+    return _wykonaj(
+        "PUT", "/integracje/gus/ustawienia", TIMEOUT_ZAPIS, json=dane
+    ).json()
+
+
+def szukaj_w_gus(nip: str) -> dict:
+    return _wykonaj(
+        "GET", "/integracje/gus/szukaj", TIMEOUT_INTEGRACJA, params={"nip": nip}
+    ).json()
+
+
+def pobierz_kurs_nbp(waluta: str, data_wystawienia: str) -> dict:
+    return _wykonaj(
+        "GET",
+        "/integracje/nbp/kurs",
+        TIMEOUT_INTEGRACJA,
+        params={"waluta": waluta, "data_wystawienia": data_wystawienia},
+    ).json()
+
+
+def sprawdz_biala_liste(
+    nip: str,
+    numer_konta: str | None = None,
+    klient_id: int | None = None,
+    faktura_id: int | None = None,
+) -> dict:
+    dane = {"nip": nip}
+    if numer_konta:
+        dane["numer_konta"] = numer_konta
+    if klient_id is not None:
+        dane["klient_id"] = klient_id
+    if faktura_id is not None:
+        dane["faktura_id"] = faktura_id
+    return _wykonaj(
+        "POST", "/integracje/biala-lista/sprawdz", TIMEOUT_INTEGRACJA, json=dane
+    ).json()
+
+
+def historia_bialej_listy_klienta(klient_id: int) -> list[dict]:
+    return _wykonaj(
+        "GET", f"/integracje/biala-lista/klient/{klient_id}", TIMEOUT_ODCZYT
+    ).json()
+
+
+def historia_bialej_listy_faktury(faktura_id: int) -> list[dict]:
+    return _wykonaj(
+        "GET", f"/integracje/biala-lista/faktura/{faktura_id}", TIMEOUT_ODCZYT
+    ).json()
+
+
+# -- faktury cykliczne (Faza 15) ---------------------------------------------
+
+
+def pobierz_szablony_cykliczne(tylko_aktywne: bool = False) -> list[dict]:
+    return _wykonaj(
+        "GET",
+        "/faktury-cykliczne",
+        TIMEOUT_ODCZYT,
+        params={"tylko_aktywne": tylko_aktywne},
+    ).json()
+
+
+def pobierz_szablon_cykliczny(szablon_id: int) -> dict:
+    return _wykonaj("GET", f"/faktury-cykliczne/{szablon_id}", TIMEOUT_ODCZYT).json()
+
+
+def utworz_szablon_cykliczny(dane: dict) -> dict:
+    return _wykonaj("POST", "/faktury-cykliczne", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def aktualizuj_szablon_cykliczny(szablon_id: int, dane: dict) -> dict:
+    return _wykonaj(
+        "PUT", f"/faktury-cykliczne/{szablon_id}", TIMEOUT_ZAPIS, json=dane
+    ).json()
+
+
+def zmien_status_szablonu_cyklicznego(szablon_id: int, status: str) -> dict:
+    return _wykonaj(
+        "PATCH",
+        f"/faktury-cykliczne/{szablon_id}/status",
+        TIMEOUT_ZAPIS,
+        json={"status": status},
+    ).json()
+
+
+def historia_faktur_szablonu(szablon_id: int) -> list[dict]:
+    return _wykonaj(
+        "GET", f"/faktury-cykliczne/{szablon_id}/faktury", TIMEOUT_ODCZYT
+    ).json()
+
+
+def pobierz_zalegle_faktury_cykliczne() -> list[dict]:
+    return _wykonaj("GET", "/faktury-cykliczne/zalegle", TIMEOUT_ODCZYT).json()
+
+
+def generuj_faktury_cykliczne(pozycje: list[dict] | None = None) -> list[dict]:
+    """`pozycje`: lista {"szablon_id": int, "okres": "RRRR-MM-DD"} do
+    wygenerowania, albo None - wtedy generowane sa WSZYSTKIE aktualnie
+    zalegle terminy wszystkich aktywnych szablonow."""
+    dane = {"pozycje": pozycje} if pozycje is not None else {}
+    return _wykonaj(
+        "POST", "/faktury-cykliczne/generuj", TIMEOUT_ZAPIS, json=dane
+    ).json()

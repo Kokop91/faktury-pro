@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import customtkinter as ctk
 
-from gui import api_client, formatowanie, styl
+from gui import api_client, formatowanie, ikony, nastawienia, styl
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
 from gui.windows.formularz_produktu import FormularzProduktu
@@ -21,6 +21,9 @@ FILTR_WSZYSTKIE = "Wszystkie"
 FILTR_TOWARY = "Tylko towary"
 FILTR_USLUGI = "Tylko usługi"
 OPCJE_FILTRA = [FILTR_WSZYSTKIE, FILTR_TOWARY, FILTR_USLUGI]
+
+_KLUCZ_FILTR = "filtr_typ_produktow"
+_KLUCZ_SORTOWANIE = "sortowanie_produkty"
 
 
 class PanelProduktow(ctk.CTkFrame):
@@ -45,7 +48,7 @@ class PanelProduktow(ctk.CTkFrame):
         pasek_naglowka.grid(
             row=0, column=0, sticky="ew", pady=(0, styl.ODSTEP_SREDNI)
         )
-        pasek_naglowka.grid_columnconfigure(1, weight=1)
+        pasek_naglowka.grid_columnconfigure(2, weight=1)
 
         ctk.CTkLabel(
             pasek_naglowka,
@@ -54,30 +57,61 @@ class PanelProduktow(ctk.CTkFrame):
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
         ).grid(row=0, column=0, padx=(0, styl.ODSTEP_MALY))
 
-        self._var_filtr = ctk.StringVar(value=FILTR_WSZYSTKIE)
+        filtr_zapisany = nastawienia.wczytaj(_KLUCZ_FILTR)
+        wartosc_filtra = filtr_zapisany if filtr_zapisany in OPCJE_FILTRA else FILTR_WSZYSTKIE
+        self._var_filtr = ctk.StringVar(value=wartosc_filtra)
         ctk.CTkOptionMenu(
             pasek_naglowka,
             values=OPCJE_FILTRA,
             variable=self._var_filtr,
-            command=lambda _wartosc: self._odswiez_tabele(),
+            command=lambda wartosc: self._na_zmiane_filtra(wartosc),
             fg_color=styl.KOLOR_AKCENT,
             button_color=styl.KOLOR_AKCENT,
             button_hover_color=styl.KOLOR_AKCENT_HOVER,
         ).grid(row=0, column=1, sticky="w")
 
+        self._pole_szukaj = ctk.CTkEntry(
+            pasek_naglowka,
+            font=styl.CZCIONKA_TRESC,
+            width=220,
+            placeholder_text="Szukaj po nazwie...",
+        )
+        self._pole_szukaj.grid(row=0, column=2, padx=(styl.ODSTEP_SREDNI, styl.ODSTEP_SREDNI), sticky="w")
+        self._pole_szukaj.bind("<KeyRelease>", lambda _z: self._odswiez_tabele())
+
         ctk.CTkButton(
             pasek_naglowka,
-            text="+ Dodaj produkt",
+            text="Dodaj produkt",
+            image=ikony.ikona_stala("plus"),
+            compound="left",
             font=styl.CZCIONKA_TRESC,
             fg_color=styl.KOLOR_AKCENT,
             hover_color=styl.KOLOR_AKCENT_HOVER,
             command=self._otworz_formularz,
-        ).grid(row=0, column=2)
+        ).grid(row=0, column=3)
 
+        sortowanie_zapisane = nastawienia.wczytaj(_KLUCZ_SORTOWANIE)
+        sortowanie_poczatkowe = (
+            tuple(sortowanie_zapisane) if isinstance(sortowanie_zapisane, list) else None
+        )
         self._tabela = Tabela(
-            self, kolumny=KOLUMNY, on_wiersz_kliknij=self._otworz_szczegoly
+            self,
+            kolumny=KOLUMNY,
+            on_wiersz_kliknij=self._otworz_szczegoly,
+            sortowalne=True,
+            sortowanie_poczatkowe=sortowanie_poczatkowe,
+            on_zmiana_sortowania=lambda klucz, malejaco: nastawienia.zapisz(
+                _KLUCZ_SORTOWANIE, [klucz, malejaco]
+            ),
         )
         self._tabela.grid(row=1, column=0, sticky="nsew")
+
+    def fokus_wyszukiwania(self) -> None:
+        self._pole_szukaj.focus_set()
+
+    def _na_zmiane_filtra(self, wartosc: str) -> None:
+        nastawienia.zapisz(_KLUCZ_FILTR, wartosc)
+        self._odswiez_tabele()
 
     def odswiez(self) -> None:
         def zadanie():
@@ -104,7 +138,7 @@ class PanelProduktow(ctk.CTkFrame):
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
-        uruchom_w_tle(self, zadanie, sukces, blad)
+        uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
 
     def _odswiez_tabele(self) -> None:
         filtr = self._var_filtr.get()
@@ -114,6 +148,10 @@ class PanelProduktow(ctk.CTkFrame):
             wiersze = [p for p in self._produkty if not p["jest_magazynowy"]]
         else:
             wiersze = self._produkty
+
+        szukana_fraza = self._pole_szukaj.get().strip().lower()
+        if szukana_fraza:
+            wiersze = [p for p in wiersze if szukana_fraza in p["nazwa"].lower()]
 
         formatery = {
             "cena_netto_grosze": lambda p: formatowanie.formatuj_kwote(
@@ -129,7 +167,13 @@ class PanelProduktow(ctk.CTkFrame):
                 else styl.KOLOR_TEKST_GLOWNY
             ),
         }
-        self._tabela.ustaw_dane(wiersze, formatery=formatery, kolory=kolory)
+        klucze_sortowania = {
+            "typ": lambda p: p["jest_magazynowy"],
+            "stan": lambda p: self._ilosc_wg_produktu.get(p["id"], Decimal("0")),
+        }
+        self._tabela.ustaw_dane(
+            wiersze, formatery=formatery, kolory=kolory, klucze_sortowania=klucze_sortowania
+        )
 
     def _tekst_stanu(self, produkt: dict) -> str:
         if not produkt["jest_magazynowy"]:

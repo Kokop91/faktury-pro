@@ -5,6 +5,7 @@ import customtkinter as ctk
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
+from gui.windows.baza_formularza import OknoFormularza
 from gui.windows.tabela import Tabela
 
 KOLUMNY_HISTORII = [
@@ -16,14 +17,11 @@ KOLUMNY_HISTORII = [
 ]
 
 
-class SzczegolyProduktu(ctk.CTkToplevel):
+class SzczegolyProduktu(OknoFormularza):
     def __init__(self, master, produkt_id: int):
         super().__init__(master)
         self.title("Szczegóły produktu")
         self.geometry("760x640")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
 
         self._produkt_id = produkt_id
 

@@ -6,7 +6,14 @@ import customtkinter as ctk
 
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu, komunikat_ostrzezenie
+from gui.widgets_pomocnicze import (
+    Banner,
+    komunikat_bledu,
+    komunikat_ostrzezenie,
+    pokaz_toast,
+    ustaw_tekst_ladowania,
+)
+from gui.windows.baza_formularza import OknoFormularza
 
 
 class _WierszLiczenia(ctk.CTkFrame):
@@ -28,7 +35,7 @@ class _WierszLiczenia(ctk.CTkFrame):
             font=styl.CZCIONKA_TRESC,
             text_color=styl.KOLOR_TEKST_GLOWNY,
             anchor="w",
-        ).grid(row=0, column=0, sticky="ew", padx=(styl.ODSTEP_MALY, 4), pady=styl.ODSTEP_MALY)
+        ).grid(row=0, column=0, sticky="ew", padx=(styl.ODSTEP_MALY, styl.ODSTEP_MIKRO), pady=styl.ODSTEP_MALY)
 
         ctk.CTkLabel(
             self,
@@ -36,7 +43,7 @@ class _WierszLiczenia(ctk.CTkFrame):
             font=styl.CZCIONKA_TRESC,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).grid(row=0, column=1, sticky="ew", padx=4, pady=styl.ODSTEP_MALY)
+        ).grid(row=0, column=1, sticky="ew", padx=styl.ODSTEP_MIKRO, pady=styl.ODSTEP_MALY)
 
         if edytowalny:
             self.pole_faktyczny = ctk.CTkEntry(
@@ -48,7 +55,7 @@ class _WierszLiczenia(ctk.CTkFrame):
                     formatowanie.formatuj_ilosc(Decimal(str(pozycja["stan_faktyczny"]))),
                 )
             self.pole_faktyczny.grid(
-                row=0, column=2, sticky="ew", padx=(4, styl.ODSTEP_MALY), pady=styl.ODSTEP_MALY
+                row=0, column=2, sticky="ew", padx=(styl.ODSTEP_MIKRO, styl.ODSTEP_MALY), pady=styl.ODSTEP_MALY
             )
         else:
             self.pole_faktyczny = None
@@ -64,7 +71,7 @@ class _WierszLiczenia(ctk.CTkFrame):
                 font=styl.CZCIONKA_TRESC_POGRUBIONA,
                 text_color=styl.KOLOR_TEKST_GLOWNY,
                 anchor="w",
-            ).grid(row=0, column=2, sticky="ew", padx=(4, styl.ODSTEP_MALY), pady=styl.ODSTEP_MALY)
+            ).grid(row=0, column=2, sticky="ew", padx=(styl.ODSTEP_MIKRO, styl.ODSTEP_MALY), pady=styl.ODSTEP_MALY)
 
     def pobierz_wpis(self) -> dict | None:
         """Zwraca {'produkt_id', 'stan_faktyczny'} jesli pole ma tresc, inaczej
@@ -81,7 +88,7 @@ class _WierszLiczenia(ctk.CTkFrame):
         return {"produkt_id": self.produkt_id, "stan_faktyczny": str(wartosc)}
 
 
-class SzczegolyInwentaryzacji(ctk.CTkToplevel):
+class SzczegolyInwentaryzacji(OknoFormularza):
     def __init__(
         self,
         master,
@@ -91,9 +98,6 @@ class SzczegolyInwentaryzacji(ctk.CTkToplevel):
         super().__init__(master)
         self.title("Spis inwentaryzacyjny")
         self.geometry("760x680")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
 
         self._inwentaryzacja_id = inwentaryzacja_id
         self._on_zmiana = on_zmiana or (lambda: None)
@@ -133,13 +137,20 @@ class SzczegolyInwentaryzacji(ctk.CTkToplevel):
         edytowalny = inwentaryzacja["status"] == "w_trakcie"
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(3, weight=1)
+
+        self._banner = Banner(self)
+        self._banner.ustaw_geometrie(
+            lambda: self._banner.grid(
+                row=0, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(styl.ODSTEP_DUZY, 0)
+            )
+        )
 
         naglowek = ctk.CTkFrame(
             self, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
         )
         naglowek.grid(
-            row=0, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY
+            row=1, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY
         )
 
         ctk.CTkLabel(
@@ -192,7 +203,7 @@ class SzczegolyInwentaryzacji(ctk.CTkToplevel):
         ctk.CTkFrame(naglowek, fg_color="transparent", height=styl.ODSTEP_MALY).pack()
 
         pasek_kolumn = ctk.CTkFrame(self, fg_color="transparent")
-        pasek_kolumn.grid(row=1, column=0, sticky="ew", padx=styl.ODSTEP_DUZY)
+        pasek_kolumn.grid(row=2, column=0, sticky="ew", padx=styl.ODSTEP_DUZY)
         for kolumna, (waga, etykieta) in enumerate(
             [(3, "Produkt"), (2, "Stan systemowy"), (2, "Stan faktyczny")]
         ):
@@ -207,7 +218,7 @@ class SzczegolyInwentaryzacji(ctk.CTkToplevel):
 
         kontener_wierszy = ctk.CTkScrollableFrame(self, fg_color=styl.KOLOR_TLO)
         kontener_wierszy.grid(
-            row=2,
+            row=3,
             column=0,
             sticky="nsew",
             padx=styl.ODSTEP_DUZY,
@@ -230,7 +241,7 @@ class SzczegolyInwentaryzacji(ctk.CTkToplevel):
         if edytowalny:
             pasek_akcji = ctk.CTkFrame(self, fg_color="transparent")
             pasek_akcji.grid(
-                row=3, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY)
+                row=4, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY)
             )
             self._przycisk_zapisz = ctk.CTkButton(
                 pasek_akcji,
@@ -253,10 +264,13 @@ class SzczegolyInwentaryzacji(ctk.CTkToplevel):
                 command=self._zamknij_spis,
             )
             self._przycisk_zamknij.pack(side="left")
+            self.ustaw_akcje_zapisu(self._zapisz_postep, self._przycisk_zapisz)
+
+        self.zapamietaj_stan_poczatkowy()
 
     def _ustaw_przyciski_aktywne(self, aktywne: bool) -> None:
+        ustaw_tekst_ladowania(self._przycisk_zapisz, not aktywne, "Zapisz postęp")
         stan = "normal" if aktywne else "disabled"
-        self._przycisk_zapisz.configure(state=stan)
         self._przycisk_zamknij.configure(state=stan)
 
     def _zbierz_wpisy(self) -> list[dict] | None:
@@ -265,10 +279,11 @@ class SzczegolyInwentaryzacji(ctk.CTkToplevel):
             try:
                 wpis = wiersz.pobierz_wpis()
             except ValueError as e:
-                komunikat_bledu(self, f"{wiersz.produkt_nazwa}: {e}")
+                self._banner.pokaz(f"{wiersz.produkt_nazwa}: {e}")
                 return None
             if wpis is not None:
                 wpisy.append(wpis)
+        self._banner.ukryj()
         return wpisy
 
     def _odswiez_w_miejscu(self) -> None:
@@ -283,7 +298,7 @@ class SzczegolyInwentaryzacji(ctk.CTkToplevel):
         if wpisy is None:
             return
         if not wpisy:
-            komunikat_bledu(self, "Wpisz stan faktyczny co najmniej jednego produktu.")
+            self._banner.pokaz("Wpisz stan faktyczny co najmniej jednego produktu.")
             return
 
         self._ustaw_przyciski_aktywne(False)
@@ -293,7 +308,9 @@ class SzczegolyInwentaryzacji(ctk.CTkToplevel):
 
         def sukces(_wynik) -> None:
             self._on_zmiana()
+            master = self.master
             self._odswiez_w_miejscu()
+            pokaz_toast(master, "Postęp spisu zapisany.")
 
         def blad(e: api_client.ApiError) -> None:
             self._ustaw_przyciski_aktywne(True)
@@ -367,6 +384,8 @@ class SzczegolyInwentaryzacji(ctk.CTkToplevel):
                 komunikat_ostrzezenie(
                     master, "Spis zamknięty, ale:\n\n" + "\n\n".join(ostrzezenia)
                 )
+            else:
+                pokaz_toast(master, "Spis zamknięty.")
             SzczegolyInwentaryzacji(master, inwentaryzacja_id=inwentaryzacja_id, on_zmiana=on_zmiana)
 
         def blad(e: api_client.ApiError) -> None:

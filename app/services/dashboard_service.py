@@ -1,0 +1,96 @@
+from datetime import date
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
+
+from app.models import Faktura
+from app.models.enums import StatusFaktury
+from app.schemas.dashboard import (
+    DashboardOut,
+    KafelkiDashboarduOut,
+    PunktWykresuPrzychodowOut,
+)
+from app.services import raporty_service
+from app.services.platnosci import lista_naleznosci, oblicz_status_efektywny, zbuduj_fakture_out
+
+# Faktury robocze nie zostaly jeszcze "wystawione" w sensie biznesowym, a anulowane
+# nie licza sie do przychodu - obie kategorie sa wylaczone z kafelkow i wykresu.
+STATUSY_WYLACZONE_Z_PRZYCHODU = frozenset({StatusFaktury.ROBOCZA, StatusFaktury.ANULOWANA})
+LICZBA_MIESIECY_WYKRESU = 12
+
+
+def _pierwszy_dzien_miesiaca(d: date) -> date:
+    return d.replace(day=1)
+
+
+def _przesun_miesiace(d: date, delta: int) -> date:
+    indeks = d.year * 12 + (d.month - 1) + delta
+    return date(indeks // 12, indeks % 12 + 1, 1)
+
+
+def pobierz_dashboard(db: Session, dzisiaj: date | None = None) -> DashboardOut:
+    dzisiaj = dzisiaj or date.today()
+    poczatek_biezacego_miesiaca = _pierwszy_dzien_miesiaca(dzisiaj)
+    poczatek_okna_wykresu = _przesun_miesiace(
+        poczatek_biezacego_miesiaca, -(LICZBA_MIESIECY_WYKRESU - 1)
+    )
+
+    zapytanie = (
+        select(Faktura)
+        .options(selectinload(Faktura.pozycje))
+        .where(
+            Faktura.status.notin_(STATUSY_WYLACZONE_Z_PRZYCHODU),
+            Faktura.data_wystawienia >= poczatek_okna_wykresu,
+        )
+    )
+    faktury_okna = list(db.execute(zapytanie).scalars().unique().all())
+
+    # Kubelki wykresu inicjowane zerami z gory, zeby miesiace bez zadnej faktury
+    # tez byly widoczne na osi (a nie po prostu pominiete w serii danych).
+    kubelki: dict[tuple[int, int], int] = {}
+    kursor = poczatek_okna_wykresu
+    for _ in range(LICZBA_MIESIECY_WYKRESU):
+        kubelki[(kursor.year, kursor.month)] = 0
+        kursor = _przesun_miesiace(kursor, 1)
+
+    przychod_biezacy_miesiac_grosze = 0
+    liczba_faktur_biezacy_miesiac = 0
+
+    for faktura in faktury_okna:
+        klucz = (faktura.data_wystawienia.year, faktura.data_wystawienia.month)
+        if klucz in kubelki:
+            kubelki[klucz] += faktura.suma_brutto_grosze
+        if faktura.data_wystawienia >= poczatek_biezacego_miesiaca:
+            przychod_biezacy_miesiac_grosze += faktura.suma_brutto_grosze
+            liczba_faktur_biezacy_miesiac += 1
+
+    wykres = [
+        PunktWykresuPrzychodowOut(rok=rok, miesiac=miesiac, suma_brutto_grosze=suma)
+        for (rok, miesiac), suma in sorted(kubelki.items())
+    ]
+
+    faktury_naleznosci, suma_naleznosci_grosze = lista_naleznosci(db, dzisiaj)
+    faktury_po_terminie = sorted(
+        (
+            f
+            for f in faktury_naleznosci
+            if oblicz_status_efektywny(f, dzisiaj) == StatusFaktury.PO_TERMINIE
+        ),
+        key=lambda f: f.termin_platnosci,
+    )
+    kwota_po_terminie_grosze = sum(f.kwota_pozostala_grosze for f in faktury_po_terminie)
+
+    kafelki = KafelkiDashboarduOut(
+        przychod_biezacy_miesiac_grosze=przychod_biezacy_miesiac_grosze,
+        liczba_faktur_biezacy_miesiac=liczba_faktur_biezacy_miesiac,
+        naleznosci_grosze=suma_naleznosci_grosze,
+        liczba_faktur_po_terminie=len(faktury_po_terminie),
+        kwota_po_terminie_grosze=kwota_po_terminie_grosze,
+    )
+
+    return DashboardOut(
+        kafelki=kafelki,
+        wykres_przychodow=wykres,
+        faktury_po_terminie=[zbuduj_fakture_out(f, dzisiaj) for f in faktury_po_terminie],
+        ponizej_minimum=raporty_service.lista_ponizej_minimum(db, magazyn_id=None),
+    )

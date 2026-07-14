@@ -5,10 +5,11 @@ import customtkinter as ctk
 
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu
+from gui.widgets_pomocnicze import Banner, komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
+from gui.windows.baza_formularza import OknoFormularza
 
 
-class FormularzPlatnosci(ctk.CTkToplevel):
+class FormularzPlatnosci(OknoFormularza):
     def __init__(
         self,
         master,
@@ -20,9 +21,6 @@ class FormularzPlatnosci(ctk.CTkToplevel):
         super().__init__(master)
         self.title("Dodaj płatność")
         self.geometry("360x380")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
 
         self._faktura_id = faktura_id
         self._on_zapisano = on_zapisano
@@ -32,7 +30,9 @@ class FormularzPlatnosci(ctk.CTkToplevel):
             fill="both", expand=True, padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY
         )
 
-        ctk.CTkLabel(
+        self._banner = Banner(kontener)
+
+        etykieta_pozostalo = ctk.CTkLabel(
             kontener,
             text=(
                 "Pozostało do zapłaty: "
@@ -41,7 +41,13 @@ class FormularzPlatnosci(ctk.CTkToplevel):
             font=styl.CZCIONKA_TRESC,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+        )
+        etykieta_pozostalo.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+        self._banner.ustaw_geometrie(
+            lambda: self._banner.pack(
+                fill="x", pady=(0, styl.ODSTEP_MALY), before=etykieta_pozostalo
+            )
+        )
 
         ctk.CTkLabel(
             kontener,
@@ -49,7 +55,7 @@ class FormularzPlatnosci(ctk.CTkToplevel):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, 2))
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
         self._pole_data = ctk.CTkEntry(kontener, font=styl.CZCIONKA_TRESC)
         self._pole_data.insert(0, formatowanie.formatuj_date(date.today()))
         self._pole_data.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
@@ -60,7 +66,7 @@ class FormularzPlatnosci(ctk.CTkToplevel):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, 2))
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
         self._pole_kwota = ctk.CTkEntry(kontener, font=styl.CZCIONKA_TRESC)
         self._pole_kwota.insert(0, formatowanie.grosze_do_wpisu(kwota_pozostala_grosze))
         self._pole_kwota.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
@@ -71,7 +77,7 @@ class FormularzPlatnosci(ctk.CTkToplevel):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, 2))
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
         self._pole_notatka = ctk.CTkEntry(kontener, font=styl.CZCIONKA_TRESC)
         self._pole_notatka.pack(fill="x")
 
@@ -86,7 +92,7 @@ class FormularzPlatnosci(ctk.CTkToplevel):
             border_color=styl.KOLOR_OBRAMOWANIE,
             text_color=styl.KOLOR_TEKST_GLOWNY,
             hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
-            command=self.destroy,
+            command=self._zamknij_z_potwierdzeniem,
         ).pack(side="left", expand=True, fill="x", padx=(0, styl.ODSTEP_MALY))
         self._przycisk_zapisz = ctk.CTkButton(
             przyciski,
@@ -96,18 +102,21 @@ class FormularzPlatnosci(ctk.CTkToplevel):
             command=self._zapisz,
         )
         self._przycisk_zapisz.pack(side="left", expand=True, fill="x")
+        self.ustaw_akcje_zapisu(self._zapisz, self._przycisk_zapisz)
+
+        self.zapamietaj_stan_poczatkowy()
 
     def _zebrane_dane(self) -> dict | None:
         try:
             data_platnosci = formatowanie.parsuj_date_pl(self._pole_data.get())
         except ValueError as e:
-            komunikat_bledu(self, f"Nieprawidłowa data płatności: {e}")
+            self._banner.pokaz(f"Nieprawidłowa data płatności: {e}")
             return None
 
         try:
             kwota_grosze = formatowanie.parsuj_kwote(self._pole_kwota.get())
         except ValueError as e:
-            komunikat_bledu(self, f"Nieprawidłowa kwota: {e}")
+            self._banner.pokaz(f"Nieprawidłowa kwota: {e}")
             return None
 
         dane: dict = {
@@ -117,6 +126,7 @@ class FormularzPlatnosci(ctk.CTkToplevel):
         notatka = self._pole_notatka.get().strip()
         if notatka:
             dane["notatka"] = notatka
+        self._banner.ukryj()
         return dane
 
     def _zapisz(self) -> None:
@@ -124,7 +134,7 @@ class FormularzPlatnosci(ctk.CTkToplevel):
         if dane is None:
             return
 
-        self._przycisk_zapisz.configure(state="disabled")
+        ustaw_tekst_ladowania(self._przycisk_zapisz, True, "Zapisz")
 
         def zadanie():
             return api_client.dodaj_platnosc(self._faktura_id, dane)
@@ -132,9 +142,10 @@ class FormularzPlatnosci(ctk.CTkToplevel):
         def sukces(_wynik) -> None:
             self._on_zapisano()
             self.destroy()
+            pokaz_toast(self.master, "Płatność zapisana.")
 
         def blad(e: api_client.ApiError) -> None:
-            self._przycisk_zapisz.configure(state="normal")
+            ustaw_tekst_ladowania(self._przycisk_zapisz, False, "Zapisz")
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)

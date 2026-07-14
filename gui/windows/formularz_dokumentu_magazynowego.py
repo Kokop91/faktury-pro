@@ -3,9 +3,16 @@ from typing import Callable
 
 import customtkinter as ctk
 
-from gui import api_client, formatowanie, styl
+from gui import api_client, formatowanie, ikony, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu, komunikat_ostrzezenie
+from gui.widgets_pomocnicze import (
+    Banner,
+    komunikat_bledu,
+    komunikat_ostrzezenie,
+    pokaz_toast,
+    ustaw_tekst_ladowania,
+)
+from gui.windows.baza_formularza import OknoFormularza
 
 TYPY_KOLEJNOSC = formatowanie.KOLEJNOSC_TYPOW_DOKUMENTU_MAGAZYNOWEGO
 _ETYKIETY_TYPOW = [
@@ -43,12 +50,12 @@ class _WierszPozycjiMagazynowej(ctk.CTkFrame):
             fg_color=styl.KOLOR_AKCENT,
             button_color=styl.KOLOR_AKCENT,
             button_hover_color=styl.KOLOR_AKCENT_HOVER,
-        ).grid(row=0, column=0, sticky="ew", padx=(styl.ODSTEP_MALY, 4), pady=styl.ODSTEP_MALY)
+        ).grid(row=0, column=0, sticky="ew", padx=(styl.ODSTEP_MALY, styl.ODSTEP_MIKRO), pady=styl.ODSTEP_MALY)
 
         self.pole_ilosc = ctk.CTkEntry(
             self, placeholder_text="Ilość", font=styl.CZCIONKA_TRESC
         )
-        self.pole_ilosc.grid(row=0, column=1, sticky="ew", padx=4, pady=styl.ODSTEP_MALY)
+        self.pole_ilosc.grid(row=0, column=1, sticky="ew", padx=styl.ODSTEP_MIKRO, pady=styl.ODSTEP_MALY)
 
         ctk.CTkButton(
             self,
@@ -58,7 +65,7 @@ class _WierszPozycjiMagazynowej(ctk.CTkFrame):
             text_color=styl.KOLOR_BLAD,
             hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
             command=lambda: self._on_usun(self),
-        ).grid(row=0, column=2, padx=(4, styl.ODSTEP_MALY))
+        ).grid(row=0, column=2, padx=(styl.ODSTEP_MIKRO, styl.ODSTEP_MALY))
 
     def pobierz_dane(self) -> dict:
         produkt_id = self._id_wg_etykiety.get(self._var_produkt.get())
@@ -68,14 +75,11 @@ class _WierszPozycjiMagazynowej(ctk.CTkFrame):
         return {"produkt_id": produkt_id, "ilosc": str(ilosc)}
 
 
-class FormularzDokumentuMagazynowego(ctk.CTkToplevel):
+class FormularzDokumentuMagazynowego(OknoFormularza):
     def __init__(self, master, on_zapisano: Callable[[], None]):
         super().__init__(master)
         self.title("Nowy dokument magazynowy")
         self.geometry("700x760")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
 
         self._on_zapisano = on_zapisano
         self._magazyny: list[dict] = []
@@ -130,7 +134,7 @@ class FormularzDokumentuMagazynowego(ctk.CTkToplevel):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, 2))
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
         widget = widget_fabryka(ramka)
         widget.pack(fill="x")
         return ramka, widget
@@ -139,10 +143,17 @@ class FormularzDokumentuMagazynowego(ctk.CTkToplevel):
 
     def _zbuduj_formularz(self) -> None:
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        self._banner = Banner(self)
+        self._banner.ustaw_geometrie(
+            lambda: self._banner.grid(
+                row=0, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(styl.ODSTEP_DUZY, 0)
+            )
+        )
 
         przewijany = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        przewijany.grid(row=0, column=0, sticky="nsew", padx=styl.ODSTEP_DUZY, pady=(styl.ODSTEP_DUZY, 0))
+        przewijany.grid(row=1, column=0, sticky="nsew", padx=styl.ODSTEP_DUZY, pady=(styl.ODSTEP_DUZY, 0))
         przewijany.grid_columnconfigure(0, weight=1)
 
         self._var_typ = ctk.StringVar(value=_ETYKIETY_TYPOW[0])
@@ -224,7 +235,9 @@ class FormularzDokumentuMagazynowego(ctk.CTkToplevel):
         self._kontener_wierszy.grid(row=1, column=0, sticky="ew")
         ctk.CTkButton(
             ramka_pozycji,
-            text="+ Dodaj pozycję",
+            text="Dodaj pozycję",
+            image=ikony.ikona_adaptacyjna("plus"),
+            compound="left",
             font=styl.CZCIONKA_TRESC,
             fg_color="transparent",
             border_width=1,
@@ -236,7 +249,7 @@ class FormularzDokumentuMagazynowego(ctk.CTkToplevel):
 
         # Przyciski akcji
         pasek_przyciskow = ctk.CTkFrame(self, fg_color="transparent")
-        pasek_przyciskow.grid(row=1, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY)
+        pasek_przyciskow.grid(row=2, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY)
         pasek_przyciskow.grid_columnconfigure((0, 1), weight=1)
 
         ctk.CTkButton(
@@ -247,7 +260,7 @@ class FormularzDokumentuMagazynowego(ctk.CTkToplevel):
             border_color=styl.KOLOR_OBRAMOWANIE,
             text_color=styl.KOLOR_TEKST_GLOWNY,
             hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
-            command=self.destroy,
+            command=self._zamknij_z_potwierdzeniem,
         ).grid(row=0, column=0, sticky="ew", padx=(0, styl.ODSTEP_MALY))
         self._przycisk_zapisz = ctk.CTkButton(
             pasek_przyciskow,
@@ -257,9 +270,11 @@ class FormularzDokumentuMagazynowego(ctk.CTkToplevel):
             command=self._zapisz,
         )
         self._przycisk_zapisz.grid(row=0, column=1, sticky="ew")
+        self.ustaw_akcje_zapisu(self._zapisz, self._przycisk_zapisz)
 
         self._dodaj_wiersz_pozycji()
         self._na_zmiane_typu(self._var_typ.get())
+        self.zapamietaj_stan_poczatkowy()
 
     # -- reakcje na zmiany --------------------------------------------------
 
@@ -356,8 +371,9 @@ class FormularzDokumentuMagazynowego(ctk.CTkToplevel):
                 bledy.append(f"Pozycja {indeks}: {e}")
 
         if bledy:
-            komunikat_bledu(self, "\n".join(bledy))
+            self._banner.pokaz("\n".join(bledy))
             return None
+        self._banner.ukryj()
 
         dane: dict = {
             "typ": typ,
@@ -377,7 +393,7 @@ class FormularzDokumentuMagazynowego(ctk.CTkToplevel):
         if dane is None:
             return
 
-        self._przycisk_zapisz.configure(state="disabled")
+        ustaw_tekst_ladowania(self._przycisk_zapisz, True, "Zapisz dokument")
 
         def zadanie():
             return api_client.utworz_dokument_magazynowy(dane)
@@ -391,9 +407,11 @@ class FormularzDokumentuMagazynowego(ctk.CTkToplevel):
                 komunikat_ostrzezenie(
                     master, "Dokument zapisany, ale:\n\n" + "\n\n".join(ostrzezenia)
                 )
+            else:
+                pokaz_toast(master, f"Dokument {wynik['numer']} zapisany.")
 
         def blad(e: api_client.ApiError) -> None:
-            self._przycisk_zapisz.configure(state="normal")
+            ustaw_tekst_ladowania(self._przycisk_zapisz, False, "Zapisz dokument")
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)

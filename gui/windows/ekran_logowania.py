@@ -45,7 +45,7 @@ class _EkranLogowania(ctk.CTk):
             font=styl.CZCIONKA_ETYKIETA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
             anchor="w",
-        ).pack(fill="x", pady=(0, 2))
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
 
     def _zbuduj_tryb_ustawiania(self, kontener) -> None:
         ctk.CTkLabel(

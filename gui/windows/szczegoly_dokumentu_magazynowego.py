@@ -3,6 +3,7 @@ import customtkinter as ctk
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
+from gui.windows.baza_formularza import OknoFormularza
 from gui.windows.tabela import Tabela
 
 KOLUMNY_POZYCJI = [
@@ -12,7 +13,7 @@ KOLUMNY_POZYCJI = [
 ]
 
 
-class SzczegolyDokumentuMagazynowego(ctk.CTkToplevel):
+class SzczegolyDokumentuMagazynowego(OknoFormularza):
     """Wylacznie do odczytu - backend (Faza 8) nie ma edycji/anulowania
     dokumentow magazynowych."""
 
@@ -20,9 +21,6 @@ class SzczegolyDokumentuMagazynowego(ctk.CTkToplevel):
         super().__init__(master)
         self.title("Szczegóły dokumentu magazynowego")
         self.geometry("700x600")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
 
         self._dokument_id = dokument_id
 

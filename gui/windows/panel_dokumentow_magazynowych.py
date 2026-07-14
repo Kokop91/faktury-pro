@@ -1,11 +1,13 @@
 import customtkinter as ctk
 
-from gui import api_client, formatowanie, styl
+from gui import api_client, formatowanie, ikony, nastawienia, styl
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
 from gui.windows.formularz_dokumentu_magazynowego import FormularzDokumentuMagazynowego
 from gui.windows.szczegoly_dokumentu_magazynowego import SzczegolyDokumentuMagazynowego
 from gui.windows.tabela import Tabela
+
+_KLUCZ_FILTR = "filtr_dokumenty_magazynowe"
 
 KOLUMNY = [
     ("numer", "Numer", 2),
@@ -46,7 +48,11 @@ class PanelDokumentowMagazynowych(ctk.CTkFrame):
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
         ).pack(side="left", padx=(0, styl.ODSTEP_MALY))
 
-        self._var_typ = ctk.StringVar(value=WSZYSTKIE_TYPY)
+        filtr_zapisany = nastawienia.wczytaj(_KLUCZ_FILTR) or {}
+
+        self._var_typ = ctk.StringVar(
+            value=filtr_zapisany.get("typ") if filtr_zapisany.get("typ") in _ETYKIETY_TYPOW else WSZYSTKIE_TYPY
+        )
         ctk.CTkOptionMenu(
             pasek_naglowka,
             values=_ETYKIETY_TYPOW,
@@ -67,6 +73,7 @@ class PanelDokumentowMagazynowych(ctk.CTkFrame):
             pasek_naglowka, font=styl.CZCIONKA_TRESC, width=110,
             placeholder_text="DD.MM.RRRR",
         )
+        self._pole_data_od.insert(0, filtr_zapisany.get("data_od", ""))
         self._pole_data_od.pack(side="left", padx=(0, styl.ODSTEP_MALY))
 
         ctk.CTkLabel(
@@ -79,6 +86,7 @@ class PanelDokumentowMagazynowych(ctk.CTkFrame):
             pasek_naglowka, font=styl.CZCIONKA_TRESC, width=110,
             placeholder_text="DD.MM.RRRR",
         )
+        self._pole_data_do.insert(0, filtr_zapisany.get("data_do", ""))
         self._pole_data_do.pack(side="left", padx=(0, styl.ODSTEP_SREDNI))
 
         ctk.CTkButton(
@@ -95,7 +103,9 @@ class PanelDokumentowMagazynowych(ctk.CTkFrame):
 
         ctk.CTkButton(
             pasek_naglowka,
-            text="+ Nowy dokument",
+            text="Nowy dokument",
+            image=ikony.ikona_stala("plus"),
+            compound="left",
             font=styl.CZCIONKA_TRESC,
             fg_color=styl.KOLOR_AKCENT,
             hover_color=styl.KOLOR_AKCENT_HOVER,
@@ -127,6 +137,11 @@ class PanelDokumentowMagazynowych(ctk.CTkFrame):
             except ValueError as e:
                 komunikat_bledu(self, f"Data do: {e}")
                 return
+
+        nastawienia.zapisz(
+            _KLUCZ_FILTR,
+            {"typ": self._var_typ.get(), "data_od": tekst_od, "data_do": tekst_do},
+        )
 
         def zadanie():
             magazyny = api_client.pobierz_magazyny(tylko_aktywne=False, limit=200)
@@ -162,7 +177,7 @@ class PanelDokumentowMagazynowych(ctk.CTkFrame):
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
-        uruchom_w_tle(self, zadanie, sukces, blad)
+        uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
 
     def _otworz_formularz(self) -> None:
         FormularzDokumentuMagazynowego(self, on_zapisano=self.odswiez)
