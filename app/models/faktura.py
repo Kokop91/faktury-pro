@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.database import Base
-from app.models.enums import StatusFaktury, TypDokumentu
+from app.models.enums import StatusFaktury, StatusKsef, TypDokumentu
 
 
 class Faktura(Base):
@@ -55,6 +55,22 @@ class Faktura(Base):
         ForeignKey("szablony_cykliczne.id"), nullable=True
     )
     okres_cykliczny: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # Faza 12B - stan wysylki do KSeF, niezalezny od `status` biznesowego
+    # powyzej. numer_ksef i upo_xml sa wypelniane dopiero po przyjeciu przez
+    # KSeF; przyczyna_odrzucenia_ksef - po odrzuceniu. ksef_numer_ref_sesji/
+    # _faktury trzymane, zeby dalo sie sprawdzic/dokonczyc status wysylki bez
+    # ponownego wysylania calego dokumentu (patrz app/services/ksef_service.py).
+    status_ksef: Mapped[StatusKsef] = mapped_column(
+        Enum(StatusKsef, name="status_ksef"),
+        nullable=False,
+        default=StatusKsef.NIE_WYSLANA,
+    )
+    numer_ksef: Mapped[str | None] = mapped_column(String(37), nullable=True)
+    upo_xml: Mapped[str | None] = mapped_column(Text, nullable=True)
+    przyczyna_odrzucenia_ksef: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ksef_numer_ref_sesji: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    ksef_numer_ref_faktury: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     utworzono: Mapped[datetime] = mapped_column(server_default=func.now())
     zaktualizowano: Mapped[datetime] = mapped_column(

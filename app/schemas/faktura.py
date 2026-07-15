@@ -8,6 +8,7 @@ from app.models.enums import (
     TYPY_WYMAGAJACE_DOKUMENTU_POWIAZANEGO,
     TYPY_WYMAGAJACE_PRZYCZYNY_KOREKTY,
     StatusFaktury,
+    StatusKsef,
     StawkaVat,
     TypDokumentu,
 )
@@ -163,6 +164,10 @@ class FakturaOut(BaseModel):
     przyczyna_korekty: str | None
     szablon_cykliczny_id: int | None
     okres_cykliczny: date | None
+    status_ksef: StatusKsef
+    numer_ksef: str | None
+    przyczyna_odrzucenia_ksef: str | None
+    ma_upo: bool
     pozycje: list[PozycjaFakturyOut]
     suma_netto_grosze: int
     suma_vat_grosze: int
@@ -176,3 +181,10 @@ class FakturaOut(BaseModel):
 class NaleznosciOut(BaseModel):
     suma_naleznosci_grosze: int
     faktury: list[FakturaOut]
+
+
+class WyslijKsefOut(BaseModel):
+    powodzenie: bool
+    komunikat: str
+    status_ksef: StatusKsef
+    numer_ksef: str | None = None

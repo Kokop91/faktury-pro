@@ -7,7 +7,7 @@ import customtkinter as ctk
 from gui import api_client, formatowanie, styl
 from gui.integracje_gui import sprawdz_biala_liste
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import komunikat_bledu, komunikat_info, ustaw_tekst_ladowania
 from gui.windows.baza_formularza import OknoFormularza
 from gui.windows.formularz_faktury import FormularzFaktury
 from gui.windows.formularz_platnosci import FormularzPlatnosci
@@ -133,6 +133,11 @@ class SzczegolyFaktury(OknoFormularza):
                 formatowanie.kolor_statusu(status_efektywny),
             ),
             (
+                "Status KSeF",
+                formatowanie.formatuj_status_ksef(faktura["status_ksef"]),
+                formatowanie.kolor_statusu_ksef(faktura["status_ksef"]),
+            ),
+            (
                 "Data wystawienia",
                 formatowanie.formatuj_date(faktura["data_wystawienia"]),
                 None,
@@ -149,8 +154,14 @@ class SzczegolyFaktury(OknoFormularza):
             ),
             ("Waluta", waluta_tekst, None),
         ]
+        if faktura.get("numer_ksef"):
+            wiersze_info.append(("Numer KSeF", faktura["numer_ksef"], None))
         if faktura.get("przyczyna_korekty"):
             wiersze_info.append(("Przyczyna korekty", faktura["przyczyna_korekty"], None))
+        if faktura["status_ksef"] == "odrzucona" and faktura.get("przyczyna_odrzucenia_ksef"):
+            wiersze_info.append(
+                ("Przyczyna odrzucenia KSeF", faktura["przyczyna_odrzucenia_ksef"], styl.KOLOR_BLAD)
+            )
 
         for etykieta, wartosc, kolor in wiersze_info:
             wiersz = ctk.CTkFrame(naglowek, fg_color="transparent")
@@ -294,6 +305,38 @@ class SzczegolyFaktury(OknoFormularza):
                 command=self._edytuj,
             ).pack(side="left")
 
+        if faktura["status"] != "robocza" and faktura["status_ksef"] != "przyjeta":
+            self._przycisk_ksef = ctk.CTkButton(
+                pasek_akcji,
+                text=(
+                    "Wyślij ponownie do KSeF"
+                    if faktura["status_ksef"] == "odrzucona"
+                    else "Wyślij do KSeF"
+                ),
+                font=styl.CZCIONKA_TRESC,
+                fg_color="transparent",
+                border_width=1,
+                border_color=styl.KOLOR_OBRAMOWANIE,
+                text_color=styl.KOLOR_TEKST_GLOWNY,
+                hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+                command=self._wyslij_do_ksef,
+            )
+            self._przycisk_ksef.pack(side="left", padx=(styl.ODSTEP_MALY, 0))
+
+        if faktura.get("ma_upo"):
+            self._przycisk_upo = ctk.CTkButton(
+                pasek_akcji,
+                text="Pobierz UPO",
+                font=styl.CZCIONKA_TRESC,
+                fg_color="transparent",
+                border_width=1,
+                border_color=styl.KOLOR_OBRAMOWANIE,
+                text_color=styl.KOLOR_TEKST_GLOWNY,
+                hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+                command=self._pobierz_upo,
+            )
+            self._przycisk_upo.pack(side="left", padx=(styl.ODSTEP_MALY, 0))
+
         if (
             faktura["status"] not in STATUSY_BLOKUJACE_PLATNOSC
             and faktura["kwota_pozostala_grosze"] > 0
@@ -406,6 +449,75 @@ class SzczegolyFaktury(OknoFormularza):
 
         def blad(e: api_client.ApiError) -> None:
             ustaw_tekst_ladowania(self._przycisk_pdf, False, "Pobierz PDF")
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _wyslij_do_ksef(self) -> None:
+        tekst_zwykly = self._przycisk_ksef.cget("text")
+        ustaw_tekst_ladowania(
+            self._przycisk_ksef, True, tekst_zwykly, "Wysyłanie do KSeF..."
+        )
+
+        def zadanie():
+            return api_client.wyslij_fakture_do_ksef(self._faktura_id)
+
+        def sukces(wynik: dict) -> None:
+            if wynik["powodzenie"]:
+                komunikat_info(self, wynik["komunikat"])
+            else:
+                komunikat_bledu(self, wynik["komunikat"])
+            # Status KSeF/numer/UPO/przyczyna odrzucenia mogly sie zmienic
+            # niezaleznie od wyniku (patrz ksef_service.wyslij_fakture_do_ksef) -
+            # przeladuj cale okno z aktualnymi danymi (wzorem
+            # _po_dodaniu_platnosci), zamiast recznie aktualizowac fragmenty widoku.
+            faktura_id = self._faktura_id
+            nazwa_klienta = self._nazwa_klienta
+            on_zmiana = self._on_zmiana
+            master = self.master
+            on_zmiana()
+            self.destroy()
+            SzczegolyFaktury(
+                master, faktura_id=faktura_id, nazwa_klienta=nazwa_klienta, on_zmiana=on_zmiana
+            )
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_ksef, False, tekst_zwykly)
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _pobierz_upo(self) -> None:
+        ustaw_tekst_ladowania(self._przycisk_upo, True, "Pobierz UPO", "Pobieranie...")
+
+        def zadanie():
+            return api_client.pobierz_upo_faktury(self._faktura_id)
+
+        def sukces(tresc: bytes) -> None:
+            ustaw_tekst_ladowania(self._przycisk_upo, False, "Pobierz UPO")
+            numer_bezpieczny = self._faktura["numer"].replace("/", "_")
+            sciezka = filedialog.asksaveasfilename(
+                parent=self,
+                title="Zapisz UPO",
+                defaultextension=".xml",
+                initialfile=f"upo_{numer_bezpieczny}.xml",
+                filetypes=[("Plik XML", "*.xml")],
+            )
+            if not sciezka:
+                return
+            try:
+                with open(sciezka, "wb") as plik:
+                    plik.write(tresc)
+            except OSError as e:
+                komunikat_bledu(self, f"Nie udało się zapisać pliku: {e}")
+                return
+            if messagebox.askyesno(
+                "Zapisano", f"Zapisano plik:\n{sciezka}\n\nOtworzyć go teraz?", parent=self
+            ):
+                os.startfile(sciezka)
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_upo, False, "Pobierz UPO")
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)

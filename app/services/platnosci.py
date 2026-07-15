@@ -60,6 +60,7 @@ def zbuduj_fakture_out(faktura: Faktura, dzisiaj: date | None = None) -> Faktura
     # Atrybut przejsciowy (nie mapowana kolumna) - bezpieczny do ustawienia na
     # instancji ORM, SQLAlchemy nie sledzi go w unit-of-work, wiec nic nie zapisze.
     faktura.status_efektywny = oblicz_status_efektywny(faktura, dzisiaj or date.today())
+    faktura.ma_upo = faktura.upo_xml is not None
     return FakturaOut.model_validate(faktura)
 
 

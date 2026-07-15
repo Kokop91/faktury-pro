@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -11,8 +11,10 @@ from app.schemas.faktura import (
     NaleznosciOut,
     PlatnoscCreate,
     PlatnoscOut,
+    WyslijKsefOut,
 )
 from app.services import faktury as faktury_service
+from app.services import ksef_service
 from app.services import pdf as pdf_service
 from app.services import platnosci as platnosci_service
 
@@ -96,3 +98,23 @@ def zmien_status_faktury(
 ):
     faktura = faktury_service.zmien_status_faktury(db, faktura_id, dane.status)
     return platnosci_service.zbuduj_fakture_out(faktura)
+
+
+@router.post("/{faktura_id}/ksef/wyslij", response_model=WyslijKsefOut)
+def wyslij_fakture_do_ksef(faktura_id: int, db: Session = Depends(get_db)):
+    return ksef_service.wyslij_fakture_do_ksef(db, faktura_id)
+
+
+@router.get("/{faktura_id}/ksef/upo")
+def pobierz_upo_faktury(faktura_id: int, db: Session = Depends(get_db)):
+    faktura = faktury_service.pobierz_fakture(db, faktura_id)
+    if not faktura.upo_xml:
+        raise HTTPException(status_code=404, detail="UPO dla tej faktury nie jest jeszcze dostępne.")
+    nazwa_pliku = faktura.numer.replace("/", "_")
+    return Response(
+        content=faktura.upo_xml.encode("utf-8"),
+        media_type="application/xml",
+        headers={
+            "Content-Disposition": f'attachment; filename="upo_{nazwa_pliku}.xml"'
+        },
+    )

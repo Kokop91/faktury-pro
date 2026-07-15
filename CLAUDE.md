@@ -28,9 +28,10 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
   Endpointy FastAPI NIE mają JWT ani żadnej autoryzacji — serwer nasłuchuje tylko na
   127.0.0.1, więc dostęp do niego już wymaga dostępu do tego samego komputera/konta.
   Zmiana hasła: widok Ustawienia (`gui/windows/widok_ustawien.py`).
-- **Integracja z KSeF (Faza 12A, zrobione — fundament + uwierzytelnianie, BEZ wysyłki
-  faktur):** obsługa API KSeF 2.0 (Krajowy System e-Faktur, Ministerstwo Finansów),
-  metoda uwierzytelniania "token KSeF" (nie certyfikat/XAdES — to poza zakresem 12A).
+- **Integracja z KSeF (Faza 12A+12B, zrobione — fundament, uwierzytelnianie i wysyłka
+  faktur w strukturze FA(3)):** obsługa API KSeF 2.0 (Krajowy System e-Faktur,
+  Ministerstwo Finansów), metoda uwierzytelniania "token KSeF" (nie certyfikat/XAdES —
+  appka nigdy nie podpisuje dokumentów, tylko wysyła zaszyfrowany token).
   - **Środowiska:** TESTOWE (`https://api-test.ksef.mf.gov.pl/v2`) i PRODUKCYJNE
     (`https://api.ksef.mf.gov.pl/v2`), przełączane w Ustawieniach
     (`gui/windows/widok_ustawien.py`). **Domyślne i bezpieczne środowisko startowe to
@@ -49,12 +50,33 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
     uwierzytelnieniu), więc jest zaszyfrowany, nie zahaszowany — Windows DPAPI
     (`win32crypt.CryptProtectData`/`CryptUnprotectData`), związany z kontem Windows na
     tym komputerze. Zob. `app/services/ksef_ustawienia.py`.
-  - **Warstwa serwisowa:** `app/services/ksef_service.py` — pełny cykl uwierzytelnienia
+  - **Warstwa serwisowa:** `app/services/ksef_service.py` — cykl uwierzytelnienia
     (challenge → szyfrowanie RSA-OAEP/SHA-256 tokenu → `/auth/ksef-token` → odpytywanie
     statusu → `/auth/token/redeem`), wywoływany przyciskiem "Testuj połączenie z KSeF"
-    w Ustawieniach. accessToken/refreshToken z redeem NIE są nigdzie zapisywane — to
-    tylko test działania, wysyłka faktur to kolejna faza (12B, patrz
-    `ETAP_2_ROZWOJU.md`).
+    w Ustawieniach (12A) oraz przy każdej wysyłce faktury (12B) — accessToken jest
+    zawsze świeży i jednorazowy, appka NIE zarządza długożyciowymi sesjami/refresh
+    tokenami.
+  - **Faza 12B — generowanie i wysyłka faktury FA(3):** `app/services/ksef_fa3_builder.py`
+    mapuje `Faktura`+`PozycjaFaktury`+`Firma`+`Klient` na XML zgodny ze strukturą
+    logiczną FA(3) (schemat XSD Ministerstwa Finansów, kopia w `app/xsd/fa3/`) i
+    waliduje go wzgledem tego schematu PRZED wysyłką — błąd walidacji nigdy nie
+    trafia do KSeF, tylko wraca jako czytelny komunikat (pole + przyczyna).
+    Wysyłka: `app/services/ksef_service.py:wyslij_fakture_do_ksef` — sesja
+    interaktywna (szyfrowanie AES-256-CBC faktury kluczem symetrycznym, sam klucz
+    szyfrowany RSA-OAEP kluczem publicznym MF), odpytywanie statusu faktury i pobranie
+    UPO po przyjęciu. Wynik zapisywany na `Faktura`: `status_ksef` (nie_wyslana /
+    wysylanie_w_toku / przyjeta / odrzucona), `numer_ksef`, `upo_xml`,
+    `przyczyna_odrzucenia_ksef`. UI: przycisk "Wyślij do KSeF" i "Pobierz UPO" w
+    szczegółach faktury (`gui/windows/szczegoly_faktury.py`), kolumna statusu KSeF na
+    liście faktur.
+    **Typy dokumentu wysyłane do KSeF:** faktura VAT, zaliczkowa, końcowa (rozliczeniowa),
+    korygująca (`RodzajFaktury` = VAT/ZAL/ROZ/KOR/KOR_ZAL/KOR_ROZ dobierany automatycznie).
+    **Faktura pro forma i nota korygująca NIGDY nie są wysyłane** — zweryfikowane wprost
+    w schemacie FA(3) (typ `TRodzajFaktury` nie ma dla nich żadnej wartości), to nie
+    jest "faktura" w rozumieniu ustawy o VAT. **Pozycje ze stawką VAT "zw" (w tym cały
+    typ RACHUNEK) są tymczasowo zablokowane** — FA(3) wymaga wtedy wskazania podstawy
+    prawnej zwolnienia (pole P_19A/B/C), a model danych appki jeszcze tego nie zbiera;
+    appka zgłasza to jako czytelny błąd zamiast zgadywać podstawę prawną.
   - Mechanizm i adresy zweryfikowane wprost z oficjalnej dokumentacji Ministerstwa
     Finansów (`github.com/CIRFMF/ksef-api`) i z żywego środowiska testowego, nie
     zgadywane.

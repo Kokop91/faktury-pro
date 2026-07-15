@@ -13,6 +13,7 @@ KOLUMNY = [
     ("data_wystawienia", "Data wystawienia", 2),
     ("kwota_brutto", "Kwota brutto", 2),
     ("status", "Status", 2),
+    ("status_ksef", "KSeF", 2),
 ]
 
 _KLUCZ_FILTR_STATUS = "filtr_status_faktur"
@@ -182,14 +183,17 @@ class WidokFaktur(ctk.CTkFrame):
             "status": lambda w: formatowanie.formatuj_status(
                 w["status_efektywny"]
             ),
+            "status_ksef": lambda w: formatowanie.formatuj_status_ksef(w["status_ksef"]),
         }
         kolory = {
             "status": lambda w: formatowanie.kolor_statusu(w["status_efektywny"]),
+            "status_ksef": lambda w: formatowanie.kolor_statusu_ksef(w["status_ksef"]),
         }
         klucze_sortowania = {
             "klient": lambda w: self._klienci_wg_id.get(w["klient_id"], ""),
             "kwota_brutto": lambda w: w["suma_brutto_grosze"],
             "status": lambda w: w["status_efektywny"],
+            "status_ksef": lambda w: w["status_ksef"],
         }
         self._tabela.ustaw_dane(
             faktury, formatery=formatery, kolory=kolory, klucze_sortowania=klucze_sortowania

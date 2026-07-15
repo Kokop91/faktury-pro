@@ -29,6 +29,32 @@ class StatusFaktury(str, enum.Enum):
     ANULOWANA = "anulowana"
 
 
+class StatusKsef(str, enum.Enum):
+    """Stan wysylki faktury do KSeF (Faza 12B) - niezalezny od StatusFaktury
+    (ta sama faktura moze byc np. 'wystawiona' i 'ksef_przyjeta' jednoczesnie)."""
+
+    NIE_WYSLANA = "nie_wyslana"
+    WYSYLANIE_W_TOKU = "wysylanie_w_toku"
+    PRZYJETA = "przyjeta"
+    ODRZUCONA = "odrzucona"
+
+
+# Typy dokumentu, ktore FA(3) potrafi wyrazic (posiadaja odpowiadajaca wartosc
+# pola RodzajFaktury) - PROFORMA i NOTA_KORYGUJACA nie sa "faktura" w rozumieniu
+# ustawy o VAT i nie maja zadnej reprezentacji w schemacie FA(3) (zweryfikowane
+# wprost w schemat_FA3_v1-0E.xsd, typ TRodzajFaktury - brak wartosci dla nich),
+# wiec nie moga byc wyslane do KSeF w ogole, niezaleznie od tresci.
+TYPY_DOKUMENTU_WYSYLANE_DO_KSEF: frozenset[TypDokumentu] = frozenset(
+    {
+        TypDokumentu.FAKTURA_VAT,
+        TypDokumentu.FAKTURA_ZALICZKOWA,
+        TypDokumentu.FAKTURA_KONCOWA,
+        TypDokumentu.FAKTURA_KORYGUJACA,
+        TypDokumentu.RACHUNEK,
+    }
+)
+
+
 class TypDokumentuMagazynowego(str, enum.Enum):
     PZ = "pz"  # Przyjecie Zewnetrzne
     WZ = "wz"  # Wydanie Zewnetrzne

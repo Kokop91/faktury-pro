@@ -466,3 +466,19 @@ def zapisz_ustawienia_ksef(dane: dict) -> dict:
 
 def testuj_polaczenie_ksef() -> dict:
     return _wykonaj("POST", "/ksef/testuj-polaczenie", TIMEOUT_KSEF).json()
+
+
+# -- wysylka faktur do KSeF (Faza 12B) ---------------------------------------
+# Sesja interaktywna (uwierzytelnienie + otwarcie sesji + wysylka + zamkniecie
+# + odpytywanie statusu) moze potrwac jeszcze dluzej niz sam test polaczenia.
+TIMEOUT_KSEF_WYSYLKA = 90.0
+
+
+def wyslij_fakture_do_ksef(faktura_id: int) -> dict:
+    return _wykonaj(
+        "POST", f"/faktury/{faktura_id}/ksef/wyslij", TIMEOUT_KSEF_WYSYLKA
+    ).json()
+
+
+def pobierz_upo_faktury(faktura_id: int) -> bytes:
+    return _wykonaj("GET", f"/faktury/{faktura_id}/ksef/upo", TIMEOUT_ODCZYT).content

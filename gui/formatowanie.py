@@ -13,6 +13,13 @@ ETYKIETY_STATUSU: dict[str, str] = {
     "anulowana": "Anulowana",
 }
 
+ETYKIETY_STATUSU_KSEF: dict[str, str] = {
+    "nie_wyslana": "Nie wysłana",
+    "wysylanie_w_toku": "Wysyłanie w toku",
+    "przyjeta": "Przyjęta",
+    "odrzucona": "Odrzucona",
+}
+
 ETYKIETY_TYPU_DOKUMENTU: dict[str, str] = {
     "faktura_vat": "Faktura VAT",
     "proforma": "Faktura pro forma",
@@ -114,6 +121,20 @@ def kolor_statusu(status: str) -> str:
 
 def formatuj_typ_dokumentu(typ: str) -> str:
     return ETYKIETY_TYPU_DOKUMENTU.get(typ, typ)
+
+
+def formatuj_status_ksef(status_ksef: str) -> str:
+    return ETYKIETY_STATUSU_KSEF.get(status_ksef, status_ksef)
+
+
+def kolor_statusu_ksef(status_ksef: str) -> tuple[str, str]:
+    # (jasny, ciemny) zgodnie z konwencja styl.py - zielony=przyjeta,
+    # czerwony=odrzucona, zolty/pomaranczowy=w toku, szary=jeszcze nie wyslana.
+    return {
+        "przyjeta": styl.KOLOR_SUKCES,
+        "odrzucona": styl.KOLOR_BLAD,
+        "wysylanie_w_toku": styl.KOLOR_OSTRZEZENIE,
+    }.get(status_ksef, styl.KOLOR_TEKST_DRUGORZEDNY)
 
 
 def formatuj_typ_dokumentu_magazynowego(typ: str) -> str:
