@@ -135,6 +135,7 @@ class WidokDashboard(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
 
         self._kafelki: list[_Kafelek] = []
+        self._kafelki_ksef: list[_Kafelek] = []
         self._wiersze_uwagi: list[ctk.CTkBaseClass] = []
         self._ostatni_wykres: list[dict] | None = None
 
@@ -158,11 +159,23 @@ class WidokDashboard(ctk.CTkFrame):
         przewijany.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="kafelki")
         self._ramka_kafelkow = przewijany
 
+        ctk.CTkLabel(
+            przewijany,
+            text="KSeF",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            anchor="w",
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MALY))
+
+        self._ramka_kafelkow_ksef = ctk.CTkFrame(przewijany, fg_color="transparent")
+        self._ramka_kafelkow_ksef.grid(row=2, column=0, columnspan=4, sticky="ew")
+        self._ramka_kafelkow_ksef.grid_columnconfigure((0, 1), weight=1, uniform="kafelki_ksef")
+
         self._karta_wykresu = ctk.CTkFrame(
             przewijany, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
         )
         self._karta_wykresu.grid(
-            row=1, column=0, columnspan=4, sticky="ew", pady=(styl.ODSTEP_SREDNI, 0)
+            row=3, column=0, columnspan=4, sticky="ew", pady=(styl.ODSTEP_SREDNI, 0)
         )
         self._karta_wykresu.grid_columnconfigure(0, weight=1)
 
@@ -195,10 +208,10 @@ class WidokDashboard(ctk.CTkFrame):
             font=styl.NAGLOWEK_2,
             text_color=styl.KOLOR_TEKST_GLOWNY,
             anchor="w",
-        ).grid(row=2, column=0, columnspan=4, sticky="w", pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MALY))
+        ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MALY))
 
         self._ramka_uwagi = ctk.CTkFrame(przewijany, fg_color="transparent")
-        self._ramka_uwagi.grid(row=3, column=0, columnspan=4, sticky="ew")
+        self._ramka_uwagi.grid(row=5, column=0, columnspan=4, sticky="ew")
         self._ramka_uwagi.grid_columnconfigure(0, weight=1)
 
         # Przerysowanie wykresu przy zmianie trybu jasny/ciemny - customtkinter
@@ -216,9 +229,12 @@ class WidokDashboard(ctk.CTkFrame):
 
         def sukces(dane: dict) -> None:
             self._zbuduj_kafelki(dane["kafelki"])
+            self._zbuduj_kafelki_ksef(dane["kafelki"])
             self._ostatni_wykres = dane["wykres_przychodow"]
             self._przerysuj_wykres(self._ostatni_wykres)
-            self._zbuduj_liste_uwagi(dane["faktury_po_terminie"], dane["ponizej_minimum"])
+            self._zbuduj_liste_uwagi(
+                dane["faktury_po_terminie"], dane["faktury_odrzucone_ksef"], dane["ponizej_minimum"]
+            )
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
@@ -275,6 +291,41 @@ class WidokDashboard(ctk.CTkFrame):
             )
             self._kafelki.append(kafelek)
 
+    def _zbuduj_kafelki_ksef(self, kafelki: dict) -> None:
+        for kafelek in self._kafelki_ksef:
+            kafelek.destroy()
+        self._kafelki_ksef = []
+
+        liczba_oczekujacych = kafelki["liczba_faktur_oczekujacych_ksef"]
+        liczba_kosztowych_nowych = kafelki["liczba_dokumentow_kosztowych_nowych"]
+
+        definicje = [
+            (
+                "Oczekują na wysłanie do KSeF",
+                str(liczba_oczekujacych),
+                None,
+                styl.KOLOR_OSTRZEZENIE if liczba_oczekujacych else None,
+                lambda: self.on_nawigacja("faktury", status_filtr=None),
+            ),
+            (
+                "Nowe dokumenty kosztowe",
+                str(liczba_kosztowych_nowych),
+                None,
+                styl.KOLOR_OSTRZEZENIE if liczba_kosztowych_nowych else None,
+                lambda: self.on_nawigacja("koszty"),
+            ),
+        ]
+
+        for indeks, (tytul, wartosc, podtytul, kolor, on_klik) in enumerate(definicje):
+            kafelek = _Kafelek(self._ramka_kafelkow_ksef, tytul, wartosc, podtytul, kolor, on_klik)
+            kafelek.grid(
+                row=0,
+                column=indeks,
+                sticky="nsew",
+                padx=(0, styl.ODSTEP_MALY) if indeks < len(definicje) - 1 else 0,
+            )
+            self._kafelki_ksef.append(kafelek)
+
     def _przerysuj_wykres(self, punkty: list[dict]) -> None:
         suma_calkowita = sum(p["suma_brutto_grosze"] for p in punkty)
         if suma_calkowita == 0:
@@ -314,13 +365,16 @@ class WidokDashboard(ctk.CTkFrame):
         self._platno.draw()
 
     def _zbuduj_liste_uwagi(
-        self, faktury_po_terminie: list[dict], ponizej_minimum: list[dict]
+        self,
+        faktury_po_terminie: list[dict],
+        faktury_odrzucone_ksef: list[dict],
+        ponizej_minimum: list[dict],
     ) -> None:
         for wiersz in self._wiersze_uwagi:
             wiersz.destroy()
         self._wiersze_uwagi = []
 
-        if not faktury_po_terminie and not ponizej_minimum:
+        if not faktury_po_terminie and not faktury_odrzucone_ksef and not ponizej_minimum:
             placeholder = ctk.CTkLabel(
                 self._ramka_uwagi,
                 text="Brak pozycji wymagających uwagi.",
@@ -344,6 +398,20 @@ class WidokDashboard(ctk.CTkFrame):
             prawy = formatowanie.formatuj_kwote(
                 faktura["kwota_pozostala_grosze"], faktura["waluta"]
             )
+            wiersz = _WierszUwagi(
+                self._ramka_uwagi,
+                lewy,
+                prawy,
+                styl.KOLOR_BLAD,
+                on_klik=lambda fid=faktura["id"]: self._otworz_fakture(fid),
+            )
+            wiersz.grid(row=wiersz_idx, column=0, sticky="ew", pady=(0, styl.ODSTEP_MALY))
+            self._wiersze_uwagi.append(wiersz)
+            wiersz_idx += 1
+
+        for faktura in faktury_odrzucone_ksef:
+            lewy = f"{faktura['numer']} — odrzucona przez KSeF"
+            prawy = "Wymaga poprawy"
             wiersz = _WierszUwagi(
                 self._ramka_uwagi,
                 lewy,

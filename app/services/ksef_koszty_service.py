@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 from app.models import DokumentKosztowy, StatusDokumentuKosztowego
 from app.services import firma as firma_service
 from app.services.ksef_service import KsefBlad, _adres_bazowy, _uzyskaj_access_token, _wywolaj
-from app.services.ksef_ustawienia import pobierz_dane_polaczenia_ksef
+from app.services.ksef_ustawienia import pobierz_dane_polaczenia_ksef, zapisz_ostatnie_sprawdzenie_kosztow
 
 DOMYSLNE_OKNO_PIERWSZE_SPRAWDZENIE_DNI = 30
 # KSeF: maksymalny dozwolony zakres jednego zapytania metadanych to 3 miesiace.
@@ -155,6 +155,11 @@ def pobierz_nowe_faktury_kosztowe(db: Session) -> dict:
             "komunikat": f"Nieoczekiwana odpowiedź KSeF (brak pola {e}).",
             "liczba_nowych": 0,
         }
+
+    # Zapisywane tylko po faktycznie udanym sprawdzeniu (nie przy bledzie
+    # polaczenia/uwierzytelnienia powyzej) - to data "appka na pewno sprawdzila
+    # KSeF", niezaleznie od tego czy cokolwiek nowego znaleziono.
+    zapisz_ostatnie_sprawdzenie_kosztow()
 
     liczba = len(nowe_metadane)
     komunikat = (

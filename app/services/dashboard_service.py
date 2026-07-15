@@ -1,16 +1,16 @@
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Faktura
-from app.models.enums import StatusFaktury
+from app.models.enums import StatusFaktury, StatusKsef
 from app.schemas.dashboard import (
     DashboardOut,
     KafelkiDashboarduOut,
     PunktWykresuPrzychodowOut,
 )
-from app.services import raporty_service
+from app.services import dokumenty_kosztowe_service, raporty_service
 from app.services.platnosci import lista_naleznosci, oblicz_status_efektywny, zbuduj_fakture_out
 
 # Faktury robocze nie zostaly jeszcze "wystawione" w sensie biznesowym, a anulowane
@@ -80,17 +80,43 @@ def pobierz_dashboard(db: Session, dzisiaj: date | None = None) -> DashboardOut:
     )
     kwota_po_terminie_grosze = sum(f.kwota_pozostala_grosze for f in faktury_po_terminie)
 
+    # Faza 12D - podsumowanie integracji KSeF. Robocze/anulowane celowo
+    # wylaczone z "oczekujacych" (mirror STATUSY_WYLACZONE_Z_PRZYCHODU powyzej) -
+    # nigdy nie maja byc wysylane, wiec nie sa czyms na co appka "czeka".
+    liczba_faktur_oczekujacych_ksef = db.execute(
+        select(func.count())
+        .select_from(Faktura)
+        .where(
+            Faktura.status.notin_(STATUSY_WYLACZONE_Z_PRZYCHODU),
+            Faktura.status_ksef == StatusKsef.NIE_WYSLANA,
+        )
+    ).scalar_one()
+
+    zapytanie_odrzucone = (
+        select(Faktura)
+        .options(selectinload(Faktura.pozycje))
+        .where(Faktura.status_ksef == StatusKsef.ODRZUCONA)
+        .order_by(Faktura.zaktualizowano.desc())
+    )
+    faktury_odrzucone_ksef = list(db.execute(zapytanie_odrzucone).scalars().unique().all())
+
+    liczba_dokumentow_kosztowych_nowych = dokumenty_kosztowe_service.liczba_nowych(db)
+
     kafelki = KafelkiDashboarduOut(
         przychod_biezacy_miesiac_grosze=przychod_biezacy_miesiac_grosze,
         liczba_faktur_biezacy_miesiac=liczba_faktur_biezacy_miesiac,
         naleznosci_grosze=suma_naleznosci_grosze,
         liczba_faktur_po_terminie=len(faktury_po_terminie),
         kwota_po_terminie_grosze=kwota_po_terminie_grosze,
+        liczba_faktur_oczekujacych_ksef=liczba_faktur_oczekujacych_ksef,
+        liczba_faktur_odrzuconych_ksef=len(faktury_odrzucone_ksef),
+        liczba_dokumentow_kosztowych_nowych=liczba_dokumentow_kosztowych_nowych,
     )
 
     return DashboardOut(
         kafelki=kafelki,
         wykres_przychodow=wykres,
         faktury_po_terminie=[zbuduj_fakture_out(f, dzisiaj) for f in faktury_po_terminie],
+        faktury_odrzucone_ksef=[zbuduj_fakture_out(f, dzisiaj) for f in faktury_odrzucone_ksef],
         ponizej_minimum=raporty_service.lista_ponizej_minimum(db, magazyn_id=None),
     )

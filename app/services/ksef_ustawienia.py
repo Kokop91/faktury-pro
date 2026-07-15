@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Ustawienia integracji KSeF (Faza 12A) trzymane lokalnie poza baza danych i
@@ -90,12 +91,17 @@ def _zapisz(dane: dict) -> None:
 
 def wczytaj_ustawienia_ksef() -> dict:
     """Zwraca stan do wyswietlenia w UI - NIGDY surowego tokena (analogicznie
-    do klucza produkcyjnego GUS: mozna nadpisac, nie mozna odczytac z powrotem)."""
+    do klucza produkcyjnego GUS: mozna nadpisac, nie mozna odczytac z powrotem).
+    `token_podglad` to WYLACZNIE ostatnie 4 znaki tokena (jak maskowanie numeru
+    karty platniczej) - trzymane jawnie obok zaszyfrowanej wersji, tylko zeby
+    uzytkownik mogl potwierdzic "tak, to ten token", bez ujawniania calosci."""
     dane = _wczytaj()
     return {
         "srodowisko": dane.get("ksef_srodowisko", DOMYSLNE_SRODOWISKO),
         "ma_token": bool(dane.get("ksef_token_zaszyfrowany")),
+        "token_podglad": dane.get("ksef_token_podglad"),
         "sprawdzaj_koszty_przy_starcie": bool(dane.get("ksef_sprawdzaj_koszty_przy_starcie", False)),
+        "ostatnie_sprawdzenie_kosztow": dane.get("ksef_ostatnie_sprawdzenie_kosztow"),
     }
 
 
@@ -130,9 +136,23 @@ def zapisz_ustawienia_ksef(zmiany: dict) -> dict:
     if "token" in zmiany:
         if zmiany["token"]:
             dane["ksef_token_zaszyfrowany"] = _szyfruj(zmiany["token"])
+            dane["ksef_token_podglad"] = zmiany["token"][-4:]
         else:
             dane.pop("ksef_token_zaszyfrowany", None)
+            dane.pop("ksef_token_podglad", None)
     if "sprawdzaj_koszty_przy_starcie" in zmiany:
         dane["ksef_sprawdzaj_koszty_przy_starcie"] = bool(zmiany["sprawdzaj_koszty_przy_starcie"])
     _zapisz(dane)
     return wczytaj_ustawienia_ksef()
+
+
+def zapisz_ostatnie_sprawdzenie_kosztow() -> None:
+    """Wolane po kazdym (udanym) sprawdzeniu KSeF pod katem nowych faktur
+    kosztowych (patrz ksef_koszty_service.py) - NIEZALEZNE od tego, czy
+    cokolwiek nowego znaleziono. To zwykla data "ostatniej proby", nie to samo
+    co punkt startowy kolejnego okna (ten wyznacza MAX(data_trwalego_zapisu)
+    juz pobranych dokumentow - bez znalezionych dokumentow ten punkt by sie
+    nie przesunal, a uzytkownik i tak chce widziec, ze appka w ogole sprawdzala)."""
+    dane = _wczytaj()
+    dane["ksef_ostatnie_sprawdzenie_kosztow"] = datetime.now(timezone.utc).isoformat()
+    _zapisz(dane)

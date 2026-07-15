@@ -98,6 +98,23 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
   - Mechanizm i adresy zweryfikowane wprost z oficjalnej dokumentacji Ministerstwa
     Finansów (`github.com/CIRFMF/ksef-api`) i z żywego środowiska testowego, nie
     zgadywane.
+  - **Faza 12D — domknięcie (dashboard + wysyłka zbiorcza), Faza 12 KOMPLETNA:**
+    dashboard ma sekcję "KSeF" (faktury oczekujące na wysyłkę, nowe dokumenty
+    kosztowe) i faktury odrzucone przez KSeF w "Wymagają uwagi". Ustawienia
+    pokazują zamaskowany podgląd zapisanego tokena (ostatnie 4 znaki) i datę
+    ostatniego sprawdzenia faktur kosztowych. Lista faktur (`gui/windows/widok_faktur.py`)
+    ma zaznaczanie wierszy (`Tabela(zaznaczalne=True)`, opt-in, nie wpływa na inne
+    tabele) i przycisk "Wyślij zaznaczone do KSeF"
+    (`ksef_service.wyslij_faktury_zbiorczo` — jedno wspólne uwierzytelnienie dla
+    całej paczki, nie N uwierzytelnień dla N faktur).
+    **Bezpieczeństwo środowiska (testowe/produkcyjne):** oznaczenie aktywnego
+    środowiska (`gui/widgets_pomocnicze.py:etykieta_srodowiska_ksef`, jedno
+    źródło tekstu/kolorów) widoczne w KAŻDYM miejscu, z którego appka wysyła/
+    pobiera coś z KSeF — Ustawienia, szczegóły faktury, lista faktur (wysyłka
+    zbiorcza), dokumenty kosztowe. Przed każdą wysyłką do KSeF (pojedynczą i
+    zbiorczą) appka odczytuje środowisko NA NOWO tuż przed akcją (nie ufa
+    wartości sprzed otwarcia okna) i wymaga świadomego potwierdzenia w oknie
+    dialogowym, jeśli aktywne jest PRODUKCYJNE.
 - **Kursy walut:** publiczne API NBP
 - **Dane firm po NIP:** API GUS/REGON
 

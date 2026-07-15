@@ -267,12 +267,23 @@ def _pobierz_upo(base_url: str, naglowki: dict, session_ref: str, invoice_ref: s
     return odpowiedz.text
 
 
-def wyslij_fakture_do_ksef(db: Session, faktura_id: int) -> dict:
+def wyslij_fakture_do_ksef(
+    db: Session,
+    faktura_id: int,
+    *,
+    access_token: str | None = None,
+    base_url: str | None = None,
+) -> dict:
     """Wysyla pojedyncza fakture do KSeF sesja interaktywna: buduje i waliduje
     FA(3) (ksef_fa3_builder), otwiera sesje, szyfruje i wysyla dokument,
     zamyka sesje, odpytuje status pojedynczej faktury i - jesli przyjeta -
     pobiera UPO. Wynik (numer KSeF / UPO / przyczyna odrzucenia) jest
-    zapisywany na rekordzie Faktura niezaleznie od wyniku."""
+    zapisywany na rekordzie Faktura niezaleznie od wyniku.
+
+    `access_token`/`base_url` - jesli podane (wysylka zbiorcza, patrz
+    wyslij_faktury_zbiorczo), pomija wlasne uwierzytelnienie i uzywa
+    JUZ uzyskanego accessToken - zeby wysylka wielu faktur naraz nie
+    uwierzytelniala sie od nowa dla kazdej z osobna."""
     faktura = _pobierz_fakture_z_relacjami(db, faktura_id)
 
     if faktura.status in STATUSY_FAKTURY_NIEWYSYLALNE:
@@ -299,20 +310,23 @@ def wyslij_fakture_do_ksef(db: Session, faktura_id: int) -> dict:
         komunikat = "Dokument nie przeszedł walidacji względem schematu FA(3): " + "; ".join(e.bledy)
         return {"powodzenie": False, "komunikat": komunikat, "status_ksef": faktura.status_ksef.value}
 
-    token, srodowisko = pobierz_dane_polaczenia_ksef()
-    if not token:
-        raise HTTPException(
-            status_code=400,
-            detail="Brak zapisanego tokena KSeF - wprowadź go w Ustawieniach.",
-        )
-    firma = firma_service.pobierz_firme(db)
-    base_url = _adres_bazowy(srodowisko)
+    token = firma = None
+    if access_token is None:
+        token, srodowisko = pobierz_dane_polaczenia_ksef()
+        if not token:
+            raise HTTPException(
+                status_code=400,
+                detail="Brak zapisanego tokena KSeF - wprowadź go w Ustawieniach.",
+            )
+        firma = firma_service.pobierz_firme(db)
+        base_url = _adres_bazowy(srodowisko)
 
     faktura.status_ksef = StatusKsef.WYSYLANIE_W_TOKU
     db.commit()
 
     try:
-        access_token = _uzyskaj_access_token(base_url, token, firma.nip)
+        if access_token is None:
+            access_token = _uzyskaj_access_token(base_url, token, firma.nip)
         naglowki = {"Authorization": f"Bearer {access_token}"}
 
         klucz_symetryczny = os.urandom(32)
@@ -428,3 +442,46 @@ def wyslij_fakture_do_ksef(db: Session, faktura_id: int) -> dict:
         faktura.status_ksef = StatusKsef.NIE_WYSLANA
         db.commit()
         return {"powodzenie": False, "komunikat": komunikat, "status_ksef": faktura.status_ksef.value}
+
+
+def wyslij_faktury_zbiorczo(db: Session, faktura_ids: list[int]) -> list[dict]:
+    """Wysyla wiele faktur w jednym wywolaniu (Faza 12D) - uwierzytelnia sie
+    RAZ (jeden accessToken wspoldzielony miedzy wszystkimi fakturami), zamiast
+    wywolywac wyslij_fakture_do_ksef() osobno dla kazdej, co przy wiekszej
+    liczbie faktur oznaczaloby tyle samo pelnych cykli uwierzytelnienia."""
+    firma = firma_service.pobierz_firme(db)
+    token, srodowisko = pobierz_dane_polaczenia_ksef()
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail="Brak zapisanego tokena KSeF - wprowadź go w Ustawieniach.",
+        )
+    base_url = _adres_bazowy(srodowisko)
+
+    try:
+        access_token = _uzyskaj_access_token(base_url, token, firma.nip)
+    except KsefBlad as e:
+        # Nie wiadomo, ktorej konkretnie faktury dotyczy blad uwierzytelnienia -
+        # ten sam komunikat dla kazdej z zadanych pozycji, status bez zmian.
+        return [
+            {
+                "faktura_id": faktura_id,
+                "powodzenie": False,
+                "komunikat": e.komunikat,
+                "status_ksef": None,
+                "numer_ksef": None,
+            }
+            for faktura_id in faktura_ids
+        ]
+
+    wyniki = []
+    for faktura_id in faktura_ids:
+        try:
+            wynik = wyslij_fakture_do_ksef(
+                db, faktura_id, access_token=access_token, base_url=base_url
+            )
+        except HTTPException as e:
+            wynik = {"powodzenie": False, "komunikat": str(e.detail), "status_ksef": None}
+        wynik["faktura_id"] = faktura_id
+        wyniki.append(wynik)
+    return wyniki

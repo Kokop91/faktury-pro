@@ -3,11 +3,12 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
-from gui import api_client, auth, nastawienia, styl
+from gui import api_client, auth, formatowanie, nastawienia, styl
 from gui.integracje_gui import pobierz_z_gus
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import (
     Banner,
+    formatuj_srodowisko_ksef,
     komunikat_bledu,
     komunikat_info,
     pokaz_toast,
@@ -604,7 +605,13 @@ class WidokUstawien(ctk.CTkFrame):
             variable=self._var_sprawdzaj_koszty_przy_starcie,
             fg_color=styl.KOLOR_AKCENT,
             hover_color=styl.KOLOR_AKCENT_HOVER,
-        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI), anchor="w")
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MALY), anchor="w")
+
+        self._etykieta_ostatnie_sprawdzenie_kosztow = ctk.CTkLabel(
+            wewnatrz, text="", font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY, anchor="w",
+        )
+        self._etykieta_ostatnie_sprawdzenie_kosztow.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
 
         self._przycisk_ksef_zapisz = ctk.CTkButton(
             wewnatrz,
@@ -635,18 +642,10 @@ class WidokUstawien(ctk.CTkFrame):
         self._wczytaj_ustawienia_ksef()
 
     def _odswiez_banda_srodowiska_ksef(self, srodowisko: str) -> None:
-        if srodowisko == "produkcyjne":
-            self._banda_srodowiska_ksef.configure(
-                text="●  ŚRODOWISKO PRODUKCYJNE — prawdziwy system KSeF",
-                fg_color=styl.KOLOR_BLAD_TLO,
-                text_color=styl.KOLOR_BLAD,
-            )
-        else:
-            self._banda_srodowiska_ksef.configure(
-                text="●  ŚRODOWISKO TESTOWE (sandbox Ministerstwa Finansów)",
-                fg_color=styl.KOLOR_SUKCES_TLO,
-                text_color=styl.KOLOR_SUKCES,
-            )
+        tekst, kolor_tekstu, kolor_tla = formatuj_srodowisko_ksef(srodowisko)
+        self._banda_srodowiska_ksef.configure(
+            text=tekst, fg_color=kolor_tla, text_color=kolor_tekstu,
+        )
 
     def _na_zmiane_srodowiska_ksef(self, wartosc: str) -> None:
         if wartosc == "Produkcyjne":
@@ -676,21 +675,42 @@ class WidokUstawien(ctk.CTkFrame):
                 "Produkcyjne" if srodowisko == "produkcyjne" else "Testowe"
             )
             self._odswiez_banda_srodowiska_ksef(srodowisko)
-            self._etykieta_stan_tokena_ksef.configure(
-                text=(
-                    "Token KSeF zapisany (zaszyfrowany lokalnie)."
-                    if dane["ma_token"]
-                    else "Brak zapisanego tokena KSeF."
-                )
-            )
             self._var_sprawdzaj_koszty_przy_starcie.set(
                 dane.get("sprawdzaj_koszty_przy_starcie", False)
             )
+            self._zastosuj_stan_tokena_i_sprawdzenia(dane)
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _zastosuj_stan_tokena_i_sprawdzenia(self, dane: dict) -> None:
+        if dane["ma_token"]:
+            podglad = dane.get("token_podglad")
+            tekst_tokena = (
+                f"Token KSeF zapisany (zaszyfrowany lokalnie), kończy się na „...{podglad}”."
+                if podglad
+                else "Token KSeF zapisany (zaszyfrowany lokalnie)."
+            )
+            self._pole_token_ksef.configure(
+                placeholder_text=f"(zapisany, ...{podglad} - wpisz nowy, żeby zmienić)"
+                if podglad
+                else "(zapisany - wpisz nowy, żeby zmienić)"
+            )
+        else:
+            tekst_tokena = "Brak zapisanego tokena KSeF."
+            self._pole_token_ksef.configure(placeholder_text="Wklej token KSeF...")
+        self._etykieta_stan_tokena_ksef.configure(text=tekst_tokena)
+
+        ostatnie = dane.get("ostatnie_sprawdzenie_kosztow")
+        self._etykieta_ostatnie_sprawdzenie_kosztow.configure(
+            text=(
+                f"Ostatnie sprawdzenie faktur kosztowych: {formatowanie.formatuj_data_czas(ostatnie)}"
+                if ostatnie
+                else "Faktury kosztowe nie były jeszcze sprawdzane."
+            )
+        )
 
     def _zapisz_ustawienia_ksef(self) -> None:
         srodowisko = (
@@ -713,13 +733,7 @@ class WidokUstawien(ctk.CTkFrame):
             self._przycisk_ksef_zapisz.configure(state="normal")
             self._pole_token_ksef.delete(0, "end")
             self._odswiez_banda_srodowiska_ksef(wynik["srodowisko"])
-            self._etykieta_stan_tokena_ksef.configure(
-                text=(
-                    "Token KSeF zapisany (zaszyfrowany lokalnie)."
-                    if wynik["ma_token"]
-                    else "Brak zapisanego tokena KSeF."
-                )
-            )
+            self._zastosuj_stan_tokena_i_sprawdzenia(wynik)
             pokaz_toast(self, "Ustawienia KSeF zapisane.")
 
         def blad(e: api_client.ApiError) -> None:

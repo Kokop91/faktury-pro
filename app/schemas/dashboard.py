@@ -10,6 +10,10 @@ class KafelkiDashboarduOut(BaseModel):
     naleznosci_grosze: int
     liczba_faktur_po_terminie: int
     kwota_po_terminie_grosze: int
+    # Faza 12D - podsumowanie integracji KSeF na dashboardzie.
+    liczba_faktur_oczekujacych_ksef: int
+    liczba_faktur_odrzuconych_ksef: int
+    liczba_dokumentow_kosztowych_nowych: int
 
 
 class PunktWykresuPrzychodowOut(BaseModel):
@@ -22,4 +26,5 @@ class DashboardOut(BaseModel):
     kafelki: KafelkiDashboarduOut
     wykres_przychodow: list[PunktWykresuPrzychodowOut]
     faktury_po_terminie: list[FakturaOut]
+    faktury_odrzucone_ksef: list[FakturaOut]
     ponizej_minimum: list[StanMagazynowyOut]

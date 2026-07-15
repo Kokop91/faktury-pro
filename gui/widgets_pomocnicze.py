@@ -71,6 +71,33 @@ class Banner(ctk.CTkFrame):
         self.grid_forget()
 
 
+def formatuj_srodowisko_ksef(srodowisko: str) -> tuple[str, tuple, tuple]:
+    """Tekst + (kolor_tekstu, kolor_tla) spojne w CALEJ appce dla oznaczenia
+    aktywnego srodowiska KSeF (Faza 12D) - PRODUKCYJNE zawsze rzuca sie w
+    oczy (czerwone tlo), zeby nigdy nie bylo watpliwosci, do ktorego systemu
+    appka sie laczy. Jedno zrodlo tekstu/kolorow dla Ustawien i kazdego
+    miejsca, z ktorego mozna cos wyslac/pobrac z KSeF (szczegoly faktury,
+    lista faktur, dokumenty kosztowe)."""
+    if srodowisko == "produkcyjne":
+        return "●  ŚRODOWISKO PRODUKCYJNE — prawdziwy system KSeF", styl.KOLOR_BLAD, styl.KOLOR_BLAD_TLO
+    return "●  ŚRODOWISKO TESTOWE (sandbox Ministerstwa Finansów)", styl.KOLOR_SUKCES, styl.KOLOR_SUKCES_TLO
+
+
+def etykieta_srodowiska_ksef(master, srodowisko: str, pogrubiona: bool = False) -> ctk.CTkLabel:
+    """Kompaktowa etykieta do umieszczenia obok kazdego przycisku wysylajacego/
+    pobierajacego cos z KSeF - patrz formatuj_srodowisko_ksef."""
+    tekst, kolor_tekstu, kolor_tla = formatuj_srodowisko_ksef(srodowisko)
+    return ctk.CTkLabel(
+        master,
+        text=tekst,
+        font=styl.CZCIONKA_TRESC_POGRUBIONA if pogrubiona else styl.CZCIONKA_DROBNA,
+        text_color=kolor_tekstu,
+        fg_color=kolor_tla,
+        corner_radius=styl.PROMIEN_NAROZNIKA,
+        anchor="w",
+    )
+
+
 _CZAS_TOASTU_MS = 3500
 
 _KOLORY_TOASTU = {

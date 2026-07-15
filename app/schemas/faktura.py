@@ -188,3 +188,18 @@ class WyslijKsefOut(BaseModel):
     komunikat: str
     status_ksef: StatusKsef
     numer_ksef: str | None = None
+
+
+class WyslijZbiorczoIn(BaseModel):
+    faktura_ids: list[int] = Field(min_length=1)
+
+
+class WyslijKsefZbiorczoWynikOut(BaseModel):
+    faktura_id: int
+    powodzenie: bool
+    komunikat: str
+    # W odroznieniu od WyslijKsefOut - opcjonalne, bo przy bledzie
+    # uwierzytelnienia (wspolnym dla calej paczki) status konkretnej faktury
+    # mogl sie w ogole nie zmienic (patrz ksef_service.wyslij_faktury_zbiorczo).
+    status_ksef: StatusKsef | None = None
+    numer_ksef: str | None = None

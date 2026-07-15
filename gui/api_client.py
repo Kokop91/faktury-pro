@@ -484,6 +484,21 @@ def pobierz_upo_faktury(faktura_id: int) -> bytes:
     return _wykonaj("GET", f"/faktury/{faktura_id}/ksef/upo", TIMEOUT_ODCZYT).content
 
 
+# Wysylka zbiorcza (Faza 12D) to jedno wywolanie HTTP obslugujace wiele faktur
+# po kolei (wspolne uwierzytelnienie) - timeout musi obejmowac cala paczke,
+# stad znaczaco dluzszy niz pojedyncza wysylka.
+TIMEOUT_KSEF_WYSYLKA_ZBIORCZA = 300.0
+
+
+def wyslij_faktury_zbiorczo(faktura_ids: list[int]) -> list[dict]:
+    return _wykonaj(
+        "POST",
+        "/faktury/ksef/wyslij-zbiorczo",
+        TIMEOUT_KSEF_WYSYLKA_ZBIORCZA,
+        json={"faktura_ids": faktura_ids},
+    ).json()
+
+
 # -- dokumenty kosztowe / odbior faktur zakupowych z KSeF (Faza 12C) ---------
 # Sprawdzenie KSeF to pelny cykl uwierzytelnienia + zapytanie(a) o metadane +
 # pobranie tresci kazdej nowej faktury - moze potrwac dluzej niz zwykle

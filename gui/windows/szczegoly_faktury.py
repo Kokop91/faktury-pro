@@ -7,7 +7,12 @@ import customtkinter as ctk
 from gui import api_client, formatowanie, styl
 from gui.integracje_gui import sprawdz_biala_liste
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu, komunikat_info, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import (
+    etykieta_srodowiska_ksef,
+    komunikat_bledu,
+    komunikat_info,
+    ustaw_tekst_ladowania,
+)
 from gui.windows.baza_formularza import OknoFormularza
 from gui.windows.formularz_faktury import FormularzFaktury
 from gui.windows.formularz_platnosci import FormularzPlatnosci
@@ -53,6 +58,7 @@ class SzczegolyFaktury(OknoFormularza):
         self._faktura: dict | None = None
         self._platnosci: list[dict] = []
         self._firma: dict | None = None
+        self._srodowisko_ksef = "testowe"
         self._nazwa_klienta = nazwa_klienta
         self._on_zmiana = on_zmiana or (lambda: None)
 
@@ -81,14 +87,19 @@ class SzczegolyFaktury(OknoFormularza):
                 # to nie powinno blokowac wyswietlenia samej faktury, po prostu
                 # przycisk sprawdzenia bialej listy sie wtedy nie pojawi.
                 firma = None
-            return faktura, nazwa_klienta, platnosci, firma
+            try:
+                srodowisko_ksef = api_client.pobierz_ustawienia_ksef()["srodowisko"]
+            except api_client.ApiError:
+                srodowisko_ksef = "testowe"
+            return faktura, nazwa_klienta, platnosci, firma, srodowisko_ksef
 
         def sukces(wynik) -> None:
-            faktura, nazwa_klienta, platnosci, firma = wynik
+            faktura, nazwa_klienta, platnosci, firma, srodowisko_ksef = wynik
             self._faktura = faktura
             self._nazwa_klienta = nazwa_klienta
             self._platnosci = platnosci
             self._firma = firma
+            self._srodowisko_ksef = srodowisko_ksef
             self._etykieta_ladowania.destroy()
             self._zbuduj_widok(faktura)
 
@@ -322,6 +333,12 @@ class SzczegolyFaktury(OknoFormularza):
                 command=self._wyslij_do_ksef,
             )
             self._przycisk_ksef.pack(side="left", padx=(styl.ODSTEP_MALY, 0))
+            # Bezpieczenstwo (Faza 12D): zawsze widoczne, do ktorego srodowiska
+            # KSeF trafi ta wysylka - zeby nigdy nie bylo watpliwosci czy to
+            # sandbox czy prawdziwy system rzadowy.
+            etykieta_srodowiska_ksef(pasek_akcji, self._srodowisko_ksef).pack(
+                side="right", padx=(styl.ODSTEP_MALY, 0), ipady=2, ipadx=styl.ODSTEP_MALY
+            )
 
         if faktura.get("ma_upo"):
             self._przycisk_upo = ctk.CTkButton(
@@ -454,7 +471,36 @@ class SzczegolyFaktury(OknoFormularza):
         uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _wyslij_do_ksef(self) -> None:
+        # Bezpieczenstwo (Faza 12D): srodowisko mogl zdazyc zmienic sie w
+        # Ustawieniach PO otwarciu tego okna (appka nie jest jednookienkowa) -
+        # odczytujemy je na nowo TERAZ, tuz przed faktyczna wysylka, zamiast
+        # ufac wartosci zaladowanej przy otwarciu okna (self._srodowisko_ksef).
         tekst_zwykly = self._przycisk_ksef.cget("text")
+
+        def zadanie_sprawdz():
+            try:
+                return api_client.pobierz_ustawienia_ksef()["srodowisko"]
+            except api_client.ApiError:
+                return self._srodowisko_ksef
+
+        def sukces_sprawdz(srodowisko: str) -> None:
+            self._srodowisko_ksef = srodowisko
+            if srodowisko == "produkcyjne" and not messagebox.askyesno(
+                "Wysyłka do środowiska produkcyjnego KSeF",
+                "Zamierzasz wysłać tę fakturę do PRODUKCYJNEGO systemu KSeF, z "
+                "rzeczywistymi konsekwencjami prawnymi i finansowymi.\n\n"
+                "Czy na pewno chcesz kontynuować?",
+                parent=self,
+            ):
+                return
+            self._wyslij_do_ksef_faktycznie(tekst_zwykly)
+
+        def blad_sprawdz(e: api_client.ApiError) -> None:
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie_sprawdz, sukces_sprawdz, blad_sprawdz)
+
+    def _wyslij_do_ksef_faktycznie(self, tekst_zwykly: str) -> None:
         ustaw_tekst_ladowania(
             self._przycisk_ksef, True, tekst_zwykly, "Wysyłanie do KSeF..."
         )

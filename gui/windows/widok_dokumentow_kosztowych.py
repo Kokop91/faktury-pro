@@ -2,7 +2,12 @@ import customtkinter as ctk
 
 from gui import api_client, formatowanie, nastawienia, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import (
+    formatuj_srodowisko_ksef,
+    komunikat_bledu,
+    pokaz_toast,
+    ustaw_tekst_ladowania,
+)
 from gui.windows.szczegoly_dokumentu_kosztowego import SzczegolyDokumentuKosztowego
 from gui.windows.tabela import Tabela
 
@@ -82,6 +87,15 @@ class WidokDokumentowKosztowych(ctk.CTkFrame):
         )
         self._przycisk_sprawdz.grid(row=0, column=3)
 
+        # Bezpieczenstwo (Faza 12D): zawsze widoczne, do ktorego srodowiska
+        # KSeF trafi zapytanie o nowe faktury - aktualizowane przy kazdym
+        # odswiezeniu (patrz odswiez()), nie tylko raz przy starcie.
+        self._etykieta_srodowisko = ctk.CTkLabel(
+            pasek_naglowka, text="", font=styl.CZCIONKA_DROBNA,
+            corner_radius=styl.PROMIEN_NAROZNIKA, anchor="w",
+        )
+        self._etykieta_srodowisko.grid(row=0, column=4, padx=(styl.ODSTEP_MALY, 0), ipady=2, ipadx=styl.ODSTEP_MALY)
+
         self._tabela = Tabela(
             self,
             kolumny=KOLUMNY,
@@ -105,11 +119,19 @@ class WidokDokumentowKosztowych(ctk.CTkFrame):
         status_klucz = self._klucze_wg_etykiety.get(self._filtr_var.get())
 
         def zadanie():
-            return api_client.pobierz_dokumenty_kosztowe(status=status_klucz, limit=200)
+            dokumenty = api_client.pobierz_dokumenty_kosztowe(status=status_klucz, limit=200)
+            try:
+                srodowisko = api_client.pobierz_ustawienia_ksef()["srodowisko"]
+            except api_client.ApiError:
+                srodowisko = "testowe"
+            return dokumenty, srodowisko
 
-        def sukces(dokumenty: list[dict]) -> None:
+        def sukces(wynik) -> None:
+            dokumenty, srodowisko = wynik
             self._dokumenty = dokumenty
             self._odswiez_tabele()
+            tekst, kolor_tekstu, kolor_tla = formatuj_srodowisko_ksef(srodowisko)
+            self._etykieta_srodowisko.configure(text=tekst, text_color=kolor_tekstu, fg_color=kolor_tla)
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)

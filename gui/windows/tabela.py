@@ -18,7 +18,15 @@ class Tabela(ctk.CTkScrollableFrame):
     `klucze_sortowania` (dla kolumn wyliczanych przez formater, np. nazwa
     klienta z klient_id). `on_zmiana_sortowania(klucz, malejaco)` pozwala
     wolajacemu zapisac ostatnie sortowanie (persystencja stanu widoku).
-    """
+
+    `zaznaczalne=True` (Faza 12D) dokleja z lewej strony kolumne checkboxow
+    (plus zbiorczy checkbox "zaznacz wszystko" w naglowku) - do akcji
+    zbiorczych (np. "Wyslij zaznaczone do KSeF"). Kazdy wiersz musi miec
+    klucz "id". `zaznaczalne_dla(wiersz)` (opcjonalne) pozwala wylaczyc
+    checkbox dla wierszy, dla ktorych akcja zbiorcza nie ma sensu (np.
+    faktura robocza) - domyslnie wszystkie wiersze sa zaznaczalne.
+    `on_zmiana_zaznaczenia()` jest wolane po kazdej zmianie (pojedynczej albo
+    zbiorczej), zeby wolajacy mogl np. zaktualizowac stan przycisku akcji."""
 
     def __init__(
         self,
@@ -28,6 +36,9 @@ class Tabela(ctk.CTkScrollableFrame):
         sortowalne: bool = False,
         sortowanie_poczatkowe: tuple[str, bool] | None = None,
         on_zmiana_sortowania: Callable[[str, bool], None] | None = None,
+        zaznaczalne: bool = False,
+        zaznaczalne_dla: Callable[[dict], bool] | None = None,
+        on_zmiana_zaznaczenia: Callable[[], None] | None = None,
         **kwargs,
     ):
         kwargs.setdefault("fg_color", styl.KOLOR_KARTA)
@@ -36,23 +47,46 @@ class Tabela(ctk.CTkScrollableFrame):
         self.on_wiersz_kliknij = on_wiersz_kliknij
         self.sortowalne = sortowalne
         self.on_zmiana_sortowania = on_zmiana_sortowania
+        self.zaznaczalne = zaznaczalne
+        self.zaznaczalne_dla = zaznaczalne_dla
+        self.on_zmiana_zaznaczenia = on_zmiana_zaznaczenia
+        self._przesuniecie = 1 if self.zaznaczalne else 0
         self._sort_klucz, self._sort_malejaco = sortowanie_poczatkowe or (None, False)
         self._wiersze: list[list[ctk.CTkLabel]] = []
         self._placeholder: ctk.CTkLabel | None = None
         self._indeks_zaznaczony: int | None = None
         self._naglowki: dict[str, ctk.CTkLabel] = {}
+        self._zmienne_zaznaczenia: dict[Any, ctk.BooleanVar] = {}
+        self._zaznaczalne_flagi: dict[Any, bool] = {}
+        self._checkbox_zaznacz_wszystko: ctk.CTkCheckBox | None = None
 
         self._ostatnie_wiersze: list[dict] = []
         self._ostatnie_formatery: dict[str, Callable[[dict], str]] = {}
         self._ostatnie_kolory: dict[str, Callable[[dict], str]] = {}
         self._ostatnie_klucze_sortowania: dict[str, Callable[[dict], Any]] = {}
 
+        if self.zaznaczalne:
+            self.grid_columnconfigure(0, weight=0)
         for indeks, (_klucz, _etykieta, waga) in enumerate(kolumny):
-            self.grid_columnconfigure(indeks, weight=waga)
+            self.grid_columnconfigure(indeks + self._przesuniecie, weight=waga)
 
         self._zbuduj_naglowek()
 
     def _zbuduj_naglowek(self) -> None:
+        if self.zaznaczalne:
+            self._checkbox_zaznacz_wszystko = ctk.CTkCheckBox(
+                self,
+                text="",
+                width=20,
+                fg_color=styl.KOLOR_AKCENT,
+                hover_color=styl.KOLOR_AKCENT_HOVER,
+                command=self._przelacz_wszystkie,
+            )
+            self._checkbox_zaznacz_wszystko.grid(
+                row=0, column=0, sticky="nsew",
+                padx=styl.ODSTEP_RAMKA_TABELI, pady=(0, styl.ODSTEP_RAMKA_TABELI),
+            )
+
         for indeks, (klucz, _etykieta, _waga) in enumerate(self.kolumny):
             label = ctk.CTkLabel(
                 self,
@@ -67,7 +101,7 @@ class Tabela(ctk.CTkScrollableFrame):
             )
             label.grid(
                 row=0,
-                column=indeks,
+                column=indeks + self._przesuniecie,
                 sticky="nsew",
                 padx=styl.ODSTEP_RAMKA_TABELI,
                 pady=(0, styl.ODSTEP_RAMKA_TABELI),
@@ -135,6 +169,7 @@ class Tabela(ctk.CTkScrollableFrame):
             for etykieta in wiersz_etykiet:
                 etykieta.destroy()
         self._wiersze = []
+        self._zmienne_zaznaczenia = {}
         if self._placeholder is not None:
             self._placeholder.destroy()
         self._placeholder = ctk.CTkLabel(
@@ -144,7 +179,7 @@ class Tabela(ctk.CTkScrollableFrame):
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
         )
         self._placeholder.grid(
-            row=1, column=0, columnspan=len(self.kolumny), pady=styl.ODSTEP_DUZY
+            row=1, column=0, columnspan=len(self.kolumny) + self._przesuniecie, pady=styl.ODSTEP_DUZY
         )
         self._indeks_zaznaczony = None
 
@@ -168,6 +203,10 @@ class Tabela(ctk.CTkScrollableFrame):
             for etykieta in wiersz_etykiet:
                 etykieta.destroy()
         self._wiersze = []
+        self._zmienne_zaznaczenia = {}
+        self._zaznaczalne_flagi = {}
+        if self._checkbox_zaznacz_wszystko is not None:
+            self._checkbox_zaznacz_wszystko.deselect()
         if self._placeholder is not None:
             self._placeholder.destroy()
             self._placeholder = None
@@ -179,6 +218,27 @@ class Tabela(ctk.CTkScrollableFrame):
 
         for indeks_wiersza, wiersz in enumerate(wiersze):
             kolor_tla = self._kolor_wiersza(indeks_wiersza)
+
+            if self.zaznaczalne:
+                mozna_zaznaczyc = self.zaznaczalne_dla(wiersz) if self.zaznaczalne_dla else True
+                zmienna = ctk.BooleanVar(value=False)
+                self._zmienne_zaznaczenia[wiersz["id"]] = zmienna
+                self._zaznaczalne_flagi[wiersz["id"]] = mozna_zaznaczyc
+                checkbox = ctk.CTkCheckBox(
+                    self,
+                    text="",
+                    width=20,
+                    fg_color=styl.KOLOR_AKCENT,
+                    hover_color=styl.KOLOR_AKCENT_HOVER,
+                    variable=zmienna,
+                    state="normal" if mozna_zaznaczyc else "disabled",
+                    command=self._na_zmiane_pojedynczego_zaznaczenia,
+                )
+                checkbox.grid(
+                    row=indeks_wiersza + 1, column=0, sticky="nsew",
+                    padx=styl.ODSTEP_RAMKA_TABELI, pady=styl.ODSTEP_RAMKA_TABELI,
+                )
+
             etykiety_w_wierszu = []
             for indeks_kolumny, (klucz, _etykieta, _waga) in enumerate(self.kolumny):
                 formater = formatery.get(klucz)
@@ -203,7 +263,7 @@ class Tabela(ctk.CTkScrollableFrame):
                 )
                 etykieta.grid(
                     row=indeks_wiersza + 1,
-                    column=indeks_kolumny,
+                    column=indeks_kolumny + self._przesuniecie,
                     sticky="nsew",
                     padx=styl.ODSTEP_RAMKA_TABELI,
                     pady=styl.ODSTEP_RAMKA_TABELI,
@@ -239,3 +299,28 @@ class Tabela(ctk.CTkScrollableFrame):
         for etykieta in self._wiersze[indeks]:
             etykieta.configure(fg_color=styl.KOLOR_WIERSZ_ZAZNACZONY)
         self._indeks_zaznaczony = indeks
+
+    # -- zaznaczanie wierszy (Faza 12D - akcje zbiorcze) ---------------------
+
+    def _przelacz_wszystkie(self) -> None:
+        zaznacz = bool(self._checkbox_zaznacz_wszystko.get())
+        for id_wiersza, zmienna in self._zmienne_zaznaczenia.items():
+            # Wiersze wylaczone przez zaznaczalne_dla NIGDY nie sa zaznaczane -
+            # "zaznacz wszystko" nie omija tego ograniczenia.
+            if self._zaznaczalne_flagi.get(id_wiersza, True):
+                zmienna.set(zaznacz)
+        if self.on_zmiana_zaznaczenia:
+            self.on_zmiana_zaznaczenia()
+
+    def _na_zmiane_pojedynczego_zaznaczenia(self) -> None:
+        if self.on_zmiana_zaznaczenia:
+            self.on_zmiana_zaznaczenia()
+
+    def pobierz_zaznaczone_id(self) -> list:
+        return [id_wiersza for id_wiersza, zmienna in self._zmienne_zaznaczenia.items() if zmienna.get()]
+
+    def wyczysc_zaznaczenie(self) -> None:
+        for zmienna in self._zmienne_zaznaczenia.values():
+            zmienna.set(False)
+        if self._checkbox_zaznacz_wszystko is not None:
+            self._checkbox_zaznacz_wszystko.deselect()

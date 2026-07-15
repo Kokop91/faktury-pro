@@ -12,6 +12,8 @@ from app.schemas.faktura import (
     PlatnoscCreate,
     PlatnoscOut,
     WyslijKsefOut,
+    WyslijKsefZbiorczoWynikOut,
+    WyslijZbiorczoIn,
 )
 from app.services import faktury as faktury_service
 from app.services import ksef_service
@@ -49,6 +51,11 @@ def naleznosci(db: Session = Depends(get_db)):
         suma_naleznosci_grosze=suma_grosze,
         faktury=[platnosci_service.zbuduj_fakture_out(f) for f in faktury],
     )
+
+
+@router.post("/ksef/wyslij-zbiorczo", response_model=list[WyslijKsefZbiorczoWynikOut])
+def wyslij_faktury_zbiorczo(dane: WyslijZbiorczoIn, db: Session = Depends(get_db)):
+    return ksef_service.wyslij_faktury_zbiorczo(db, dane.faktura_ids)
 
 
 @router.get("/{faktura_id}", response_model=FakturaOut)

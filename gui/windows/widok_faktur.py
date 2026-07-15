@@ -1,11 +1,24 @@
+from tkinter import messagebox
+
 import customtkinter as ctk
 
 from gui import api_client, formatowanie, ikony, nastawienia, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu
+from gui.widgets_pomocnicze import (
+    formatuj_srodowisko_ksef,
+    komunikat_bledu,
+    komunikat_info,
+    ustaw_tekst_ladowania,
+)
 from gui.windows.formularz_faktury import FormularzFaktury
 from gui.windows.szczegoly_faktury import SzczegolyFaktury
 from gui.windows.tabela import Tabela
+
+# Faktury dla ktorych wysylka zbiorcza ma sens - mirror warunku widocznosci
+# przycisku "Wyslij do KSeF" w gui/windows/szczegoly_faktury.py (nie robocza,
+# jeszcze nie przyjeta przez KSeF).
+def _faktura_wysylalna_do_ksef(wiersz: dict) -> bool:
+    return wiersz["status"] != "robocza" and wiersz["status_ksef"] != "przyjeta"
 
 KOLUMNY = [
     ("numer", "Numer", 2),
@@ -24,10 +37,11 @@ class WidokFaktur(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color=styl.KOLOR_TLO)
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=1)
 
         self._klienci_wg_id: dict[int, str] = {}
         self._ostatnie_faktury: list[dict] = []
+        self._srodowisko_ksef = "testowe"
         self._etykiety_statusow = ["Wszystkie"] + list(
             formatowanie.ETYKIETY_STATUSU.values()
         )
@@ -96,6 +110,41 @@ class WidokFaktur(ctk.CTkFrame):
             command=self._otworz_formularz,
         ).grid(row=0, column=4)
 
+        # Faza 12D - akcja zbiorcza. Pasek zawsze widoczny (przycisk disabled,
+        # gdy nic nie zaznaczono), zeby jego istnienie bylo oczywiste, a nie
+        # pojawialo/znikalo w zaleznosci od zaznaczenia.
+        pasek_zbiorczy = ctk.CTkFrame(self, fg_color="transparent")
+        pasek_zbiorczy.grid(
+            row=1, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_MALY)
+        )
+
+        self._etykieta_zaznaczonych = ctk.CTkLabel(
+            pasek_zbiorczy,
+            text="Zaznaczono: 0",
+            font=styl.CZCIONKA_TRESC,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+        )
+        self._etykieta_zaznaczonych.pack(side="left")
+
+        self._przycisk_wyslij_zbiorczo = ctk.CTkButton(
+            pasek_zbiorczy,
+            text="Wyślij zaznaczone do KSeF",
+            font=styl.CZCIONKA_TRESC,
+            fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+            state="disabled",
+            command=self._wyslij_zaznaczone_do_ksef,
+        )
+        self._przycisk_wyslij_zbiorczo.pack(side="left", padx=(styl.ODSTEP_SREDNI, 0))
+
+        # Bezpieczenstwo (Faza 12D): zawsze widoczne, do ktorego srodowiska
+        # KSeF trafi wysylka zbiorcza - aktualizowane w odswiez().
+        self._etykieta_srodowisko = ctk.CTkLabel(
+            pasek_zbiorczy, text="", font=styl.CZCIONKA_DROBNA,
+            corner_radius=styl.PROMIEN_NAROZNIKA, anchor="w",
+        )
+        self._etykieta_srodowisko.pack(side="right", ipady=2, ipadx=styl.ODSTEP_MALY)
+
         sortowanie_zapisane = nastawienia.wczytaj(_KLUCZ_SORTOWANIE)
         sortowanie_poczatkowe = (
             tuple(sortowanie_zapisane) if isinstance(sortowanie_zapisane, list) else None
@@ -109,9 +158,12 @@ class WidokFaktur(ctk.CTkFrame):
             on_zmiana_sortowania=lambda klucz, malejaco: nastawienia.zapisz(
                 _KLUCZ_SORTOWANIE, [klucz, malejaco]
             ),
+            zaznaczalne=True,
+            zaznaczalne_dla=_faktura_wysylalna_do_ksef,
+            on_zmiana_zaznaczenia=self._na_zmiane_zaznaczenia,
         )
         self._tabela.grid(
-            row=1,
+            row=2,
             column=0,
             sticky="nsew",
             padx=styl.ODSTEP_DUZY,
@@ -144,18 +196,31 @@ class WidokFaktur(ctk.CTkFrame):
             # ktory zostal miedzyczasie dezaktywowany (soft-delete).
             klienci = api_client.pobierz_klientow(tylko_aktywni=False, limit=200)
             faktury = api_client.pobierz_faktury(status=status_klucz, limit=200)
-            return klienci, faktury
+            try:
+                srodowisko = api_client.pobierz_ustawienia_ksef()["srodowisko"]
+            except api_client.ApiError:
+                srodowisko = "testowe"
+            return klienci, faktury, srodowisko
 
         def sukces(wynik):
-            klienci, faktury = wynik
+            klienci, faktury, srodowisko = wynik
             self._klienci_wg_id = {k["id"]: k["nazwa"] for k in klienci}
             self._ostatnie_faktury = faktury
+            self._srodowisko_ksef = srodowisko
             self._odswiez_tabele()
+            tekst, kolor_tekstu, kolor_tla = formatuj_srodowisko_ksef(srodowisko)
+            self._etykieta_srodowisko.configure(text=tekst, text_color=kolor_tekstu, fg_color=kolor_tla)
+            self._na_zmiane_zaznaczenia()
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
+
+    def _na_zmiane_zaznaczenia(self) -> None:
+        liczba = len(self._tabela.pobierz_zaznaczone_id())
+        self._etykieta_zaznaczonych.configure(text=f"Zaznaczono: {liczba}")
+        self._przycisk_wyslij_zbiorczo.configure(state="normal" if liczba else "disabled")
 
     def _odswiez_tabele(self) -> None:
         szukana_fraza = self._pole_szukaj.get().strip().lower()
@@ -210,3 +275,68 @@ class WidokFaktur(ctk.CTkFrame):
 
     def _otworz_formularz(self) -> None:
         FormularzFaktury(self, on_zapisano=self.odswiez)
+
+    def _wyslij_zaznaczone_do_ksef(self) -> None:
+        zaznaczone_id = self._tabela.pobierz_zaznaczone_id()
+        if not zaznaczone_id:
+            return
+
+        # Bezpieczenstwo (Faza 12D): odczytaj srodowisko na nowo TERAZ, tuz
+        # przed wysylka, zamiast ufac wartosci zaladowanej przy ostatnim
+        # odswiez() - patrz analogiczny komentarz w szczegoly_faktury.py.
+        def zadanie_sprawdz():
+            try:
+                return api_client.pobierz_ustawienia_ksef()["srodowisko"]
+            except api_client.ApiError:
+                return self._srodowisko_ksef
+
+        def sukces_sprawdz(srodowisko: str) -> None:
+            self._srodowisko_ksef = srodowisko
+            if srodowisko == "produkcyjne" and not messagebox.askyesno(
+                "Wysyłka do środowiska produkcyjnego KSeF",
+                f"Zamierzasz wysłać {len(zaznaczone_id)} faktur(y) do PRODUKCYJNEGO "
+                "systemu KSeF, z rzeczywistymi konsekwencjami prawnymi i finansowymi.\n\n"
+                "Czy na pewno chcesz kontynuować?",
+                parent=self,
+            ):
+                return
+            self._wyslij_zaznaczone_do_ksef_faktycznie(zaznaczone_id)
+
+        def blad_sprawdz(e: api_client.ApiError) -> None:
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie_sprawdz, sukces_sprawdz, blad_sprawdz)
+
+    def _wyslij_zaznaczone_do_ksef_faktycznie(self, zaznaczone_id: list) -> None:
+        ustaw_tekst_ladowania(
+            self._przycisk_wyslij_zbiorczo, True, "Wyślij zaznaczone do KSeF", "Wysyłanie do KSeF..."
+        )
+
+        def zadanie():
+            return api_client.wyslij_faktury_zbiorczo(zaznaczone_id)
+
+        def sukces(wyniki: list[dict]) -> None:
+            ustaw_tekst_ladowania(self._przycisk_wyslij_zbiorczo, False, "Wyślij zaznaczone do KSeF")
+            liczba_ok = sum(1 for w in wyniki if w["powodzenie"])
+            liczba_wszystkich = len(wyniki)
+            if liczba_ok == liczba_wszystkich:
+                komunikat_info(self, f"Wysłano pomyślnie {liczba_ok} z {liczba_wszystkich} faktur.")
+            else:
+                nieudane = [w for w in wyniki if not w["powodzenie"]]
+                szczegoly = "\n".join(
+                    f"— faktura #{w['faktura_id']}: {w['komunikat']}" for w in nieudane
+                )
+                komunikat_bledu(
+                    self,
+                    f"Wysłano pomyślnie {liczba_ok} z {liczba_wszystkich} faktur.\n\n"
+                    f"Nieudane:\n{szczegoly}",
+                )
+            self._tabela.wyczysc_zaznaczenie()
+            self._na_zmiane_zaznaczenia()
+            self.odswiez()
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_wyslij_zbiorczo, False, "Wyślij zaznaczone do KSeF")
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
