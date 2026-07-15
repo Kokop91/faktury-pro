@@ -13,3 +13,5 @@ pillow
 bcrypt
 matplotlib
 lxml
+cryptography
+pywin32

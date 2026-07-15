@@ -10,6 +10,7 @@ from app.api import (
     integracje,
     inwentaryzacje,
     klienci,
+    ksef,
     magazyn,
     magazyny,
     produkty,
@@ -30,6 +31,7 @@ app.include_router(raporty.router)
 app.include_router(dashboard.router)
 app.include_router(firma.router)
 app.include_router(integracje.router)
+app.include_router(ksef.router)
 
 
 @app.get("/health")

@@ -1,4 +1,5 @@
 from datetime import date
+from tkinter import messagebox
 
 import customtkinter as ctk
 
@@ -47,6 +48,7 @@ class WidokUstawien(ctk.CTkFrame):
         self._zbuduj_karte_wygladu(wrapper)
         self._zbuduj_karte_firmy(wrapper)
         self._zbuduj_karte_integracji_gus(wrapper)
+        self._zbuduj_karte_ksef(wrapper)
         self._zbuduj_karte_hasla(wrapper)
 
     def _zbuduj_karte_wygladu(self, master) -> None:
@@ -515,6 +517,217 @@ class WidokUstawien(ctk.CTkFrame):
         def blad(e: api_client.ApiError) -> None:
             self._przycisk_gus_ustawienia.configure(state="normal")
             komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    # -- integracja KSeF (Faza 12A - fundament + uwierzytelnienie, bez
+    # wysylki faktur) - srodowisko testowe/produkcyjne z wyraznym oznaczeniem
+    # aktywnego, bo to prawdziwy system rzadowy (pomylka srodowiska ma
+    # konsekwencje prawne/finansowe), token przechowywany zaszyfrowany
+    # (app/services/ksef_ustawienia.py, Windows DPAPI) ----------------------
+
+    def _zbuduj_karte_ksef(self, master) -> None:
+        karta = ctk.CTkFrame(
+            master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        karta.pack(pady=(0, styl.ODSTEP_SREDNI), fill="x")
+
+        ctk.CTkLabel(
+            karta,
+            text="Integracja KSeF",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+        ).pack(
+            padx=styl.ODSTEP_DUZY,
+            pady=(styl.ODSTEP_DUZY, styl.ODSTEP_SREDNI),
+            anchor="w",
+        )
+
+        wewnatrz = ctk.CTkFrame(karta, fg_color="transparent", width=320)
+        wewnatrz.pack(padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY), fill="x")
+
+        self._banda_srodowiska_ksef = ctk.CTkLabel(
+            wewnatrz,
+            text="",
+            font=styl.CZCIONKA_TRESC_POGRUBIONA,
+            corner_radius=styl.PROMIEN_NAROZNIKA,
+        )
+        self._banda_srodowiska_ksef.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI), ipady=styl.ODSTEP_MALY)
+
+        ctk.CTkLabel(
+            wewnatrz,
+            text=(
+                "Domyślnie środowisko TESTOWE Ministerstwa Finansów (sandbox KSeF 2.0). "
+                "Przełączenie na PRODUKCYJNE wysyła żądania do prawdziwego systemu "
+                "rządowego i wymaga potwierdzenia."
+            ),
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            wraplength=320,
+            justify="left",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._etykieta_pola(wewnatrz, "Środowisko")
+        self._var_srodowisko_ksef = ctk.StringVar(value="Testowe")
+        self._przelacznik_srodowiska_ksef = ctk.CTkSegmentedButton(
+            wewnatrz,
+            values=["Testowe", "Produkcyjne"],
+            variable=self._var_srodowisko_ksef,
+            font=styl.CZCIONKA_TRESC,
+            selected_color=styl.KOLOR_AKCENT,
+            selected_hover_color=styl.KOLOR_AKCENT_HOVER,
+            command=self._na_zmiane_srodowiska_ksef,
+        )
+        self._przelacznik_srodowiska_ksef.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._etykieta_pola(wewnatrz, "Token KSeF")
+        self._pole_token_ksef = ctk.CTkEntry(
+            wewnatrz, show="•", font=styl.CZCIONKA_TRESC,
+            placeholder_text="(zapisany - wpisz nowy, żeby zmienić)",
+        )
+        self._pole_token_ksef.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._etykieta_stan_tokena_ksef = ctk.CTkLabel(
+            wewnatrz, text="", font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY, anchor="w",
+        )
+        self._etykieta_stan_tokena_ksef.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._przycisk_ksef_zapisz = ctk.CTkButton(
+            wewnatrz,
+            text="Zapisz ustawienia KSeF",
+            fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+            command=self._zapisz_ustawienia_ksef,
+        )
+        self._przycisk_ksef_zapisz.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._banner_ksef = Banner(wewnatrz)
+        self._banner_ksef.ustaw_geometrie(
+            lambda: self._banner_ksef.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+        )
+
+        self._przycisk_ksef_testuj = ctk.CTkButton(
+            wewnatrz,
+            text="Testuj połączenie z KSeF",
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._testuj_polaczenie_ksef,
+        )
+        self._przycisk_ksef_testuj.pack(fill="x")
+
+        self._wczytaj_ustawienia_ksef()
+
+    def _odswiez_banda_srodowiska_ksef(self, srodowisko: str) -> None:
+        if srodowisko == "produkcyjne":
+            self._banda_srodowiska_ksef.configure(
+                text="●  ŚRODOWISKO PRODUKCYJNE — prawdziwy system KSeF",
+                fg_color=styl.KOLOR_BLAD_TLO,
+                text_color=styl.KOLOR_BLAD,
+            )
+        else:
+            self._banda_srodowiska_ksef.configure(
+                text="●  ŚRODOWISKO TESTOWE (sandbox Ministerstwa Finansów)",
+                fg_color=styl.KOLOR_SUKCES_TLO,
+                text_color=styl.KOLOR_SUKCES,
+            )
+
+    def _na_zmiane_srodowiska_ksef(self, wartosc: str) -> None:
+        if wartosc == "Produkcyjne":
+            potwierdzono = messagebox.askyesno(
+                "Przełączenie na środowisko produkcyjne KSeF",
+                "Zamierzasz przełączyć integrację KSeF na ŚRODOWISKO PRODUKCYJNE.\n\n"
+                "Od tego momentu żądania (w tym test połączenia) będą wysyłane do "
+                "prawdziwego systemu Ministerstwa Finansów, z rzeczywistymi "
+                "konsekwencjami prawnymi i finansowymi.\n\n"
+                "Czy na pewno chcesz kontynuować?",
+                parent=self,
+            )
+            if not potwierdzono:
+                self._przelacznik_srodowiska_ksef.set("Testowe")
+                wartosc = "Testowe"
+        self._odswiez_banda_srodowiska_ksef(
+            "produkcyjne" if wartosc == "Produkcyjne" else "testowe"
+        )
+
+    def _wczytaj_ustawienia_ksef(self) -> None:
+        def zadanie():
+            return api_client.pobierz_ustawienia_ksef()
+
+        def sukces(dane: dict) -> None:
+            srodowisko = dane["srodowisko"]
+            self._przelacznik_srodowiska_ksef.set(
+                "Produkcyjne" if srodowisko == "produkcyjne" else "Testowe"
+            )
+            self._odswiez_banda_srodowiska_ksef(srodowisko)
+            self._etykieta_stan_tokena_ksef.configure(
+                text=(
+                    "Token KSeF zapisany (zaszyfrowany lokalnie)."
+                    if dane["ma_token"]
+                    else "Brak zapisanego tokena KSeF."
+                )
+            )
+
+        def blad(e: api_client.ApiError) -> None:
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _zapisz_ustawienia_ksef(self) -> None:
+        srodowisko = (
+            "produkcyjne" if self._var_srodowisko_ksef.get() == "Produkcyjne" else "testowe"
+        )
+        dane: dict = {"srodowisko": srodowisko}
+        token_nowy = self._pole_token_ksef.get().strip()
+        if token_nowy:
+            dane["token"] = token_nowy
+
+        self._przycisk_ksef_zapisz.configure(state="disabled")
+
+        def zadanie():
+            return api_client.zapisz_ustawienia_ksef(dane)
+
+        def sukces(wynik: dict) -> None:
+            self._przycisk_ksef_zapisz.configure(state="normal")
+            self._pole_token_ksef.delete(0, "end")
+            self._odswiez_banda_srodowiska_ksef(wynik["srodowisko"])
+            self._etykieta_stan_tokena_ksef.configure(
+                text=(
+                    "Token KSeF zapisany (zaszyfrowany lokalnie)."
+                    if wynik["ma_token"]
+                    else "Brak zapisanego tokena KSeF."
+                )
+            )
+            pokaz_toast(self, "Ustawienia KSeF zapisane.")
+
+        def blad(e: api_client.ApiError) -> None:
+            self._przycisk_ksef_zapisz.configure(state="normal")
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _testuj_polaczenie_ksef(self) -> None:
+        self._banner_ksef.ukryj()
+        ustaw_tekst_ladowania(
+            self._przycisk_ksef_testuj, True, "Testuj połączenie z KSeF", "Łączenie z KSeF..."
+        )
+
+        def zadanie():
+            return api_client.testuj_polaczenie_ksef()
+
+        def sukces(wynik: dict) -> None:
+            ustaw_tekst_ladowania(self._przycisk_ksef_testuj, False, "Testuj połączenie z KSeF")
+            if wynik["powodzenie"]:
+                pokaz_toast(self, wynik["komunikat"], "sukces")
+            else:
+                self._banner_ksef.pokaz(wynik["komunikat"])
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_ksef_testuj, False, "Testuj połączenie z KSeF")
+            self._banner_ksef.pokaz(e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
 

@@ -447,3 +447,22 @@ def generuj_faktury_cykliczne(pozycje: list[dict] | None = None) -> list[dict]:
     return _wykonaj(
         "POST", "/faktury-cykliczne/generuj", TIMEOUT_ZAPIS, json=dane
     ).json()
+
+
+# -- integracja KSeF (Faza 12A) -----------------------------------------------
+# Pelny cykl uwierzytelnienia (challenge -> szyfrowanie -> ksef-token ->
+# odpytywanie statusu -> redeem) moze potrwac dluzej niz zwykle wywolanie -
+# stad wlasny, dluzszy timeout.
+TIMEOUT_KSEF = 45.0
+
+
+def pobierz_ustawienia_ksef() -> dict:
+    return _wykonaj("GET", "/ksef/ustawienia", TIMEOUT_ODCZYT).json()
+
+
+def zapisz_ustawienia_ksef(dane: dict) -> dict:
+    return _wykonaj("PUT", "/ksef/ustawienia", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def testuj_polaczenie_ksef() -> dict:
+    return _wykonaj("POST", "/ksef/testuj-polaczenie", TIMEOUT_KSEF).json()
