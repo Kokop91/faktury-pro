@@ -66,3 +66,4 @@ class Firma(Base):
     klienci: Mapped[list["Klient"]] = relationship(back_populates="firma")
     produkty: Mapped[list["Produkt"]] = relationship(back_populates="firma")
     magazyny: Mapped[list["Magazyn"]] = relationship(back_populates="firma")
+    dokumenty_kosztowe: Mapped[list["DokumentKosztowy"]] = relationship(back_populates="firma")

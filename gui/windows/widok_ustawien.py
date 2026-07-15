@@ -593,6 +593,19 @@ class WidokUstawien(ctk.CTkFrame):
         )
         self._etykieta_stan_tokena_ksef.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
 
+        # Faza 12C - w odroznieniu od reszty ustawien KSeF powyzej (srodowisko,
+        # token), to WLACZA rzeczywiste polaczenie sieciowe z KSeF przy kazdym
+        # starcie appki - stad domyslnie wylaczone, uzytkownik decyduje swiadomie.
+        self._var_sprawdzaj_koszty_przy_starcie = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            wewnatrz,
+            text="Sprawdzaj nowe faktury kosztowe w KSeF przy starcie aplikacji",
+            font=styl.CZCIONKA_TRESC,
+            variable=self._var_sprawdzaj_koszty_przy_starcie,
+            fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI), anchor="w")
+
         self._przycisk_ksef_zapisz = ctk.CTkButton(
             wewnatrz,
             text="Zapisz ustawienia KSeF",
@@ -670,6 +683,9 @@ class WidokUstawien(ctk.CTkFrame):
                     else "Brak zapisanego tokena KSeF."
                 )
             )
+            self._var_sprawdzaj_koszty_przy_starcie.set(
+                dane.get("sprawdzaj_koszty_przy_starcie", False)
+            )
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
@@ -680,7 +696,10 @@ class WidokUstawien(ctk.CTkFrame):
         srodowisko = (
             "produkcyjne" if self._var_srodowisko_ksef.get() == "Produkcyjne" else "testowe"
         )
-        dane: dict = {"srodowisko": srodowisko}
+        dane: dict = {
+            "srodowisko": srodowisko,
+            "sprawdzaj_koszty_przy_starcie": self._var_sprawdzaj_koszty_przy_starcie.get(),
+        }
         token_nowy = self._pole_token_ksef.get().strip()
         if token_nowy:
             dane["token"] = token_nowy

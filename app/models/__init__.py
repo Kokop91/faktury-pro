@@ -1,6 +1,8 @@
+from app.models.dokument_kosztowy import DokumentKosztowy
 from app.models.dokument_magazynowy import DokumentMagazynowy
 from app.models.enums import (
     CzestotliwoscCykliczna,
+    StatusDokumentuKosztowego,
     StatusFaktury,
     StatusInwentaryzacji,
     StatusKsef,
@@ -56,4 +58,6 @@ __all__ = [
     "CzestotliwoscCykliczna",
     "StatusSzablonuCyklicznego",
     "WeryfikacjaBialejListy",
+    "DokumentKosztowy",
+    "StatusDokumentuKosztowego",
 ]

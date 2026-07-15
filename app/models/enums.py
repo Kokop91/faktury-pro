@@ -29,6 +29,16 @@ class StatusFaktury(str, enum.Enum):
     ANULOWANA = "anulowana"
 
 
+class StatusDokumentuKosztowego(str, enum.Enum):
+    """Stan przegladu dokumentu kosztowego (Faza 12C) pobranego z KSeF - CZYSTO
+    rejestrowy/informacyjny, bez integracji ksiegowej (to potencjalny temat
+    na przyszlosc, poza zakresem tej fazy)."""
+
+    NOWA = "nowa"
+    ZAAKCEPTOWANA = "zaakceptowana"
+    DO_WYJASNIENIA = "do_wyjasnienia"
+
+
 class StatusKsef(str, enum.Enum):
     """Stan wysylki faktury do KSeF (Faza 12B) - niezalezny od StatusFaktury
     (ta sama faktura moze byc np. 'wystawiona' i 'ksef_przyjeta' jednoczesnie)."""

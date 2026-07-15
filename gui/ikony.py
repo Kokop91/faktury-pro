@@ -83,6 +83,17 @@ def _rysuj_dashboard(rysuj: ImageDraw.ImageDraw, s: Callable[[float], float], w:
     rysuj.rectangle([s(16), s(4), s(20.5), s(20)], outline="white", width=w)
 
 
+def _rysuj_wplyw(rysuj: ImageDraw.ImageDraw, s: Callable[[float], float], w: float) -> None:
+    """Tacka (skrzynka odbiorcza) ze strzalka skierowana w dol - symbolizuje
+    dokumenty PRZYCHODZACE (faktury kosztowe odebrane z KSeF), w odroznieniu
+    od ikony "faktury" (wystawiane, wychodzace)."""
+    rysuj.line([s(4.5), s(14), s(4.5), s(20)], fill="white", width=w)
+    rysuj.line([s(4.5), s(20), s(19.5), s(20)], fill="white", width=w)
+    rysuj.line([s(19.5), s(20), s(19.5), s(14)], fill="white", width=w)
+    rysuj.line([s(12), s(3.5), s(12), s(14.5)], fill="white", width=w)
+    rysuj.polygon([(s(8), s(11)), (s(16), s(11)), (s(12), s(15.5))], fill="white")
+
+
 def _rysuj_cykl(rysuj: ImageDraw.ImageDraw, s: Callable[[float], float], w: float) -> None:
     """Dwa luki z grocikami (jak ikona "odswiez/powtorz") - symbolizuja
     powtarzajacy sie w czasie szablon faktury cyklicznej."""
@@ -102,6 +113,7 @@ _RYSOWNICE: dict[str, Callable[[ImageDraw.ImageDraw, Callable[[float], float], i
     "plus": _rysuj_plus,
     "dashboard": _rysuj_dashboard,
     "cykliczne": _rysuj_cykl,
+    "koszty": _rysuj_wplyw,
 }
 
 

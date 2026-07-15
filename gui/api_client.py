@@ -482,3 +482,45 @@ def wyslij_fakture_do_ksef(faktura_id: int) -> dict:
 
 def pobierz_upo_faktury(faktura_id: int) -> bytes:
     return _wykonaj("GET", f"/faktury/{faktura_id}/ksef/upo", TIMEOUT_ODCZYT).content
+
+
+# -- dokumenty kosztowe / odbior faktur zakupowych z KSeF (Faza 12C) ---------
+# Sprawdzenie KSeF to pelny cykl uwierzytelnienia + zapytanie(a) o metadane +
+# pobranie tresci kazdej nowej faktury - moze potrwac dluzej niz zwykle
+# wywolanie, podobnie jak wysylka (patrz TIMEOUT_KSEF_WYSYLKA).
+TIMEOUT_KSEF_KOSZTY = 90.0
+
+
+def pobierz_nowe_koszty_ksef() -> dict:
+    return _wykonaj("POST", "/ksef/pobierz-koszty", TIMEOUT_KSEF_KOSZTY).json()
+
+
+def pobierz_dokumenty_kosztowe(
+    status: str | None = None,
+    data_od: str | None = None,
+    data_do: str | None = None,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[dict]:
+    parametry: dict = {"skip": skip, "limit": limit}
+    if status:
+        parametry["status"] = status
+    if data_od:
+        parametry["data_od"] = data_od
+    if data_do:
+        parametry["data_do"] = data_do
+    return _wykonaj("GET", "/dokumenty-kosztowe", TIMEOUT_ODCZYT, params=parametry).json()
+
+
+def liczba_nowych_dokumentow_kosztowych() -> int:
+    return _wykonaj("GET", "/dokumenty-kosztowe/liczba-nowych", TIMEOUT_ODCZYT).json()["liczba_nowych"]
+
+
+def pobierz_dokument_kosztowy(dokument_id: int) -> dict:
+    return _wykonaj("GET", f"/dokumenty-kosztowe/{dokument_id}", TIMEOUT_ODCZYT).json()
+
+
+def zmien_status_dokumentu_kosztowego(dokument_id: int, status: str) -> dict:
+    return _wykonaj(
+        "PATCH", f"/dokumenty-kosztowe/{dokument_id}/status", TIMEOUT_ZAPIS, json={"status": status}
+    ).json()

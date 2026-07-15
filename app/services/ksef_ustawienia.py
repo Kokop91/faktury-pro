@@ -95,6 +95,7 @@ def wczytaj_ustawienia_ksef() -> dict:
     return {
         "srodowisko": dane.get("ksef_srodowisko", DOMYSLNE_SRODOWISKO),
         "ma_token": bool(dane.get("ksef_token_zaszyfrowany")),
+        "sprawdzaj_koszty_przy_starcie": bool(dane.get("ksef_sprawdzaj_koszty_przy_starcie", False)),
     }
 
 
@@ -116,9 +117,10 @@ def pobierz_dane_polaczenia_ksef() -> tuple[str | None, str]:
 
 
 def zapisz_ustawienia_ksef(zmiany: dict) -> dict:
-    """`zmiany` moze zawierac 'srodowisko' i/lub 'token' (te same nazwy pol
-    co w schemacie API UstawieniaKsefIn). 'token' ustawiony na pusty/None
-    czysci zapisany token. Zwraca stan jak wczytaj_ustawienia_ksef()."""
+    """`zmiany` moze zawierac 'srodowisko', 'token' i/lub
+    'sprawdzaj_koszty_przy_starcie' (te same nazwy pol co w schemacie API
+    UstawieniaKsefIn). 'token' ustawiony na pusty/None czysci zapisany token.
+    Zwraca stan jak wczytaj_ustawienia_ksef()."""
     if "srodowisko" in zmiany and zmiany["srodowisko"] not in SRODOWISKA:
         raise ValueError(f"Nieznane środowisko KSeF: {zmiany['srodowisko']}")
 
@@ -130,5 +132,7 @@ def zapisz_ustawienia_ksef(zmiany: dict) -> dict:
             dane["ksef_token_zaszyfrowany"] = _szyfruj(zmiany["token"])
         else:
             dane.pop("ksef_token_zaszyfrowany", None)
+    if "sprawdzaj_koszty_przy_starcie" in zmiany:
+        dane["ksef_sprawdzaj_koszty_przy_starcie"] = bool(zmiany["sprawdzaj_koszty_przy_starcie"])
     _zapisz(dane)
     return wczytaj_ustawienia_ksef()

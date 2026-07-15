@@ -5,6 +5,7 @@ import customtkinter as ctk
 from gui import api_client, ikony, nastawienia, styl
 from gui.watki import uruchom_w_tle
 from gui.windows.widok_dashboard import WidokDashboard
+from gui.windows.widok_dokumentow_kosztowych import WidokDokumentowKosztowych
 from gui.windows.widok_faktur import WidokFaktur
 from gui.windows.widok_faktur_cyklicznych import WidokFakturCyklicznych
 from gui.windows.widok_klientow import WidokKlientow
@@ -47,6 +48,11 @@ class GlowneOkno(ctk.CTk):
         # desktopowa nie dziala 24/7). Nigdy nie generuje nic samo - tylko
         # informuje i czeka na decyzje uzytkownika, patrz DialogZaleglychCyklicznych.
         self.after(300, self._sprawdz_faktury_cykliczne)
+        # Faza 12C: sprawdzenie KSeF (siec + uwierzytelnienie) jest OPCJONALNE
+        # i wylacznie na zyczenie uzytkownika (ustawienie w Ustawieniach) -
+        # w odroznieniu od odznaki liczby nowych dokumentow ponizej, ktora jest
+        # czysto lokalnym zapytaniem do bazy i odswieza sie zawsze.
+        self.after(400, self._sprawdz_koszty_ksef_jesli_wlaczone)
 
     def _sprawdz_faktury_cykliczne(self) -> None:
         def zadanie():
@@ -63,6 +69,40 @@ class GlowneOkno(ctk.CTk):
 
         def blad(_e) -> None:
             pass  # cichy brak powiadomienia startowego nie powinien przeszkadzac w pracy
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _sprawdz_koszty_ksef_jesli_wlaczone(self) -> None:
+        def zadanie():
+            ustawienia = api_client.pobierz_ustawienia_ksef()
+            if not ustawienia.get("sprawdzaj_koszty_przy_starcie"):
+                return None
+            return api_client.pobierz_nowe_koszty_ksef()
+
+        def sukces(wynik: dict | None) -> None:
+            if wynik is None:
+                return
+            self._odswiez_odznake_kosztow()
+            if wynik.get("liczba_nowych"):
+                widok = self._widoki.get("koszty")
+                odswiez = getattr(widok, "odswiez", None) if widok is not None else None
+                if callable(odswiez):
+                    odswiez()
+
+        def blad(_e) -> None:
+            pass  # cichy brak powiadomienia startowego (jak przy fakturach cyklicznych)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _odswiez_odznake_kosztow(self) -> None:
+        def zadanie():
+            return api_client.liczba_nowych_dokumentow_kosztowych()
+
+        def sukces(liczba: int) -> None:
+            self._pasek_boczny.ustaw_odznake("koszty", liczba)
+
+        def blad(_e) -> None:
+            pass  # odznaka to tylko wskazowka - brak polaczenia nie powinien przeszkadzac w pracy
 
         uruchom_w_tle(self, zadanie, sukces, blad)
 
@@ -120,6 +160,8 @@ class GlowneOkno(ctk.CTk):
             return WidokFakturCyklicznych(self._kontener)
         if klucz == "naleznosci":
             return WidokNaleznosci(self._kontener)
+        if klucz == "koszty":
+            return WidokDokumentowKosztowych(self._kontener)
         if klucz == "klienci":
             return WidokKlientow(self._kontener)
         if klucz == "magazyn":
@@ -149,6 +191,7 @@ class GlowneOkno(ctk.CTk):
         odswiez = getattr(widok, "odswiez", None)
         if callable(odswiez):
             odswiez()
+        self._odswiez_odznake_kosztow()
 
 
 class _PasekBoczny(ctk.CTkFrame):
@@ -158,6 +201,7 @@ class _PasekBoczny(ctk.CTkFrame):
         ("faktury", "Faktury"),
         ("cykliczne", "Faktury cykliczne"),
         ("naleznosci", "Należności"),
+        ("koszty", "Dokumenty kosztowe"),
         ("klienci", "Klienci"),
         ("magazyn", "Magazyn"),
         ("ustawienia", "Ustawienia"),
@@ -173,6 +217,7 @@ class _PasekBoczny(ctk.CTkFrame):
         self.grid_propagate(False)
         self.on_nawigacja = on_nawigacja
         self._przyciski: dict[str, ctk.CTkButton] = {}
+        self._odznaki: dict[str, ctk.CTkLabel] = {}
 
         tytul = ctk.CTkLabel(
             self,
@@ -212,3 +257,30 @@ class _PasekBoczny(ctk.CTkFrame):
                 if klucz_przycisku == klucz
                 else "transparent"
             )
+
+    def ustaw_odznake(self, klucz: str, liczba: int) -> None:
+        """Male czerwone kolko z liczba w rogu pozycji paska bocznego (Faza
+        12C - liczba nowych, nieprzejrzanych dokumentow kosztowych). Ukryte
+        calkowicie, gdy liczba <= 0."""
+        przycisk = self._przyciski.get(klucz)
+        if przycisk is None:
+            return
+        odznaka = self._odznaki.get(klucz)
+        if liczba <= 0:
+            if odznaka is not None:
+                odznaka.place_forget()
+            return
+        if odznaka is None:
+            odznaka = ctk.CTkLabel(
+                przycisk,
+                text="",
+                font=styl.CZCIONKA_DROBNA,
+                text_color="white",
+                fg_color=styl.KOLOR_BLAD,
+                corner_radius=9,
+                width=18,
+                height=18,
+            )
+            self._odznaki[klucz] = odznaka
+        odznaka.configure(text=str(liczba) if liczba <= 99 else "99+")
+        odznaka.place(relx=1.0, rely=0.5, anchor="e", x=-styl.ODSTEP_MALY)

@@ -13,6 +13,12 @@ ETYKIETY_STATUSU: dict[str, str] = {
     "anulowana": "Anulowana",
 }
 
+ETYKIETY_STATUSU_DOKUMENTU_KOSZTOWEGO: dict[str, str] = {
+    "nowa": "Nowa",
+    "zaakceptowana": "Zaakceptowana",
+    "do_wyjasnienia": "Do wyjaśnienia",
+}
+
 ETYKIETY_STATUSU_KSEF: dict[str, str] = {
     "nie_wyslana": "Nie wysłana",
     "wysylanie_w_toku": "Wysyłanie w toku",
@@ -121,6 +127,20 @@ def kolor_statusu(status: str) -> str:
 
 def formatuj_typ_dokumentu(typ: str) -> str:
     return ETYKIETY_TYPU_DOKUMENTU.get(typ, typ)
+
+
+def formatuj_status_dokumentu_kosztowego(status: str) -> str:
+    return ETYKIETY_STATUSU_DOKUMENTU_KOSZTOWEGO.get(status, status)
+
+
+def kolor_statusu_dokumentu_kosztowego(status: str) -> tuple[str, str]:
+    # nowa=zolty/pomaranczowy (wymaga uwagi), zaakceptowana=zielony,
+    # do_wyjasnienia=czerwony - ta sama konwencja co status_ksef.
+    return {
+        "nowa": styl.KOLOR_OSTRZEZENIE,
+        "zaakceptowana": styl.KOLOR_SUKCES,
+        "do_wyjasnienia": styl.KOLOR_BLAD,
+    }.get(status, styl.KOLOR_TEKST_DRUGORZEDNY)
 
 
 def formatuj_status_ksef(status_ksef: str) -> str:

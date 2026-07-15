@@ -77,6 +77,24 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
     typ RACHUNEK) są tymczasowo zablokowane** — FA(3) wymaga wtedy wskazania podstawy
     prawnej zwolnienia (pole P_19A/B/C), a model danych appki jeszcze tego nie zbiera;
     appka zgłasza to jako czytelny błąd zamiast zgadywać podstawę prawną.
+  - **Faza 12C — odbiór faktur kosztowych (zakupowych):** nowy model `DokumentKosztowy`
+    (`app/models/dokument_kosztowy.py`) — rejestr/podgląd faktur wystawionych na NIP
+    naszej firmy, BEZ integracji księgowej (to potencjalny temat na przyszłość).
+    Sprawdzanie: `app/services/ksef_koszty_service.py:pobierz_nowe_faktury_kosztowe` —
+    `POST /invoices/query/metadata` (SubjectType=Subject2/nabywca) + pobranie treści
+    XML każdej nowej faktury (`GET /invoices/ksef/{ksefNumber}`); punkt startowy
+    kolejnego sprawdzenia to `MAX(data_trwalego_zapisu)` z już pobranych dokumentów
+    (typ daty `PermanentStorage`, zalecany przez MF do przyrostowego pobierania -
+    świadomie NIE używamy mechanizmu eksportu paczek z HWM, bo jest zaprojektowany
+    dla systemów działających 24/7, a ta appka sprawdza tylko na żądanie).
+    Wywoływane WYŁĄCZNIE: (a) ręcznie przyciskiem "Sprawdź nowe faktury kosztowe"
+    (`gui/windows/widok_dokumentow_kosztowych.py`), (b) opcjonalnie przy starcie appki,
+    jeśli użytkownik włączył to w Ustawieniach (`sprawdzaj_koszty_przy_starcie`,
+    domyślnie WYŁĄCZONE — w odróżnieniu od zaległych faktur cyklicznych z Fazy 15,
+    to prawdziwe połączenie sieciowe z KSeF, nie tylko lokalne zapytanie do bazy).
+    Liczba nierozpatrzonych ("nowa") dokumentów pokazywana jako odznaka w pasku
+    bocznym — TA odznaka odświeża się zawsze (czysto lokalne zapytanie), niezależnie
+    od ustawienia auto-sprawdzania.
   - Mechanizm i adresy zweryfikowane wprost z oficjalnej dokumentacji Ministerstwa
     Finansów (`github.com/CIRFMF/ksef-api`) i z żywego środowiska testowego, nie
     zgadywane.

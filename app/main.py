@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.api import (
     dashboard,
+    dokumenty_kosztowe,
     faktury,
     faktury_cykliczne,
     firma,
@@ -32,6 +33,7 @@ app.include_router(dashboard.router)
 app.include_router(firma.router)
 app.include_router(integracje.router)
 app.include_router(ksef.router)
+app.include_router(dokumenty_kosztowe.router)
 
 
 @app.get("/health")
