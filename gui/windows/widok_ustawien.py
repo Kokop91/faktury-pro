@@ -33,6 +33,9 @@ POLA_FIRMY = [
 ETYKIETA_JDG = "Osoba fizyczna (JDG)"
 ETYKIETA_SPOLKA = "Spółka / inna osoba niefizyczna"
 
+ETYKIETA_OSTRZEGAJ = "Ostrzegaj"
+ETYKIETA_BLOKUJ = "Blokuj"
+
 
 class WidokUstawien(ctk.CTkFrame):
     def __init__(self, master):
@@ -159,6 +162,26 @@ class WidokUstawien(ctk.CTkFrame):
                 pole = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC)
                 pole.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
             self._pola_firmy[klucz] = pole
+
+        # -- sprzedaz ponizej stanu magazynowego (Faza 8) - konfigurowalne wg
+        # PLAN_PROJEKTU.md 3.5, ale do teraz appka zawsze dzialala w trybie
+        # domyslnym OSTRZEGAJ bez mozliwosci zmiany - to pole na to naprawia. ---
+        ctk.CTkFrame(wewnatrz, fg_color=styl.KOLOR_OBRAMOWANIE, height=1).pack(
+            fill="x", pady=styl.ODSTEP_SREDNI
+        )
+        ctk.CTkLabel(
+            wewnatrz, text="Sprzedaż poniżej stanu magazynowego", font=styl.CZCIONKA_TRESC_POGRUBIONA,
+            text_color=styl.KOLOR_TEKST_GLOWNY, anchor="w",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+        self._var_tryb_blokady = ctk.StringVar(value=ETYKIETA_OSTRZEGAJ)
+        ctk.CTkSegmentedButton(
+            wewnatrz,
+            values=[ETYKIETA_OSTRZEGAJ, ETYKIETA_BLOKUJ],
+            variable=self._var_tryb_blokady,
+            font=styl.CZCIONKA_TRESC,
+            selected_color=styl.KOLOR_AKCENT,
+            selected_hover_color=styl.KOLOR_AKCENT_HOVER,
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MALY))
 
         # -- dane do JPK_V7 (Faza 13) - forma prawna okresla ksztalt sekcji
         # Podmiot1: osoba fizyczna (JDG) potrzebuje imie/nazwisko/date urodzenia,
@@ -289,6 +312,9 @@ class WidokUstawien(ctk.CTkFrame):
                 ETYKIETA_JDG if firma.get("typ_podatnika") == "osoba_fizyczna" else ETYKIETA_SPOLKA
             )
             self._na_zmiane_typ_podatnika(self._var_typ_podatnika.get())
+            self._var_tryb_blokady.set(
+                ETYKIETA_BLOKUJ if firma.get("tryb_blokady_ujemnego_stanu") == "blokuj" else ETYKIETA_OSTRZEGAJ
+            )
             if firma.get("imie_pierwsze"):
                 self._pole_imie.delete(0, "end")
                 self._pole_imie.insert(0, firma["imie_pierwsze"])
@@ -363,6 +389,9 @@ class WidokUstawien(ctk.CTkFrame):
             "nazwa": nazwa,
             "nip": nip,
             "typ_podatnika": "osoba_fizyczna" if jest_jdg else "osoba_niefizyczna",
+            "tryb_blokady_ujemnego_stanu": (
+                "blokuj" if self._var_tryb_blokady.get() == ETYKIETA_BLOKUJ else "ostrzegaj"
+            ),
         }
         for klucz in (
             "ulica", "kod_pocztowy", "miejscowosc", "kraj", "email", "telefon",

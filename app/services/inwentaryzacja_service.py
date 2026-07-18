@@ -182,6 +182,14 @@ def zamknij_inwentaryzacje(
     odrzucony (tryb "blokuj" przy zejsciu ponizej zera) - robiac go pierwszym,
     ewentualny blad przerywa operacje zanim cokolwiek zostanie zapisane, wiec
     nie ma ryzyka podwojnego naliczenia korekty przy ponownej probie zamkniecia.
+
+    Oba dokumenty tworzone sa z commit=False - RW, PW i zmiana statusu spisu
+    na ZAKONCZONA musza trafic do bazy JEDNYM wspolnym db.commit() na koncu tej
+    funkcji, inaczej proces przerwany miedzy commitem RW a commitem PW (albo
+    miedzy PW a zapisaniem statusu) zostawia spis w stanie W_TRAKCIE z czescia
+    korekt juz zapisanych - ponowna proba zamkniecia policzylaby roznice od tej
+    samej migawki stan_systemowy/stan_faktyczny i utworzylaby korekty PO RAZ
+    DRUGI, podwajajac zmiane stanu.
     """
     inwentaryzacja = pobierz_inwentaryzacje(db, inwentaryzacja_id)
     if inwentaryzacja.status != StatusInwentaryzacji.W_TRAKCIE:
@@ -223,6 +231,7 @@ def zamknij_inwentaryzacje(
                 magazyn_zrodlowy_id=inwentaryzacja.magazyn_id,
                 pozycje=pozycje_niedobor,
             ),
+            commit=False,
         )
         dokumenty_utworzone.append(dokument_rw)
         ostrzezenia.extend(ostrzezenia_rw)
@@ -236,6 +245,7 @@ def zamknij_inwentaryzacje(
                 magazyn_docelowy_id=inwentaryzacja.magazyn_id,
                 pozycje=pozycje_nadwyzka,
             ),
+            commit=False,
         )
         dokumenty_utworzone.append(dokument_pw)
         ostrzezenia.extend(ostrzezenia_pw)

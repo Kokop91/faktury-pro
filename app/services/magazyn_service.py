@@ -258,13 +258,21 @@ def _waliduj_magazyny_dokumentu(
 
 
 def utworz_dokument_magazynowy(
-    db: Session, dane: DokumentMagazynowyCreate
+    db: Session, dane: DokumentMagazynowyCreate, *, commit: bool = True
 ) -> tuple[DokumentMagazynowy, list[str]]:
     """Tworzy dokument magazynowy z pozycjami i aplikuje zmiany StanMagazynowy.
-    Cala operacja to jedna transakcja (jeden db.commit() na koncu) - kazdy
+    Domyslnie cala operacja to jedna transakcja (jeden db.commit() na koncu) - kazdy
     HTTPException podniesiony w trakcie (nieprawidlowy produkt, usluga w
     dokumencie, tryb "blokuj" ponizej zera) powoduje, ze sesja zamyka sie bez
     commitu i wszystkie czastkowe zmiany znikaja (patrz app/database.py get_db).
+
+    `commit=False` - do uzycia gdy wywolujacy sam tworzy WIECEJ NIZ JEDEN dokument
+    magazynowy w ramach jednej wiekszej operacji (patrz
+    inwentaryzacja_service.zamknij_inwentaryzacje) i musi je zcommitowac razem z
+    reszta zmian JEDNYM db.commit() - w przeciwnym razie proces przerwany miedzy
+    dwoma niezaleznymi commitami (np. RW juz zapisane, PW jeszcze nie) prowadzi
+    do podwojnego naliczenia korekty przy ponownej probie (kazdy dokument ma
+    wlasny, juz zatwierdzony wplyw na stan, wiec retry tworzy je od nowa).
     """
     _waliduj_magazyny_dokumentu(
         dane.typ, dane.magazyn_zrodlowy_id, dane.magazyn_docelowy_id
@@ -340,7 +348,10 @@ def utworz_dokument_magazynowy(
         if dane.typ in TYPY_ZWIEKSZAJACE_DOCELOWY:
             _zmien_ilosc(db, produkt.id, dane.magazyn_docelowy_id, pozycja_in.ilosc)
 
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(dokument)
     return dokument, ostrzezenia
 
