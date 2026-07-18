@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import threading
@@ -20,6 +21,52 @@ if getattr(sys, "frozen", False):
     # MUSI byc ustawione PRZED pierwszym importem weasyprint - stad na samej
     # gorze tego pliku, przed jakimkolwiek innym importem z gui/app.
     os.environ.setdefault("FONTCONFIG_PATH", str(Path(sys._MEIPASS) / "etc" / "fonts"))  # type: ignore[attr-defined]
+
+
+def _skonfiguruj_logowanie() -> None:
+    """W trybie spakowanym --windowed (Faza 18A) proces nie ma konsoli -
+    sys.stdout/sys.stderr sa None. Domyslna konfiguracja logowania uvicorn
+    (uvicorn.logging.DefaultFormatter) przy KAZDYM logu sprawdza
+    `self.stream.isatty()`, zeby zdecydowac o kolorach - to wywala sie z
+    `AttributeError: 'NoneType' object has no attribute 'isatty'` i appka
+    nie startuje w ogole, gdy strumien to None.
+
+    Naprawa w dwoch krokach, TA SAMA sciezka kodu w obu trybach (deweloperskim
+    i spakowanym) - rozroznione samym stanem sys.stdout/sys.stderr, nie
+    osobnym if/else:
+    1. Gdy stdout/stderr sa None, przekierowujemy je na plik logu (zamiast
+       os.devnull, zeby zachowac mozliwosc diagnozowania problemow w
+       przyszlosci) - %LOCALAPPDATA%/FakturyPro/logs/app.log, ten sam wzorzec
+       katalogu co prywatny Postgres z Fazy 18B. W trybie deweloperskim
+       stdout/stderr NIE sa None (jest prawdziwa konsola), wiec ten krok jest
+       pomijany i terminal dziala jak dotychczas.
+    2. WatekSerwera przekazuje log_config=None do uvicorn.Config (patrz
+       nizej), wylaczajac WLASNA konfiguracje logowania uvicorn (zrodlo
+       awarii) - zamiast tego appka konfiguruje logging.basicConfig sama,
+       piszac na sys.stderr (ktory po kroku 1 zawsze jest bezpiecznym,
+       prawdziwym strumieniem - albo konsola, albo plik logu).
+    """
+    if sys.stdout is None or sys.stderr is None:
+        katalog_logow = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "FakturyPro" / "logs"
+        katalog_logow.mkdir(parents=True, exist_ok=True)
+        plik_logu = open(katalog_logow / "app.log", "a", encoding="utf-8", errors="replace", buffering=1)
+        sys.stdout = plik_logu
+        sys.stderr = plik_logu
+
+    # WARNING, nie INFO - zeby zachowac dotychczasowa cisza konsoli w trybie
+    # deweloperskim (biblioteki takie jak weasyprint logguja sporo na poziomie
+    # INFO, ktore wczesniej i tak nie bylo nigdzie wypisywane, bo nic nie
+    # wywolywalo logging.basicConfig). Plik logu ma lapac realne problemy,
+    # nie kazdy krok przetwarzania.
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+        force=True,
+    )
+
+
+_skonfiguruj_logowanie()
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -67,7 +114,19 @@ class WatekSerwera:
         from app.main import app as aplikacja_fastapi
 
         self._server = uvicorn.Server(
-            uvicorn.Config(aplikacja_fastapi, host=host, port=port, log_level="warning")
+            uvicorn.Config(
+                aplikacja_fastapi,
+                host=host,
+                port=port,
+                log_level="warning",
+                # log_config=None: wylacza WLASNA konfiguracje logowania uvicorn
+                # (uvicorn.logging.DefaultFormatter), ktora w trybie spakowanym
+                # --windowed (sys.stdout/stderr = None) wywala sie na .isatty() -
+                # patrz _skonfiguruj_logowanie() na gorze tego pliku, ktora
+                # konfiguruje logging.basicConfig zamiast tego, PRZED startem
+                # tego watku.
+                log_config=None,
+            )
         )
         self._watek = threading.Thread(target=self._server.run, daemon=True)
 
