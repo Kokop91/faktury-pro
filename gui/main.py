@@ -123,6 +123,43 @@ def _pokaz_blad_startu(tekst: str) -> None:
     root.destroy()
 
 
+def _uruchom_prywatny_postgres_jesli_trzeba():
+    """Zwraca uruchomiony PostgresPrywatny, albo None, jesli appka dziala w
+    trybie deweloperskim (DATABASE_URL podane jawnie w .env - patrz
+    app.config.UZYWA_PRYWATNEGO_POSTGRESA) i laczy sie z Postgresem, ktorym
+    opiekuje sie deweloper recznie, tak jak w Etapie 1/2 - w tym trybie appka
+    NIE dotyka prywatnej instancji w ogole (Faza 18B jest wylacznie dla
+    uzytkownika koncowego, bez wlasnego .env).
+
+    Zwraca (postgres, blad) - `blad` to czytelny komunikat po polsku, jesli
+    start albo przygotowanie schematu sie nie udalo (postgres jest wtedy juz
+    zatrzymany), albo None przy powodzeniu.
+    """
+    from app.config import UZYWA_PRYWATNEGO_POSTGRESA
+
+    if not UZYWA_PRYWATNEGO_POSTGRESA:
+        return None, None
+
+    from gui.postgres_serwer import PostgresPrywatny, upewnij_baze_i_migracje
+
+    postgres = PostgresPrywatny()
+    postgres.uruchom()
+    if not postgres.czekaj_az_gotowy():
+        postgres.zatrzymaj()
+        return None, (
+            "Nie udało się uruchomić wbudowanej bazy danych aplikacji.\n\n"
+            "Sprawdź, czy port 55432 nie jest zajęty przez inny program."
+        )
+
+    try:
+        upewnij_baze_i_migracje()
+    except Exception as e:  # noqa: BLE001 - pokazujemy uzytkownikowi cokolwiek pojdzie nie tak
+        postgres.zatrzymaj()
+        return None, f"Nie udało się przygotować bazy danych aplikacji:\n\n{e}"
+
+    return postgres, None
+
+
 def main() -> None:
     # customtkinter wlacza automatyczne DPI awareness (SetProcessDpiAwareness) na
     # Windows juz przy imporcie modulu (patrz ScalingTracker.deactivate_automatic_dpi_awareness
@@ -137,9 +174,16 @@ def main() -> None:
     if not pokaz_ekran_logowania():
         return
 
+    postgres_prywatny, blad_postgresa = _uruchom_prywatny_postgres_jesli_trzeba()
+    if blad_postgresa is not None:
+        _pokaz_blad_startu(blad_postgresa)
+        return
+
     watek = _uruchom_serwer()
     if not _czekaj_na_serwer(watek):
         zatrzymaj_serwer(watek)
+        if postgres_prywatny is not None:
+            postgres_prywatny.zatrzymaj()
         _pokaz_blad_startu(
             "Serwer aplikacji nie uruchomił się poprawnie.\n\n"
             "Sprawdź, czy port 8000 nie jest zajęty przez inny program "
@@ -154,6 +198,8 @@ def main() -> None:
     def _przy_zamknieciu() -> None:
         okno.zapisz_geometrie()
         zatrzymaj_serwer(watek)
+        if postgres_prywatny is not None:
+            postgres_prywatny.zatrzymaj()
         okno.destroy()
 
     okno.protocol("WM_DELETE_WINDOW", _przy_zamknieciu)

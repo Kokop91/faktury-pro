@@ -13,7 +13,14 @@ nie webowa. Poniższy backend to nie jest "serwer do przeglądarki" — to lokal
 z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym samym komputerze.
 
 - **Backend (lokalny serwer API):** Python, FastAPI — bez zmian względem Faz 1-2, ten kod zostaje
-- **Baza danych:** PostgreSQL
+- **Baza danych:** PostgreSQL. **Tryb deweloperski** (bez zmian względem Etapu 1/2):
+  `DATABASE_URL` w `.env` wskazuje na Postgresa, którym opiekuje się deweloper ręcznie
+  (Docker / instalacja systemowa na porcie 5432). **Tryb produktowy (Faza 18B, Etap 3):**
+  gdy `DATABASE_URL` NIE jest podane jawnie (żaden `.env`, żadna zmienna środowiskowa —
+  dokładnie tak wygląda appka u użytkownika końcowego), appka sama zarządza WŁASNĄ,
+  prywatną, przenośną instancją PostgreSQL — użytkownik nigdy nie ma świadomości, że
+  PostgreSQL w ogóle istnieje, nie instaluje go, nie konfiguruje. Zobacz sekcję
+  "Prywatny PostgreSQL" niżej po szczegóły.
 - **ORM/migracje:** SQLAlchemy + Alembic
 - **PDF:** WeasyPrint (HTML → PDF)
 - **Frontend/UI:** **customtkinter** — aplikacja desktopowa komunikująca się z FastAPI przez
@@ -122,9 +129,9 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
     dialogowym, jeśli aktywne jest PRODUKCYJNE.
 - **Kursy walut:** publiczne API NBP
 - **Dane firm po NIP:** API GUS/REGON
-- **Pakowanie do dystrybucji (Faza 18A, Etap 3 — zrobione: sam plik wykonywalny;
-  18B/18C/18D — prywatny PostgreSQL, instalator Windows, kreator pierwszego
-  uruchomienia — jeszcze NIE zrobione):** appka pakowana przez **PyInstaller**
+- **Pakowanie do dystrybucji (Faza 18A+18B, Etap 3 — zrobione: sam plik
+  wykonywalny + prywatny PostgreSQL; 18C/18D — instalator Windows, kreator
+  pierwszego uruchomienia — jeszcze NIE zrobione):** appka pakowana przez **PyInstaller**
   (`faktury_pro.spec` w katalogu głównym repo — celowo WYJĄTEK od reguły
   `*.spec` w `.gitignore`, to ręcznie utrzymywany plik, nie auto-wygenerowane
   rusztowanie). Tryb `--onedir` + `--windowed` (nie `--onefile` — onedir jest
@@ -164,6 +171,62 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
   - **customtkinter/psycopg2/uvicorn/sqlalchemy/bcrypt/pywin32:** obsługiwane
     automatycznie przez hooki PyInstallera / `pyinstaller-hooks-contrib`, bez
     ręcznej konfiguracji w `.spec`.
+  - **Prywatny, przenośny PostgreSQL (Faza 18B):** appka zarządza WŁASNĄ
+    instancją PostgreSQL — użytkownik końcowy nigdy nie instaluje ani nie
+    konfiguruje bazy danych. Aktywne TYLKO gdy `DATABASE_URL` nie jest podane
+    jawnie (`app.config.UZYWA_PRYWATNEGO_POSTGRESA`) — tryb deweloperski z
+    `.env` (jak w Etapie 1/2) pozostaje całkowicie bez zmian, appka wtedy w
+    ogóle nie dotyka prywatnej instancji.
+    - **Źródło binariów:** oficjalne archiwum EDB "binaries" (zip, bez
+      instalatora — przeznaczone wprost do embedowania w innych aplikacjach),
+      zweryfikowane bezpośrednio przez sprawdzenie przekierowania pobierania,
+      NIE zgadywane. Wersja 18.4, zgodna z wersją zainstalowaną na maszynie
+      deweloperskiej. Pobierane i przycinane (tylko `bin/`+`lib/`+`share/`,
+      ~146 MB z ~320 MB — bez pgAdmin/StackBuilder/dokumentacji/nagłówków C)
+      przez `scripts/pobierz_postgres_portable.py`, jednorazowo na maszynie
+      budującej. Ląduje w `vendor/postgresql/pgsql/` (`.gitignore` — zbyt
+      duże na repozytorium git).
+    - **KLUCZOWA PUŁAPKA (zweryfikowana empirycznie, kosztowała najwięcej
+      czasu w tej fazie):** binaria PostgreSQL NIE mogą być dołączone przez
+      `datas` w `faktury_pro.spec` — PyInstaller podczas budowania wykonuje
+      krok "binary vs. data reclassification", który rozpoznaje pliki .dll
+      w `datas` jako biblioteki natywne i poddaje je własnej logice
+      deduplikacji wg samej nazwy pliku. Postgres i WeasyPrint mają kilka
+      bibliotek o IDENTYCZNEJ nazwie, ale zbudowanych przez różne łańcuchy
+      narzędzi (`zlib1.dll`, `libiconv-2.dll`, `libwinpthread-1.dll`) — efekt:
+      PDF przestawał się generować (`OSError: cannot load library
+      libpango-1.0-0.dll: error 0x7f`). Naprawione przez pominięcie binariów
+      Postgresa w `Analysis(datas=...)` i dołączenie ich PO zbudowaniu, zwykłym
+      kopiowaniem plików (`scripts/dolacz_postgres_do_buildu.py`) do
+      `dist/Faktury Pro/_internal/vendor/postgresql/pgsql/` — PyInstaller
+      nigdy ich wtedy nie widzi ani nie analizuje.
+    - **Katalog binariów** (`vendor/postgresql/pgsql/`) rozwiązywany przez
+      `app.sciezki.katalog_bazowy()` (jak reszta zasobów) — to pliki appki,
+      tylko do odczytu. **Katalog DANYCH** (żywa, mutowalna baza) leży
+      NATOMIAST w `%LOCALAPPDATA%/FakturyPro/pgsql-data/` — musi przetrwać
+      aktualizacje/reinstalacje samej appki, więc nie może siedzieć w tym
+      samym miejscu co jej pliki programu (analogicznie do `auth.json`/
+      `ksef.json` z wcześniejszych faz, tylko `%LOCALAPPDATA%`, nie
+      `%APPDATA%` — to duże pliki binarne, nie powinny "wędrować" w profilu
+      sieciowym/domenowym tak jak małe ustawienia).
+    - **Zarządzanie procesem** (`gui/postgres_serwer.py:PostgresPrywatny`,
+      rozszerzenie wzorca z Fazy 4/18A): `initdb` przy pierwszym uruchomieniu
+      (`--auth=trust`, `--locale=C`, `--encoding=UTF8` — trust auth bezpieczny
+      tu, bo instancja nasłuchuje WYŁĄCZNIE na 127.0.0.1 na niestandardowym
+      porcie **55432** — celowo inny niż domyślne 5432, żeby nie kolidować z
+      ewentualnym innym Postgresem na komputerze użytkownika — i katalog
+      danych ma uprawnienia NTFS ograniczone do konta Windows użytkownika).
+      Start/stop jako podproces `postgres.exe`/`pg_ctl.exe stop -m fast`,
+      health-check przez `pg_isready.exe`, uruchamiane w `gui/main.py:main()`
+      PRZED serwerem FastAPI (i zatrzymywane PO nim, w odwrotnej kolejności).
+      `gui/postgres_serwer.py:upewnij_baze_i_migracje()` tworzy bazę
+      `faktury_pro`, jeśli jeszcze nie istnieje, i dociąga schemat do
+      najnowszej migracji Alembic (bezpieczne wywoływać przy każdym starcie —
+      no-op, gdy już aktualne) — Alembic (`alembic.ini` + `alembic/`) musi
+      być dołączony jako `datas` w `.spec`, bo `env.py` jest wczytywany przez
+      Alembic ręcznie z pliku, nie zwykłym `import` (i wymagał jawnego
+      `hiddenimports=["logging.config"]` — ten sam powód: dynamicznie
+      wczytany plik nie jest widoczny dla statycznej analizy PyInstallera).
 
 ## Struktura katalogów (docelowa)
 ```
