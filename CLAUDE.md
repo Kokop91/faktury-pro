@@ -19,9 +19,14 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
 - **Frontend/UI:** **customtkinter** — aplikacja desktopowa komunikująca się z FastAPI przez
   bibliotekę `requests` (ten sam wzorzec co w projekcie SecureChat autora: FastAPI backend +
   customtkinter GUI)
-- **Uruchamianie serwera:** aplikacja customtkinter odpala FastAPI/uvicorn jako subprocess
-  przy starcie i zatrzymuje go przy zamknięciu okna — użytkownik końcowy nie widzi ani nie
-  obsługuje serwera bezpośrednio, dla niego ma to wyglądać jak zwykły, pojedynczy program
+- **Uruchamianie serwera (zmienione w Fazie 18A):** FastAPI/uvicorn NIE jest już uruchamiany
+  jako osobny podproces (`python -m uvicorn ...`) — po spakowaniu PyInstallerem nie ma
+  dostępnego `python.exe` do wywołania w ten sposób. Zamiast tego `gui/main.py:WatekSerwera`
+  uruchamia `uvicorn.Server` programowo, w osobnym wątku WEWNĄTRZ tego samego procesu co GUI
+  (pętla Tk w wątku głównym, pętla asyncio uvicorn we własnym wątku — nie kolidują). Wybrane
+  świadomie zamiast alternatywy "drugi osobny plik .exe dla backendu", bo eliminuje całą
+  kategorię problemów ze względnymi ścieżkami między dwoma spakowanymi plikami. Użytkownik
+  końcowy nadal nie widzi ani nie obsługuje serwera bezpośrednio.
 - **Auth (Faza 6, zrobione):** appka jest jednostanowiskowa, więc zamiast JWT/sesji jest ekran
   logowania hasłem przy starcie (`gui/windows/ekran_logowania.py`). Hash hasła (bcrypt) leży
   lokalnie w `%APPDATA%/FakturyPro/auth.json` — poza bazą PostgreSQL i poza repozytorium.
@@ -117,6 +122,48 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
     dialogowym, jeśli aktywne jest PRODUKCYJNE.
 - **Kursy walut:** publiczne API NBP
 - **Dane firm po NIP:** API GUS/REGON
+- **Pakowanie do dystrybucji (Faza 18A, Etap 3 — zrobione: sam plik wykonywalny;
+  18B/18C/18D — prywatny PostgreSQL, instalator Windows, kreator pierwszego
+  uruchomienia — jeszcze NIE zrobione):** appka pakowana przez **PyInstaller**
+  (`faktury_pro.spec` w katalogu głównym repo — celowo WYJĄTEK od reguły
+  `*.spec` w `.gitignore`, to ręcznie utrzymywany plik, nie auto-wygenerowane
+  rusztowanie). Tryb `--onedir` + `--windowed` (nie `--onefile` — onedir jest
+  bardziej niezawodny i szybszy przy starcie). Zależności potrzebne WYŁĄCZNIE
+  do budowania (PyInstaller + `pyinstaller-hooks-contrib`, ten drugi pakiet
+  dostarcza gotowe reguły pakowania dla WeasyPrint/customtkinter/psycopg2/
+  uvicorn/sqlalchemy — bez niego PyInstaller sam nie wie, które natywne .dll
+  dołączyć) żyją w osobnym `requirements-build.txt`, nie w głównym
+  `requirements.txt`.
+  - **Budowanie:** `pip install -r requirements.txt -r requirements-build.txt`,
+    potem `pyinstaller faktury_pro.spec --noconfirm`. Wynik:
+    `dist/Faktury Pro/Faktury Pro.exe`.
+  - **Rozwiązywanie ścieżek do zasobów** (szablony PDF z Fazy 3, schematy XSD
+    JPK_V7 z Fazy 13, schemat XSD FA(3) z Fazy 12B): `app/sciezki.py:katalog_bazowy()`
+    sprawdza `sys.frozen`/`sys._MEIPASS` (zalecany przez PyInstaller wzorzec) —
+    w trybie deweloperskim to katalog główny repo, w wersji spakowanej katalog
+    rozpakowanych danych. Wszystkie miejsca ładujące pliki z dysku (nie przez
+    `importlib.resources`) muszą przez to przechodzić, nie liczyć na goły
+    `__file__`.
+  - **WeasyPrint w wersji spakowanej:** natywne biblioteki (Pango/GLib/HarfBuzz/
+    fontconfig, ok. 20 plików .dll) i katalog konfiguracyjny fontconfig
+    (`etc/fonts/`) są dołączane AUTOMATYCZNIE przez `hook-weasyprint.py`
+    z `pyinstaller-hooks-contrib` (zweryfikowane czytając ten hook i licząc
+    zamknięte drzewo zależności `ldd` niezależnie — obie metody dały ten sam
+    zestaw plików). Appka SAMA musi jednak wskazać fontconfigowi na te
+    dołączone pliki w czasie działania (inaczej próbowałby wkompilowanej
+    ścieżki z maszyny budującej) — `os.environ["FONTCONFIG_PATH"]` ustawiane
+    na samej górze `gui/main.py`, TYLKO gdy `sys.frozen`, PRZED jakimkolwiek
+    importem `weasyprint` (ten dlopen'uje biblioteki natywne już przy
+    imporcie modułu). Przetestowane na żywo w spakowanej wersji (nie tylko
+    deweloperskiej) — polskie znaki diakrytyczne renderują się poprawnie.
+  - **matplotlib w wersji spakowanej:** działa bez dodatkowej konfiguracji —
+    kod dashboardu importuje `matplotlib.backends.backend_tkagg` bezpośrednio
+    (nie przez automatyczne wykrywanie backendu), więc PyInstaller widzi ten
+    import statycznie; dane `mpl-data` dołącza wbudowany hook PyInstallera.
+    Przetestowane na żywo w spakowanej wersji.
+  - **customtkinter/psycopg2/uvicorn/sqlalchemy/bcrypt/pywin32:** obsługiwane
+    automatycznie przez hooki PyInstallera / `pyinstaller-hooks-contrib`, bez
+    ręcznej konfiguracji w `.spec`.
 
 ## Struktura katalogów (docelowa)
 ```

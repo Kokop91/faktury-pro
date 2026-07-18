@@ -31,6 +31,9 @@ MANIFEST
 #   before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+# ...ale faktury_pro.spec (Faza 18A) NIE jest auto-generowanym rusztowaniem -
+# to recznie utrzymywany plik konfiguracyjny budowania appki, ma zyc w repo.
+!faktury_pro.spec
 
 # Installer logs
 pip-log.txt

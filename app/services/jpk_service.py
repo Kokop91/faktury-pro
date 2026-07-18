@@ -32,7 +32,6 @@ WAZNE OGRANICZENIA WYNIKAJACE Z ZAKRESU APLIKACJI (opisane tez w GUI):
 import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
-from pathlib import Path
 
 import lxml.etree as ET
 from fastapi import HTTPException, status
@@ -41,8 +40,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import Faktura, Firma
 from app.models.enums import StatusFaktury, StawkaVat, TypDokumentu, TypPodatnika
+from app.sciezki import katalog_bazowy
 
-SCHEMATY_DIR = Path(__file__).resolve().parent.parent / "jpk_schemas"
+SCHEMATY_DIR = katalog_bazowy() / "app" / "jpk_schemas"
 
 # Namespace wspoldzielonych typow bazowych (etd:) z StrukturyDanych.xsd. Element
 # formDefault="qualified" oznacza, ze elementy odziedziczone przez OsobaFizyczna

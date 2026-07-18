@@ -9,9 +9,10 @@ from weasyprint import HTML
 
 from app.models import Faktura, Klient
 from app.models.enums import StawkaVat, TypDokumentu
+from app.sciezki import katalog_bazowy
 from app.services.faktury import podsumowanie_wg_stawek
 
-TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+TEMPLATES_DIR = katalog_bazowy() / "app" / "templates"
 
 TYTULY_DOKUMENTU: dict[TypDokumentu, str] = {
     TypDokumentu.FAKTURA_VAT: "Faktura VAT",

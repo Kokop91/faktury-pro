@@ -1,0 +1,14 @@
+# Zaleznosci potrzebne WYLACZNIE do zbudowania spakowanej wersji appki
+# (Faza 18A) - nie sa potrzebne do uruchomienia jej w trybie deweloperskim
+# ani do dzialania samej spakowanej appki w rekach uzytkownika koncowego.
+#
+# Instalacja: pip install -r requirements.txt -r requirements-build.txt
+# Budowanie:  pyinstaller faktury_pro.spec --noconfirm
+#
+# pyinstaller-hooks-contrib dostarcza gotowe, spolecznosciowe "przepisy"
+# pakowania dla WeasyPrint (natywne biblioteki Pango/fontconfig + pliki
+# konfiguracyjne fontconfig), customtkinter (folder assets z motywami) i
+# psycopg2 - bez tego pakietu PyInstaller sam z siebie NIE wie, ktore
+# natywne .dll dolaczyc do tych bibliotek.
+pyinstaller
+pyinstaller-hooks-contrib
