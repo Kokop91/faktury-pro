@@ -15,6 +15,9 @@ downloads/
 # Binaria zewnetrzne pobierane przez scripts/pobierz_postgres_portable.py
 # (Faza 18B) - ok. 146 MB, nie powinny trafiac do repozytorium git.
 vendor/
+# Skompilowany instalator (Faza 18C, installer.iss) - duzy plik wynikowy
+# budowania, nie zrodlo - odtwarzalny z "ISCC installer.iss".
+Output/
 eggs/
 .eggs/
 lib/

@@ -12,3 +12,8 @@
 # natywne .dll dolaczyc do tych bibliotek.
 pyinstaller
 pyinstaller-hooks-contrib
+
+# Instalator Windows (Faza 18C, installer.iss) potrzebuje DODATKOWO Inno Setup
+# 6 (https://jrsoftware.org/isdl.php) - to NIE jest pakiet pip, tylko osobne
+# narzedzie do zainstalowania recznie (albo cicho: <instalator>.exe /VERYSILENT).
+# Kompilator wiersza polecen po instalacji: ISCC.exe.

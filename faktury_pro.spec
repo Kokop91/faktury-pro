@@ -129,6 +129,7 @@ exe = EXE(  # noqa: F821
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(ROOT / "assets" / "icon.ico"),  # Faza 18C - tez uzywana przez skroty instalatora
 )
 
 coll = COLLECT(  # noqa: F821

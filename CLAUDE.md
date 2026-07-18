@@ -129,9 +129,9 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
     dialogowym, jeśli aktywne jest PRODUKCYJNE.
 - **Kursy walut:** publiczne API NBP
 - **Dane firm po NIP:** API GUS/REGON
-- **Pakowanie do dystrybucji (Faza 18A+18B, Etap 3 — zrobione: sam plik
-  wykonywalny + prywatny PostgreSQL; 18C/18D — instalator Windows, kreator
-  pierwszego uruchomienia — jeszcze NIE zrobione):** appka pakowana przez **PyInstaller**
+- **Pakowanie do dystrybucji (Faza 18A+18B+18C, Etap 3 — zrobione: sam plik
+  wykonywalny + prywatny PostgreSQL + instalator Windows; 18D — kreator
+  pierwszego uruchomienia — jeszcze NIE zrobiony):** appka pakowana przez **PyInstaller**
   (`faktury_pro.spec` w katalogu głównym repo — celowo WYJĄTEK od reguły
   `*.spec` w `.gitignore`, to ręcznie utrzymywany plik, nie auto-wygenerowane
   rusztowanie). Tryb `--onedir` + `--windowed` (nie `--onefile` — onedir jest
@@ -227,6 +227,56 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
       Alembic ręcznie z pliku, nie zwykłym `import` (i wymagał jawnego
       `hiddenimports=["logging.config"]` — ten sam powód: dynamicznie
       wczytany plik nie jest widoczny dla statycznej analizy PyInstallera).
+  - **Instalator Windows (Faza 18C):** `installer.iss` (Inno Setup 6 — wybrany
+    zamiast NSIS, bo Pascal Script czytelniej wyraża potrzebną tu logikę
+    "zapytaj o zachowanie danych, ale tylko przy deinstalacji interaktywnej"
+    niż język skryptowy NSIS, a deklaratywne wsparcie dla instalacji
+    per-użytkownika bez uprawnień administratora jest wbudowane).
+    - **Budowanie:** `"C:\Tools\InnoSetup6\ISCC.exe" installer.iss` (albo
+      dowolna inna instalacja Inno Setup 6) — PO `pyinstaller faktury_pro.spec`
+      i PO `scripts/dolacz_postgres_do_buildu.py` (pakuje cały gotowy folder
+      `dist/Faktury Pro/`, więc musi już zawierać binaria Postgresa). Wynik:
+      `Output/FakturyPro-Setup-1.0.0.exe`.
+    - **Per-użytkownik, bez uprawnień administratora:**
+      `PrivilegesRequired=lowest` — instalator NIGDY nie prosi o podniesienie
+      uprawnień (UAC), nawet uruchomiony przez administratora. Katalog
+      instalacji domyślnie `%LOCALAPPDATA%\Programs\FakturyPro` (NIE Program
+      Files) — ten sam wzorzec co inne nowoczesne instalatory per-użytkownik
+      na Windows (np. VS Code).
+    - **Skróty:** Menu Start zawsze, Pulpit opcjonalnie (zaznaczone domyślnie,
+      task `desktopicon`) — obie wskazują wprost na `Faktury Pro.exe`
+      (ikona `assets/icon.ico` wbudowana w plik .exe przez
+      `EXE(icon=...)` w `faktury_pro.spec`, więc skróty i sam plik mają tę
+      samą ikonę bez dodatkowego kopiowania).
+    - **Deinstalacja i dane:** katalog instalacji i katalog DANYCH
+      (`%LOCALAPPDATA%\FakturyPro`, z prywatnym Postgresem z Fazy 18B) są
+      CELOWO rozdzielone (patrz wyżej) — zwykła deinstalacja usuwa tylko
+      pliki programu. Przy deinstalacji **interaktywnej** `installer.iss`
+      pyta osobnym oknem, czy usunąć też dane — domyślny fokus na "Nie"
+      (`MB_DEFBUTTON2`), bo nieodwracalne usunięcie faktur bez wyraźnej
+      zgody byłoby zbyt ryzykowne. Deinstalacja **cicha/automatyczna**
+      (`UninstallSilent()`, np. wdrożenie firmowe) NIGDY nie usuwa danych
+      bez pytania — pomija to okno całkowicie i zawsze zachowuje dane.
+    - **Odporność na osierocone procesy (zweryfikowana na żywo, prawdziwy
+      znaleziony błąd):** jeśli appka zakończyła się awaryjnie (np. Menedżer
+      zadań, awaria) zamiast przez normalne zamknięcie okna, prywatny
+      PostgreSQL mógł zostać osierocony i nadal działać, blokując pliki
+      `.dll`/`.exe` — deinstalacja/reinstalacja wtedy nie mogła usunąć
+      katalogu instalacji. Naprawione: `installer.iss` przed usuwaniem
+      plików (i przed reinstalacją) zamyka wszelkie procesy uruchomione
+      DOKŁADNIE z katalogu instalacji (filtrowanie po ścieżce pliku
+      wykonywalnego, NIE po samej nazwie `postgres.exe` — żeby nigdy nie
+      tknąć innego, niezwiązanego Postgresa na komputerze użytkownika).
+    - **Zweryfikowane na żywo, pełny cykl:** cicha instalacja (pliki,
+      skróty, wpis w rejestrze odinstalowywania, uruchomienie appki z
+      zainstalowanej lokalizacji) → cicha deinstalacja z domyślnym
+      zachowaniem danych → symulacja osieroconego Postgresa + deinstalacja
+      (potwierdzone: proces zabity, `"Removed all? Yes"`, dane zachowane) →
+      ponowna instalacja → dane nadal na miejscu, appka nadal się uruchamia.
+      NIE zweryfikowane na żywo (wymaga kliknięcia w oknie dialogowym, co
+      wykracza poza dostępne w tej sesji narzędzia): samo okno
+      "czy usunąć dane?" przy deinstalacji interaktywnej — zalecany jeden
+      ręczny test tej ścieżki przed przekazaniem instalatora dalej.
 
 ## Struktura katalogów (docelowa)
 ```
