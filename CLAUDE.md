@@ -267,16 +267,24 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
       DOKŁADNIE z katalogu instalacji (filtrowanie po ścieżce pliku
       wykonywalnego, NIE po samej nazwie `postgres.exe` — żeby nigdy nie
       tknąć innego, niezwiązanego Postgresa na komputerze użytkownika).
-    - **Zweryfikowane na żywo, pełny cykl:** cicha instalacja (pliki,
-      skróty, wpis w rejestrze odinstalowywania, uruchomienie appki z
-      zainstalowanej lokalizacji) → cicha deinstalacja z domyślnym
-      zachowaniem danych → symulacja osieroconego Postgresa + deinstalacja
-      (potwierdzone: proces zabity, `"Removed all? Yes"`, dane zachowane) →
-      ponowna instalacja → dane nadal na miejscu, appka nadal się uruchamia.
-      NIE zweryfikowane na żywo (wymaga kliknięcia w oknie dialogowym, co
-      wykracza poza dostępne w tej sesji narzędzia): samo okno
-      "czy usunąć dane?" przy deinstalacji interaktywnej — zalecany jeden
-      ręczny test tej ścieżki przed przekazaniem instalatora dalej.
+    - **Zweryfikowane na żywo, pełny cykl (powtórzone po naprawie crasha
+      uvicorn z commita `851f536` — poprzedni zbudowany `Output/FakturyPro-
+      Setup-1.0.0.exe` był starszy niż ta naprawa i pakował appkę, która
+      wywalała się od razu po starcie w trybie `--windowed`; przebudowany od
+      zera: `pyinstaller faktury_pro.spec` → `dolacz_postgres_do_buildu.py`
+      → `ISCC.exe installer.iss`):** cicha instalacja (pliki, skróty Pulpit +
+      Menu Start, wpis w rejestrze odinstalowywania) → uruchomienie appki ze
+      spakowanej lokalizacji (potwierdzone: dochodzi do ekranu logowania bez
+      crasha) → cicha deinstalacja z domyślnym zachowaniem danych → ponowna
+      cicha instalacja → dane nadal na miejscu → **interaktywna deinstalacja
+      z oknem "czy usunąć dane?" (UI Automation, oba warianty)**: wariant A —
+      sam Enter (domyślny fokus, `MB_DEFBUTTON2` = "Nie") zachował katalog
+      danych, usunął tylko pliki programu; wariant B — jawne kliknięcie "Tak"
+      usunęło katalog danych (`%LOCALAPPDATA%\FakturyPro`) całkowicie. Tekst
+      okna, oba przyciski i oba efekty zgodne z kodem w `installer.iss`.
+      Symulacja osieroconego Postgresa (zweryfikowana we wcześniejszej
+      sesji, nie powtarzana tu) opisana wyżej w sekcji o odporności na
+      osierocone procesy.
 
 ## Struktura katalogów (docelowa)
 ```
