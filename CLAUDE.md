@@ -379,6 +379,72 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
       pliku logo (`tkinter.filedialog`) wymagają jednego ręcznego przejścia
       przez człowieka przed uznaniem fazy za w pełni potwierdzoną.
 
+## Faza 19 — automatyczne generowanie WZ z faktury (Etap 3, zrobione)
+
+Świadomy, jednorazowy skrót dla użytkownika — przycisk "Wygeneruj WZ z tej
+faktury" w szczegółach faktury (`gui/windows/szczegoly_faktury.py`), NIE
+automatyczna reguła w tle. **Model B (rozłączność faktur i magazynu) pozostaje
+domyślnym zachowaniem appki** — ten przycisk tylko wstępnie wypełnia zwykły,
+w pełni edytowalny formularz WZ danymi z faktury; użytkownik wciąż świadomie
+przegląda/koryguje i zatwierdza, zanim cokolwiek się zapisze. Wystawienie
+faktury samo z siebie nadal nigdy nie zmienia stanu magazynowego.
+
+- **Dopasowanie pozycji faktury do towarów magazynowych — po nazwie, nie po
+  FK.** `PozycjaFaktury` (Faza 1) nie ma powiązania z `Produkt` — to wolny
+  tekst (nazwa/ilość/cena wpisywane ręcznie przy wystawianiu faktury), nawet
+  gdy fakturę wystawiono na podstawie towaru z katalogu. Dopasowanie
+  (`gui/windows/formularz_wz_z_faktury.py:dopasuj_pozycje_do_produktow`) jest
+  więc dokładnym dopasowaniem tekstu nazwy (bez rozróżniania wielkości liter)
+  względem aktywnych, magazynowych (`jest_magazynowy=True`) produktów z
+  katalogu — świadomie zaakceptowane jako wystarczające, bo formularz i tak
+  otwiera się do wglądu/edycji przed zapisem. Pozycje bez dopasowania (usługi
+  albo literówka/inna nazwa niż w katalogu) są pomijane z czytelną informacją
+  w formularzu, nie blokują generowania reszty.
+- **Zero zmian w logice Fazy 8.** Zapis idzie dokładnie tym samym kodem co
+  ręczne tworzenie dokumentu magazynowego —
+  `app/services/magazyn_service.py:utworz_dokument_magazynowy` przez ten sam
+  endpoint `POST /dokumenty-magazynowe` (`gui/api_client.py:utworz_dokument_magazynowy`)
+  — więc numeracja, walidacja `jest_magazynowy`, i tryb
+  ostrzegaj/blokuj (`Firma.tryb_blokady_ujemnego_stanu`) działają identycznie
+  jak zawsze. `DokumentMagazynowy.faktura_powiazana_id` (prawdziwy FK do
+  `Faktura.id`, istniejący od migracji Fazy 7) jest po prostu ustawiany wprost
+  na id faktury — żadna nowa migracja Alembic nie była potrzebna.
+- **Zabezpieczenie przed duplikacją** — `GET /dokumenty-magazynowe` dostał
+  nowy, opcjonalny filtr `faktura_powiazana_id` (dokładne dopasowanie po FK,
+  nie zgadywanie po numerze jak w wolno-tekstowym polu formularza ręcznego
+  tworzenia dokumentu). Gdy dla faktury istnieje już powiązane WZ, przycisk
+  zamienia się w link "WZ już wygenerowane: {numer}" otwierający istniejący
+  dokument (`gui/windows/szczegoly_dokumentu_magazynowego.py`) zamiast
+  pozwalać wygenerować drugie bez ostrzeżenia.
+- **Trzy stany przycisku** w `szczegoly_faktury.py`, zależnie od faktury:
+  ukryty dla `robocza`/`anulowana`; nieaktywny + wyjaśnienie tekstowe obok
+  (mirror istniejącego wzorca "Sprawdź w białej liście" w tym samym ekranie),
+  gdy zero pozycji dopasowanych do towaru magazynowego; aktywny w pozostałych
+  przypadkach.
+- `gui/windows/wiersz_pozycji_magazynowej.py` — wydzielony z
+  `formularz_dokumentu_magazynowego.py` (był tam prywatną klasą) do
+  współdzielonego pliku, bo Faza 19 też go potrzebuje (ten sam wzorzec co
+  `gui/windows/wiersz_pozycji.py` dla pozycji faktur), z dwoma nowymi
+  opcjonalnymi parametrami do wstępnego wypełnienia (`produkt_wybrany`,
+  `ilosc_poczatkowa`).
+- Przy okazji naprawiony drobny, wcześniej istniejący błąd w
+  `formularz_dokumentu_magazynowego.py:_zapisz` — `wynik['numer']` zamiast
+  `wynik['dokument']['numer']` (odpowiedź `POST /dokumenty-magazynowe` jest
+  zagnieżdżona, `UtworzenieDokumentuMagazynowegoOut.dokument`) — powodował
+  ciche `KeyError` w callbacku sukcesu PO już udanym zapisie dokumentu (efekt:
+  brakujący toast potwierdzenia, dokument i tak zapisany poprawnie).
+- **Zweryfikowane:** logika dopasowania (jednostkowo), pełny cykl
+  backendu przez warstwę serwisową w transakcji z rollbackiem na bazie
+  deweloperskiej (filtr `faktura_powiazana_id` przed/po utworzeniu, oba tryby
+  ostrzegaj/blokuj z Fazy 8 przez dokładnie ten sam kod), oraz stan
+  skonstruowanych widgetów GUI (wartości pól, liczba i zawartość wstępnie
+  wypełnionych wierszy, wszystkie etykiety) przez bezpośrednią introspekcję
+  drzewa widgetów — zrzuty ekranu z tej samej sesji były momentami mylące
+  (`CTkScrollableFrame` bywa wyrenderowany w przewiniętej pozycji, ten sam
+  znany kaprys co przy Fazie 18D), ale introspekcja na żywym obiekcie
+  potwierdziła, że wszystkie dane są poprawne niezależnie od tego, co akurat
+  pokazał zrzut ekranu.
+
 ## Struktura katalogów (docelowa)
 ```
 app/

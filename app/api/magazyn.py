@@ -38,10 +38,11 @@ def lista_dokumentow_magazynowych(
     magazyn_id: int | None = Query(default=None),
     data_od: date | None = Query(default=None),
     data_do: date | None = Query(default=None),
+    faktura_powiazana_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     return magazyn_service.lista_dokumentow_magazynowych(
-        db, skip, limit, typ, magazyn_id, data_od, data_do
+        db, skip, limit, typ, magazyn_id, data_od, data_do, faktura_powiazana_id
     )
 
 

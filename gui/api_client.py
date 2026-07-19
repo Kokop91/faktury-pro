@@ -188,6 +188,7 @@ def pobierz_dokumenty_magazynowe(
     magazyn_id: int | None = None,
     data_od: str | None = None,
     data_do: str | None = None,
+    faktura_powiazana_id: int | None = None,
     skip: int = 0,
     limit: int = 200,
 ) -> list[dict]:
@@ -200,6 +201,8 @@ def pobierz_dokumenty_magazynowe(
         parametry["data_od"] = data_od
     if data_do:
         parametry["data_do"] = data_do
+    if faktura_powiazana_id is not None:
+        parametry["faktura_powiazana_id"] = faktura_powiazana_id
     return _wykonaj(
         "GET", "/dokumenty-magazynowe", TIMEOUT_ODCZYT, params=parametry
     ).json()

@@ -379,6 +379,7 @@ def lista_dokumentow_magazynowych(
     magazyn_id: int | None,
     data_od: date | None,
     data_do: date | None,
+    faktura_powiazana_id: int | None = None,
 ) -> list[DokumentMagazynowy]:
     zapytanie = select(DokumentMagazynowy).options(
         selectinload(DokumentMagazynowy.pozycje)
@@ -396,6 +397,10 @@ def lista_dokumentow_magazynowych(
         zapytanie = zapytanie.where(DokumentMagazynowy.data_dokumentu >= data_od)
     if data_do is not None:
         zapytanie = zapytanie.where(DokumentMagazynowy.data_dokumentu <= data_do)
+    if faktura_powiazana_id is not None:
+        zapytanie = zapytanie.where(
+            DokumentMagazynowy.faktura_powiazana_id == faktura_powiazana_id
+        )
 
     zapytanie = (
         zapytanie.order_by(DokumentMagazynowy.id.desc()).offset(skip).limit(limit)

@@ -16,6 +16,8 @@ from gui.widgets_pomocnicze import (
 from gui.windows.baza_formularza import OknoFormularza
 from gui.windows.formularz_faktury import FormularzFaktury
 from gui.windows.formularz_platnosci import FormularzPlatnosci
+from gui.windows.formularz_wz_z_faktury import FormularzWzZFaktury, dopasuj_pozycje_do_produktow
+from gui.windows.szczegoly_dokumentu_magazynowego import SzczegolyDokumentuMagazynowego
 from gui.windows.tabela import Tabela
 
 KOLUMNY_POZYCJI = [
@@ -41,6 +43,12 @@ ETYKIETY_STAWEK_VAT = {"23": "23%", "8": "8%", "5": "5%", "0": "0%", "zw": "zw."
 # (mirror app/services/platnosci.py STATUSY_BLOKUJACE_PLATNOSC).
 STATUSY_BLOKUJACE_PLATNOSC = frozenset({"robocza", "anulowana"})
 
+# Statusy, dla ktorych generowanie WZ (Faza 19) nie ma sensu - dokument roboczy
+# jeszcze nie jest "prawdziwa" sprzedaza, anulowana nigdy nia nie byla. Wartosci
+# pokrywaja sie z STATUSY_BLOKUJACE_PLATNOSC, ale to niezalezna decyzja biznesowa
+# (WZ dotyczy wydania towaru, nie platnosci), stad osobna stala.
+STATUSY_NIEUZYTECZNE_DLA_WZ = frozenset({"robocza", "anulowana"})
+
 
 class SzczegolyFaktury(OknoFormularza):
     def __init__(
@@ -59,6 +67,8 @@ class SzczegolyFaktury(OknoFormularza):
         self._platnosci: list[dict] = []
         self._firma: dict | None = None
         self._srodowisko_ksef = "testowe"
+        self._produkty_magazynowe: list[dict] = []
+        self._wz_istniejaca: dict | None = None
         self._nazwa_klienta = nazwa_klienta
         self._on_zmiana = on_zmiana or (lambda: None)
 
@@ -91,15 +101,37 @@ class SzczegolyFaktury(OknoFormularza):
                 srodowisko_ksef = api_client.pobierz_ustawienia_ksef()["srodowisko"]
             except api_client.ApiError:
                 srodowisko_ksef = "testowe"
-            return faktura, nazwa_klienta, platnosci, firma, srodowisko_ksef
+            try:
+                produkty = api_client.pobierz_produkty(tylko_aktywne=True, limit=200)
+            except api_client.ApiError:
+                # Best-effort jak firma/srodowisko_ksef wyzej - jesli sie nie
+                # uda, przycisk WZ (Faza 19) po prostu sie nie pokaze.
+                produkty = []
+            try:
+                wz_istniejace = api_client.pobierz_dokumenty_magazynowe(
+                    typ="wz", faktura_powiazana_id=faktura_id, limit=1
+                )
+            except api_client.ApiError:
+                wz_istniejace = []
+            return (
+                faktura, nazwa_klienta, platnosci, firma, srodowisko_ksef,
+                produkty, wz_istniejace,
+            )
 
         def sukces(wynik) -> None:
-            faktura, nazwa_klienta, platnosci, firma, srodowisko_ksef = wynik
+            (
+                faktura, nazwa_klienta, platnosci, firma, srodowisko_ksef,
+                produkty, wz_istniejace,
+            ) = wynik
             self._faktura = faktura
             self._nazwa_klienta = nazwa_klienta
             self._platnosci = platnosci
             self._firma = firma
             self._srodowisko_ksef = srodowisko_ksef
+            # Tylko towary magazynowe - uslugi nigdy nie wystepuja w dokumentach
+            # magazynowych (CLAUDE.md, regula 5).
+            self._produkty_magazynowe = [p for p in produkty if p["jest_magazynowy"]]
+            self._wz_istniejaca = wz_istniejace[0] if wz_istniejace else None
             self._etykieta_ladowania.destroy()
             self._zbuduj_widok(faktura)
 
@@ -397,6 +429,83 @@ class SzczegolyFaktury(OknoFormularza):
                 justify="left",
             )
             self._etykieta_biala_lista.pack(side="left", padx=(styl.ODSTEP_MALY, 0))
+
+        if faktura["status"] not in STATUSY_NIEUZYTECZNE_DLA_WZ:
+            pasek_wz = ctk.CTkFrame(self, fg_color="transparent")
+            pasek_wz.grid(
+                row=8, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY)
+            )
+            if self._wz_istniejaca is not None:
+                ctk.CTkButton(
+                    pasek_wz,
+                    text=f"WZ już wygenerowane: {self._wz_istniejaca['numer']}",
+                    font=styl.CZCIONKA_TRESC,
+                    fg_color="transparent",
+                    border_width=1,
+                    border_color=styl.KOLOR_OBRAMOWANIE,
+                    text_color=styl.KOLOR_TEKST_GLOWNY,
+                    hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+                    command=self._otworz_wz_istniejace,
+                ).pack(side="left")
+            else:
+                dopasowane, _pominiete = dopasuj_pozycje_do_produktow(
+                    faktura["pozycje"], self._produkty_magazynowe
+                )
+                if dopasowane:
+                    ctk.CTkButton(
+                        pasek_wz,
+                        text="Wygeneruj WZ z tej faktury",
+                        font=styl.CZCIONKA_TRESC,
+                        fg_color="transparent",
+                        border_width=1,
+                        border_color=styl.KOLOR_OBRAMOWANIE,
+                        text_color=styl.KOLOR_TEKST_GLOWNY,
+                        hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+                        command=self._wygeneruj_wz,
+                    ).pack(side="left")
+                else:
+                    ctk.CTkButton(
+                        pasek_wz,
+                        text="Wygeneruj WZ z tej faktury",
+                        font=styl.CZCIONKA_TRESC,
+                        fg_color="transparent",
+                        border_width=1,
+                        border_color=styl.KOLOR_OBRAMOWANIE,
+                        text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+                        state="disabled",
+                    ).pack(side="left")
+                    ctk.CTkLabel(
+                        pasek_wz,
+                        text="Ta faktura nie zawiera pozycji odpowiadających towarom magazynowym.",
+                        font=styl.CZCIONKA_DROBNA,
+                        text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+                        anchor="w",
+                        wraplength=560,
+                        justify="left",
+                    ).pack(side="left", padx=(styl.ODSTEP_MALY, 0))
+
+    def _wygeneruj_wz(self) -> None:
+        FormularzWzZFaktury(
+            self,
+            faktura=self._faktura,
+            produkty_magazynowe=self._produkty_magazynowe,
+            on_zapisano=self._po_wygenerowaniu_wz,
+        )
+
+    def _po_wygenerowaniu_wz(self) -> None:
+        # Ten sam wzorzec odswiezenia calego okna co _po_dodaniu_platnosci/_po_edycji.
+        faktura_id = self._faktura_id
+        nazwa_klienta = self._nazwa_klienta
+        on_zmiana = self._on_zmiana
+        master = self.master
+        on_zmiana()
+        self.destroy()
+        SzczegolyFaktury(
+            master, faktura_id=faktura_id, nazwa_klienta=nazwa_klienta, on_zmiana=on_zmiana
+        )
+
+    def _otworz_wz_istniejace(self) -> None:
+        SzczegolyDokumentuMagazynowego(self, self._wz_istniejaca["id"])
 
     def _sprawdz_biala_liste(self) -> None:
         sprawdz_biala_liste(
