@@ -281,6 +281,10 @@ def main() -> None:
         _pokaz_blad_startu(blad)
         return
 
+    from gui import proces_aplikacji
+
+    proces_aplikacji.zarejestruj(watek, postgres_prywatny)
+
     from gui.api_client import ApiError
     from gui.windows.kreator_pierwszego_uruchomienia import uruchom_kreator_jesli_potrzebny
 

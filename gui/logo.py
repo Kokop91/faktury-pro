@@ -18,6 +18,12 @@ def _katalog_logo() -> Path:
     return Path(podstawa) / NAZWA_KATALOGU / NAZWA_PODKATALOGU_LOGO
 
 
+def katalog_logo() -> Path:
+    """Publiczny dostep do katalogu logo (Faza 22 - kopia zapasowa musi
+    umiec je zarchiwizowac/przywrocic, patrz gui/kopia_zapasowa.py)."""
+    return _katalog_logo()
+
+
 def wybierz_i_skopiuj_logo(rodzic) -> str | None:
     """Otwiera systemowe okno wyboru pliku obrazu i kopiuje go do lokalnego
     katalogu danych appki pod stala nazwa "logo.<rozszerzenie>" (jedna firma =

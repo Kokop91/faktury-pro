@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
 from gui import api_client, auth, formatowanie, nastawienia, styl
+from gui import kopia_zapasowa as kz
 from gui.integracje_gui import pobierz_z_gus
 from gui.logo import wybierz_i_skopiuj_logo
 from gui.watki import uruchom_w_tle
@@ -16,6 +17,7 @@ from gui.widgets_pomocnicze import (
     pokaz_toast,
     ustaw_tekst_ladowania,
 )
+from gui.windows.dialog_kopii_zapasowej import DialogPrzywrocBackup, DialogWykonajBackup
 from gui.windows.dialog_wyboru_urzedu import DialogWyboruUrzeduSkarbowego
 
 # (klucz, etykieta, wymagane)
@@ -61,6 +63,7 @@ class WidokUstawien(ctk.CTkFrame):
 
         self._zbuduj_karte_wygladu(wrapper)
         self._zbuduj_karte_firmy(wrapper)
+        self._zbuduj_karte_backupu(wrapper)
         self._zbuduj_karte_integracji_gus(wrapper)
         self._zbuduj_karte_ksef(wrapper)
         self._zbuduj_karte_hasla(wrapper)
@@ -486,6 +489,145 @@ class WidokUstawien(ctk.CTkFrame):
 
         uruchom_w_tle(self, zadanie, sukces, blad)
 
+    # -- kopia zapasowa i przywracanie (Faza 22) - KRYTYCZNY priorytet, appka
+    # przechowuje od Fazy 18B wszystkie dane firmy wylacznie lokalnie -------
+
+    def _zbuduj_karte_backupu(self, master) -> None:
+        karta = ctk.CTkFrame(
+            master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        karta.pack(pady=(0, styl.ODSTEP_SREDNI), fill="x")
+
+        ctk.CTkLabel(
+            karta,
+            text="Kopia zapasowa i przywracanie",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+        ).pack(
+            padx=styl.ODSTEP_DUZY,
+            pady=(styl.ODSTEP_DUZY, styl.ODSTEP_SREDNI),
+            anchor="w",
+        )
+
+        wewnatrz = ctk.CTkFrame(karta, fg_color="transparent", width=320)
+        wewnatrz.pack(padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY), fill="x")
+
+        ctk.CTkLabel(
+            wewnatrz,
+            text=(
+                "Kopia obejmuje całą bazę danych (faktury, klientów, magazyn) "
+                "oraz logo firmy, zaszyfrowana hasłem, które ustawiasz osobno "
+                "od hasła logowania. Zalecane: wybierz lokalizację NA INNYM "
+                "nośniku niż ten komputer - dysk USB, dysk sieciowy albo "
+                "folder synchronizowany z chmurą (Google Drive/OneDrive/"
+                "Dropbox)."
+            ),
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            wraplength=320,
+            justify="left",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._etykieta_pola(wewnatrz, "Lokalizacja kopii zapasowych")
+        wiersz_katalog = ctk.CTkFrame(wewnatrz, fg_color="transparent")
+        wiersz_katalog.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+        wiersz_katalog.grid_columnconfigure(0, weight=1)
+        self._etykieta_katalog_backupu = ctk.CTkLabel(
+            wiersz_katalog, text="Nie wybrano", font=styl.CZCIONKA_TRESC,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY, anchor="w",
+        )
+        self._etykieta_katalog_backupu.grid(row=0, column=0, sticky="ew", padx=(0, styl.ODSTEP_MALY))
+        ctk.CTkButton(
+            wiersz_katalog, text="Wybierz folder...", font=styl.CZCIONKA_DROBNA, width=110,
+            fg_color="transparent", border_width=1, border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY, hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._wybierz_katalog_backupu,
+        ).grid(row=0, column=1)
+
+        self._etykieta_stan_backupu = ctk.CTkLabel(
+            wewnatrz, text="", font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY, anchor="w",
+        )
+        self._etykieta_stan_backupu.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._przycisk_wykonaj_backup = ctk.CTkButton(
+            wewnatrz,
+            text="Wykonaj kopię zapasową teraz",
+            fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+            command=self._otworz_wykonanie_backupu,
+        )
+        self._przycisk_wykonaj_backup.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        ctk.CTkFrame(wewnatrz, fg_color=styl.KOLOR_OBRAMOWANIE, height=1).pack(
+            fill="x", pady=styl.ODSTEP_SREDNI
+        )
+
+        ctk.CTkLabel(
+            wewnatrz, text="Przywracanie z kopii zapasowej", font=styl.CZCIONKA_TRESC_POGRUBIONA,
+            text_color=styl.KOLOR_TEKST_GLOWNY, anchor="w",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+        ctk.CTkLabel(
+            wewnatrz,
+            text="Nadpisuje CAŁKOWICIE bieżące dane wybraną kopią zapasową.",
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            wraplength=320,
+            justify="left",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+        ctk.CTkButton(
+            wewnatrz,
+            text="Przywróć z kopii zapasowej...",
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_BLAD,
+            text_color=styl.KOLOR_BLAD,
+            hover_color=styl.KOLOR_BLAD_TLO,
+            command=lambda: DialogPrzywrocBackup(self),
+        ).pack(fill="x")
+
+        self._odswiez_stan_backupu()
+
+    def _odswiez_stan_backupu(self) -> None:
+        stan = kz.stan_backupu()
+        katalog = stan["katalog_docelowy"]
+        if katalog:
+            self._etykieta_katalog_backupu.configure(text=katalog, text_color=styl.KOLOR_TEKST_GLOWNY)
+        else:
+            self._etykieta_katalog_backupu.configure(text="Nie wybrano", text_color=styl.KOLOR_TEKST_DRUGORZEDNY)
+
+        if stan["ostatni_backup"] is None:
+            self._etykieta_stan_backupu.configure(
+                text="Nie wykonano jeszcze żadnej kopii zapasowej.", text_color=styl.KOLOR_OSTRZEZENIE
+            )
+        else:
+            dni = stan["dni_od_ostatniego"]
+            data_tekst = formatowanie.formatuj_data_czas(
+                datetime.fromisoformat(stan["ostatni_backup"])
+            )
+            opis_dni = "dzisiaj" if dni == 0 else f"{dni} dni temu"
+            self._etykieta_stan_backupu.configure(
+                text=f"Ostatnia kopia zapasowa: {data_tekst} ({opis_dni}).",
+                text_color=styl.KOLOR_BLAD if stan["przeterminowany"] else styl.KOLOR_SUKCES,
+            )
+
+        self._przycisk_wykonaj_backup.configure(state="normal" if katalog else "disabled")
+
+    def _wybierz_katalog_backupu(self) -> None:
+        katalog = filedialog.askdirectory(parent=self, title="Wybierz lokalizację kopii zapasowych")
+        if not katalog:
+            return
+        kz.ustaw_katalog_docelowy(katalog)
+        self._odswiez_stan_backupu()
+
+    def _otworz_wykonanie_backupu(self) -> None:
+        stan = kz.stan_backupu()
+        if not stan["katalog_docelowy"]:
+            return
+        DialogWykonajBackup(
+            self, stan["katalog_docelowy"], on_wykonano=self._odswiez_stan_backupu
+        )
+
     # -- integracja GUS (srodowisko testowe/produkcyjne + klucz) -------------
 
     def _zbuduj_karte_integracji_gus(self, master) -> None:
@@ -904,7 +1046,7 @@ class WidokUstawien(ctk.CTkFrame):
         return etykieta
 
     def odswiez(self) -> None:
-        pass
+        self._odswiez_stan_backupu()
 
     def _zmien_haslo(self) -> None:
         stare = self._pole_stare.get()

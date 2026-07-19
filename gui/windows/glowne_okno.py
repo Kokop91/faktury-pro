@@ -53,6 +53,10 @@ class GlowneOkno(ctk.CTk):
         # w odroznieniu od odznaki liczby nowych dokumentow ponizej, ktora jest
         # czysto lokalnym zapytaniem do bazy i odswieza sie zawsze.
         self.after(400, self._sprawdz_koszty_ksef_jesli_wlaczone)
+        # Faza 22 - ten sam wzorzec "sprawdz przy starcie, nigdy nie wymuszaj"
+        # co faktury cykliczne powyzej. Czysto lokalny odczyt pliku
+        # (gui/kopia_zapasowa.py), wiec bez uruchom_w_tle/opoznienia sieciowego.
+        self.after(500, self._sprawdz_backup)
 
     def _sprawdz_faktury_cykliczne(self) -> None:
         def zadanie():
@@ -93,6 +97,20 @@ class GlowneOkno(ctk.CTk):
             pass  # cichy brak powiadomienia startowego (jak przy fakturach cyklicznych)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _sprawdz_backup(self) -> None:
+        from gui import kopia_zapasowa as kz
+        from gui.windows.dialog_przypomnienia_backupu import DialogPrzypomnieniaBackupu
+
+        stan = kz.stan_backupu()
+        if not stan["przeterminowany"]:
+            return
+        DialogPrzypomnieniaBackupu(
+            self,
+            nigdy_skonfigurowano=stan["katalog_docelowy"] is None,
+            dni_od_ostatniego=stan["dni_od_ostatniego"],
+            on_przejdz=lambda: self._pokaz_widok("ustawienia"),
+        )
 
     def _odswiez_odznake_kosztow(self) -> None:
         def zadanie():

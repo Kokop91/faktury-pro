@@ -6,6 +6,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 from gui import api_client, formatowanie, styl
+from gui import kopia_zapasowa as kz
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
 from gui.windows.szczegoly_faktury import SzczegolyFaktury
@@ -214,6 +215,22 @@ class WidokDashboard(ctk.CTkFrame):
         self._ramka_uwagi.grid(row=5, column=0, columnspan=4, sticky="ew")
         self._ramka_uwagi.grid_columnconfigure(0, weight=1)
 
+        # Faza 22 - stan kopii zapasowej to CZYSTO lokalne ustawienie (nie
+        # pochodzi z bazy danych/DashboardOut), wiec kafelek jest budowany
+        # osobno od reszty dashboardu w _zbuduj_kafelek_backupu.
+        ctk.CTkLabel(
+            przewijany,
+            text="Kopia zapasowa",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            anchor="w",
+        ).grid(row=6, column=0, columnspan=4, sticky="w", pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MALY))
+
+        self._ramka_kafelka_backupu = ctk.CTkFrame(przewijany, fg_color="transparent")
+        self._ramka_kafelka_backupu.grid(row=7, column=0, columnspan=4, sticky="ew")
+        self._ramka_kafelka_backupu.grid_columnconfigure(0, weight=1, uniform="kafelek_backup")
+        self._kafelek_backupu: _Kafelek | None = None
+
         # Przerysowanie wykresu przy zmianie trybu jasny/ciemny - customtkinter
         # sam odswieza kolory widgetow CTk, ale matplotlib nie jest widgetem CTk
         # i wymaga recznego przerysowania z nowa paleta kolorow.
@@ -240,6 +257,34 @@ class WidokDashboard(ctk.CTkFrame):
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
+        # Czysto lokalny odczyt pliku (gui/nastawienia.py) - bez sensu przez
+        # osobny watek/siec jak reszta dashboardu powyzej.
+        self._zbuduj_kafelek_backupu()
+
+    def _zbuduj_kafelek_backupu(self) -> None:
+        if self._kafelek_backupu is not None:
+            self._kafelek_backupu.destroy()
+
+        stan = kz.stan_backupu()
+        if stan["ostatni_backup"] is None:
+            wartosc = "Nigdy"
+            podtytul = "Skonfiguruj w Ustawieniach"
+            kolor = styl.KOLOR_BLAD
+        else:
+            dni = stan["dni_od_ostatniego"]
+            wartosc = "Dzisiaj" if dni == 0 else f"{dni} dni temu"
+            podtytul = None
+            kolor = styl.KOLOR_BLAD if stan["przeterminowany"] else styl.KOLOR_SUKCES
+
+        self._kafelek_backupu = _Kafelek(
+            self._ramka_kafelka_backupu,
+            "Ostatnia kopia zapasowa",
+            wartosc,
+            podtytul,
+            kolor,
+            on_klik=lambda: self.on_nawigacja("ustawienia"),
+        )
+        self._kafelek_backupu.grid(row=0, column=0, sticky="nsew")
 
     def _zbuduj_kafelki(self, kafelki: dict) -> None:
         for kafelek in self._kafelki:
