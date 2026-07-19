@@ -17,6 +17,10 @@ class Produkt(Base):
     nazwa: Mapped[str] = mapped_column(String(255), nullable=False)
     jednostka_miary: Mapped[str] = mapped_column(String(20), nullable=False)
     cena_netto_grosze: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # Faza 25 - koszt zakupu/wytworzenia jednostkowy, OPCJONALNY (appka nie zna
+    # go automatycznie znikad). Produkty bez tej wartosci sa pomijane w
+    # rentownosc_service.rentownosc_produktow, nigdy traktowane jako koszt=0.
+    koszt_zakupu_grosze: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     domyslna_stawka_vat: Mapped[StawkaVat] = mapped_column(
         Enum(StawkaVat, name="stawka_vat"),
         nullable=False,

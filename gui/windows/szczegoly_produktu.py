@@ -4,7 +4,7 @@ import customtkinter as ctk
 
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu
+from gui.widgets_pomocnicze import komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
 from gui.windows.baza_formularza import OknoFormularza
 from gui.windows.tabela import Tabela
 
@@ -104,6 +104,42 @@ class SzczegolyProduktu(OknoFormularza):
                 text_color=styl.KOLOR_TEKST_GLOWNY,
                 anchor="w",
             ).pack(side="left")
+
+        # Faza 25 - jedyne pole produktu edytowalne z poziomu tego okna (patrz
+        # app/services/magazyn_service.py:ustaw_koszt_zakupu - swiadomie waski
+        # endpoint, produkt poza tym pozostaje create-only).
+        wiersz_kosztu = ctk.CTkFrame(naglowek, fg_color="transparent")
+        wiersz_kosztu.pack(fill="x", padx=styl.ODSTEP_SREDNI, pady=2)
+        ctk.CTkLabel(
+            wiersz_kosztu,
+            text="Koszt zakupu:",
+            font=styl.CZCIONKA_ETYKIETA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            width=160,
+            anchor="w",
+        ).pack(side="left")
+        self._pole_koszt_zakupu = ctk.CTkEntry(
+            wiersz_kosztu, font=styl.CZCIONKA_TRESC, width=140, placeholder_text="nieznany"
+        )
+        if produkt.get("koszt_zakupu_grosze") is not None:
+            self._pole_koszt_zakupu.insert(
+                0, formatowanie.grosze_do_wpisu(produkt["koszt_zakupu_grosze"])
+            )
+        self._pole_koszt_zakupu.pack(side="left", padx=(0, styl.ODSTEP_MALY))
+        self._przycisk_koszt_zakupu = ctk.CTkButton(
+            wiersz_kosztu,
+            text="Zapisz",
+            font=styl.CZCIONKA_DROBNA,
+            width=70,
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._zapisz_koszt_zakupu,
+        )
+        self._przycisk_koszt_zakupu.pack(side="left")
+
         ctk.CTkFrame(naglowek, fg_color="transparent", height=styl.ODSTEP_MALY).pack()
 
         if not produkt["jest_magazynowy"]:
@@ -157,3 +193,28 @@ class SzczegolyProduktu(OknoFormularza):
             ),
         }
         tabela.ustaw_dane(historia, formatery=formatery, kolory=kolory)
+
+    def _zapisz_koszt_zakupu(self) -> None:
+        tekst = self._pole_koszt_zakupu.get().strip()
+        koszt_zakupu_grosze = None
+        if tekst:
+            try:
+                koszt_zakupu_grosze = formatowanie.parsuj_kwote(tekst, wymagaj_dodatniej=False)
+            except ValueError as e:
+                komunikat_bledu(self, f"Nieprawidłowy koszt zakupu: {e}")
+                return
+
+        ustaw_tekst_ladowania(self._przycisk_koszt_zakupu, True, "Zapisz")
+
+        def zadanie():
+            return api_client.ustaw_koszt_zakupu_produktu(self._produkt_id, koszt_zakupu_grosze)
+
+        def sukces(_wynik: dict) -> None:
+            ustaw_tekst_ladowania(self._przycisk_koszt_zakupu, False, "Zapisz")
+            pokaz_toast(self.master, "Koszt zakupu zapisany.")
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_koszt_zakupu, False, "Zapisz")
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)

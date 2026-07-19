@@ -2,7 +2,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.magazyn import ProduktCreate, ProduktOut, RuchMagazynowyOut
+from app.schemas.magazyn import (
+    ProduktCreate,
+    ProduktKosztZakupuUpdate,
+    ProduktOut,
+    RuchMagazynowyOut,
+)
 from app.services import magazyn_service
 
 router = APIRouter(prefix="/produkty", tags=["magazyn"])
@@ -31,3 +36,10 @@ def szczegoly_produktu(produkt_id: int, db: Session = Depends(get_db)):
 @router.get("/{produkt_id}/historia-ruchow", response_model=list[RuchMagazynowyOut])
 def historia_ruchow_produktu(produkt_id: int, db: Session = Depends(get_db)):
     return magazyn_service.historia_ruchow_produktu(db, produkt_id)
+
+
+@router.patch("/{produkt_id}/koszt-zakupu", response_model=ProduktOut)
+def ustaw_koszt_zakupu(
+    produkt_id: int, dane: ProduktKosztZakupuUpdate, db: Session = Depends(get_db)
+):
+    return magazyn_service.ustaw_koszt_zakupu(db, produkt_id, dane.koszt_zakupu_grosze)

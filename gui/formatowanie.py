@@ -232,6 +232,14 @@ def formatuj_kwote(grosze: int, waluta: str = "PLN") -> str:
     return f"-{wynik}" if ujemna else wynik
 
 
+def formatuj_procent(wartosc: float | None) -> str:
+    """Formatuje procent (Faza 25 - marza) do postaci '53,3%'. None (brak
+    danych kosztowych - patrz rentownosc_service.marza_okresu) -> '—'."""
+    if wartosc is None:
+        return "—"
+    return f"{wartosc:.1f}".replace(".", ",") + "%"
+
+
 def formatuj_date(wartosc) -> str:
     if wartosc is None:
         return ""

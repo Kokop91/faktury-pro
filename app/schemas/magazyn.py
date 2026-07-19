@@ -10,6 +10,10 @@ class ProduktBase(BaseModel):
     nazwa: str = Field(min_length=1, max_length=255)
     jednostka_miary: str = Field(min_length=1, max_length=20)
     cena_netto_grosze: int = Field(ge=0)
+    # Faza 25 - koszt zakupu/wytworzenia jednostkowy, opcjonalny. None = appka
+    # nie zna kosztu tego produktu, pomijany w rentownosc_service, nigdy
+    # traktowany jako 0.
+    koszt_zakupu_grosze: int | None = Field(default=None, ge=0)
     domyslna_stawka_vat: StawkaVat = StawkaVat.STAWKA_23
     jest_magazynowy: bool
     objety_zalacznikiem_15: bool = False
@@ -27,6 +31,10 @@ class ProduktOut(ProduktBase):
     aktywny: bool
     utworzono: datetime
     zaktualizowano: datetime
+
+
+class ProduktKosztZakupuUpdate(BaseModel):
+    koszt_zakupu_grosze: int | None = Field(default=None, ge=0)
 
 
 class MagazynBase(BaseModel):

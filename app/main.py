@@ -12,6 +12,7 @@ from app.api import (
     integracje,
     inwentaryzacje,
     klienci,
+    koszty_reczne,
     ksef,
     magazyn,
     magazyny,
@@ -19,6 +20,7 @@ from app.api import (
     produkty,
     przypomnienia,
     raporty,
+    rentownosc,
 )
 from app.database import get_db
 
@@ -38,6 +40,8 @@ app.include_router(firma.router)
 app.include_router(integracje.router)
 app.include_router(ksef.router)
 app.include_router(dokumenty_kosztowe.router)
+app.include_router(koszty_reczne.router)
+app.include_router(rentownosc.router)
 app.include_router(email.router)
 app.include_router(przypomnienia.router)
 

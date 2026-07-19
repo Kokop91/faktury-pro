@@ -139,6 +139,7 @@ class WidokDashboard(ctk.CTkFrame):
         self._kafelki_ksef: list[_Kafelek] = []
         self._wiersze_uwagi: list[ctk.CTkBaseClass] = []
         self._ostatni_wykres: list[dict] | None = None
+        self._ostatni_wykres_kosztow: list[dict] | None = None
 
         ctk.CTkLabel(
             self,
@@ -157,7 +158,7 @@ class WidokDashboard(ctk.CTkFrame):
         przewijany.grid(
             row=1, column=0, sticky="nsew", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY)
         )
-        przewijany.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="kafelki")
+        przewijany.grid_columnconfigure((0, 1, 2, 3, 4), weight=1, uniform="kafelki")
         self._ramka_kafelkow = przewijany
 
         ctk.CTkLabel(
@@ -166,17 +167,17 @@ class WidokDashboard(ctk.CTkFrame):
             font=styl.NAGLOWEK_2,
             text_color=styl.KOLOR_TEKST_GLOWNY,
             anchor="w",
-        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MALY))
+        ).grid(row=1, column=0, columnspan=5, sticky="w", pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MALY))
 
         self._ramka_kafelkow_ksef = ctk.CTkFrame(przewijany, fg_color="transparent")
-        self._ramka_kafelkow_ksef.grid(row=2, column=0, columnspan=4, sticky="ew")
+        self._ramka_kafelkow_ksef.grid(row=2, column=0, columnspan=5, sticky="ew")
         self._ramka_kafelkow_ksef.grid_columnconfigure((0, 1), weight=1, uniform="kafelki_ksef")
 
         self._karta_wykresu = ctk.CTkFrame(
             przewijany, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
         )
         self._karta_wykresu.grid(
-            row=3, column=0, columnspan=4, sticky="ew", pady=(styl.ODSTEP_SREDNI, 0)
+            row=3, column=0, columnspan=5, sticky="ew", pady=(styl.ODSTEP_SREDNI, 0)
         )
         self._karta_wykresu.grid_columnconfigure(0, weight=1)
 
@@ -203,16 +204,53 @@ class WidokDashboard(ctk.CTkFrame):
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
         )
 
+        # Faza 25 - drugi wykres, obok istniejacego przychodow: przychody vs
+        # koszty w tym samym 12-miesiecznym oknie. Osobna para Figure/Canvas
+        # (ten sam wzorzec co self._figura/_osie/_platno powyzej), zeby nie
+        # mieszac dwoch serii na jednym wykresie slupkowym.
+        self._karta_wykresu_kosztow = ctk.CTkFrame(
+            przewijany, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        self._karta_wykresu_kosztow.grid(
+            row=4, column=0, columnspan=5, sticky="ew", pady=(styl.ODSTEP_SREDNI, 0)
+        )
+        self._karta_wykresu_kosztow.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            self._karta_wykresu_kosztow,
+            text="Przychody vs koszty — ostatnie 12 miesięcy",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w", padx=styl.ODSTEP_SREDNI, pady=(styl.ODSTEP_SREDNI, 0))
+
+        self._figura_kosztow = Figure(figsize=(8, 3), dpi=100)
+        self._osie_kosztow = self._figura_kosztow.add_subplot(111)
+        self._platno_kosztow = FigureCanvasTkAgg(
+            self._figura_kosztow, master=self._karta_wykresu_kosztow
+        )
+        self._widget_platna_kosztow = self._platno_kosztow.get_tk_widget()
+        self._widget_platna_kosztow.grid(
+            row=1, column=0, sticky="nsew", padx=styl.ODSTEP_SREDNI, pady=styl.ODSTEP_SREDNI
+        )
+
+        self._etykieta_brak_wykresu_kosztow = ctk.CTkLabel(
+            self._karta_wykresu_kosztow,
+            text="Brak danych — wystaw pierwszą fakturę albo dodaj koszt.",
+            font=styl.CZCIONKA_TRESC,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+        )
+
         ctk.CTkLabel(
             przewijany,
             text="Wymagają uwagi",
             font=styl.NAGLOWEK_2,
             text_color=styl.KOLOR_TEKST_GLOWNY,
             anchor="w",
-        ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MALY))
+        ).grid(row=5, column=0, columnspan=5, sticky="w", pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MALY))
 
         self._ramka_uwagi = ctk.CTkFrame(przewijany, fg_color="transparent")
-        self._ramka_uwagi.grid(row=5, column=0, columnspan=4, sticky="ew")
+        self._ramka_uwagi.grid(row=6, column=0, columnspan=5, sticky="ew")
         self._ramka_uwagi.grid_columnconfigure(0, weight=1)
 
         # Faza 22 - stan kopii zapasowej to CZYSTO lokalne ustawienie (nie
@@ -224,14 +262,14 @@ class WidokDashboard(ctk.CTkFrame):
             font=styl.NAGLOWEK_2,
             text_color=styl.KOLOR_TEKST_GLOWNY,
             anchor="w",
-        ).grid(row=6, column=0, columnspan=4, sticky="w", pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MALY))
+        ).grid(row=7, column=0, columnspan=5, sticky="w", pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MALY))
 
         self._ramka_kafelka_backupu = ctk.CTkFrame(przewijany, fg_color="transparent")
-        self._ramka_kafelka_backupu.grid(row=7, column=0, columnspan=4, sticky="ew")
+        self._ramka_kafelka_backupu.grid(row=8, column=0, columnspan=5, sticky="ew")
         self._ramka_kafelka_backupu.grid_columnconfigure(0, weight=1, uniform="kafelek_backup")
         self._kafelek_backupu: _Kafelek | None = None
 
-        # Przerysowanie wykresu przy zmianie trybu jasny/ciemny - customtkinter
+        # Przerysowanie wykresow przy zmianie trybu jasny/ciemny - customtkinter
         # sam odswieza kolory widgetow CTk, ale matplotlib nie jest widgetem CTk
         # i wymaga recznego przerysowania z nowa paleta kolorow.
         ctk.AppearanceModeTracker.add(self._na_zmiane_trybu)
@@ -239,16 +277,20 @@ class WidokDashboard(ctk.CTkFrame):
     def _na_zmiane_trybu(self, _nowy_tryb: str) -> None:
         if self._ostatni_wykres is not None:
             self._przerysuj_wykres(self._ostatni_wykres)
+        if self._ostatni_wykres_kosztow is not None:
+            self._przerysuj_wykres_kosztow(self._ostatni_wykres_kosztow)
 
     def odswiez(self) -> None:
         def zadanie():
             return api_client.pobierz_dashboard()
 
         def sukces(dane: dict) -> None:
-            self._zbuduj_kafelki(dane["kafelki"])
+            self._zbuduj_kafelki(dane["kafelki"], dane["marza_biezacy_miesiac"])
             self._zbuduj_kafelki_ksef(dane["kafelki"])
             self._ostatni_wykres = dane["wykres_przychodow"]
             self._przerysuj_wykres(self._ostatni_wykres)
+            self._ostatni_wykres_kosztow = dane["wykres_przychodow_kosztow"]
+            self._przerysuj_wykres_kosztow(self._ostatni_wykres_kosztow)
             self._zbuduj_liste_uwagi(
                 dane["faktury_po_terminie"], dane["faktury_odrzucone_ksef"], dane["ponizej_minimum"]
             )
@@ -286,12 +328,23 @@ class WidokDashboard(ctk.CTkFrame):
         )
         self._kafelek_backupu.grid(row=0, column=0, sticky="nsew")
 
-    def _zbuduj_kafelki(self, kafelki: dict) -> None:
+    def _zbuduj_kafelki(self, kafelki: dict, marza: dict) -> None:
         for kafelek in self._kafelki:
             kafelek.destroy()
         self._kafelki = []
 
         liczba_po_terminie = kafelki["liczba_faktur_po_terminie"]
+
+        if marza["ma_dane_kosztowe"]:
+            wartosc_marzy = formatowanie.formatuj_kwote(marza["marza_grosze"])
+            podtytul_marzy = f"{formatowanie.formatuj_procent(marza['marza_procent'])} marży"
+            kolor_marzy = (
+                styl.KOLOR_SUKCES if marza["marza_grosze"] >= 0 else styl.KOLOR_BLAD
+            )
+        else:
+            wartosc_marzy = "Brak danych"
+            podtytul_marzy = "kosztów w tym miesiącu"
+            kolor_marzy = styl.KOLOR_TEKST_DRUGORZEDNY
 
         definicje = [
             (
@@ -323,6 +376,13 @@ class WidokDashboard(ctk.CTkFrame):
                 None,
                 None,
                 lambda: self.on_nawigacja("faktury", status_filtr=None),
+            ),
+            (
+                "Marża w tym miesiącu",
+                wartosc_marzy,
+                podtytul_marzy,
+                kolor_marzy,
+                lambda: self.on_nawigacja("rentownosc"),
             ),
         ]
 
@@ -408,6 +468,66 @@ class WidokDashboard(ctk.CTkFrame):
 
         self._figura.tight_layout()
         self._platno.draw()
+
+    def _przerysuj_wykres_kosztow(self, punkty: list[dict]) -> None:
+        suma_calkowita = sum(
+            p["przychod_netto_grosze"] + p["koszty_grosze"] for p in punkty
+        )
+        if suma_calkowita == 0:
+            self._widget_platna_kosztow.grid_remove()
+            self._etykieta_brak_wykresu_kosztow.grid(
+                row=1, column=0, padx=styl.ODSTEP_SREDNI, pady=(0, styl.ODSTEP_SREDNI)
+            )
+            return
+
+        self._etykieta_brak_wykresu_kosztow.grid_remove()
+        self._widget_platna_kosztow.grid(
+            row=1, column=0, sticky="nsew", padx=styl.ODSTEP_SREDNI, pady=styl.ODSTEP_SREDNI
+        )
+
+        kolor_tla = _kolor(styl.KOLOR_KARTA)
+        kolor_przychodu = _kolor(styl.KOLOR_SUKCES)
+        kolor_kosztow = _kolor(styl.KOLOR_BLAD)
+        kolor_tekstu = _kolor(styl.KOLOR_TEKST_DRUGORZEDNY)
+        kolor_siatki = _kolor(styl.KOLOR_OBRAMOWANIE)
+
+        self._figura_kosztow.patch.set_facecolor(kolor_tla)
+        self._osie_kosztow.clear()
+        self._osie_kosztow.set_facecolor(kolor_tla)
+
+        etykiety_x = [_NAZWY_MIESIECY[p["miesiac"] - 1] for p in punkty]
+        przychody_zlote = [p["przychod_netto_grosze"] / 100 for p in punkty]
+        koszty_zlote = [p["koszty_grosze"] / 100 for p in punkty]
+        pozycje_x = list(range(len(punkty)))
+        szerokosc = 0.35
+
+        self._osie_kosztow.bar(
+            [x - szerokosc / 2 for x in pozycje_x],
+            przychody_zlote,
+            width=szerokosc,
+            color=kolor_przychodu,
+            label="Przychód netto",
+        )
+        self._osie_kosztow.bar(
+            [x + szerokosc / 2 for x in pozycje_x],
+            koszty_zlote,
+            width=szerokosc,
+            color=kolor_kosztow,
+            label="Koszty",
+        )
+        self._osie_kosztow.set_xticks(pozycje_x)
+        self._osie_kosztow.set_xticklabels(etykiety_x)
+        self._osie_kosztow.set_ylim(bottom=0)
+        self._osie_kosztow.tick_params(colors=kolor_tekstu, labelsize=9, length=0)
+        for nazwa_krawedzi in ("top", "right", "left"):
+            self._osie_kosztow.spines[nazwa_krawedzi].set_visible(False)
+        self._osie_kosztow.spines["bottom"].set_color(kolor_siatki)
+        self._osie_kosztow.yaxis.grid(True, color=kolor_siatki, linewidth=0.6, alpha=0.6)
+        self._osie_kosztow.set_axisbelow(True)
+        self._osie_kosztow.legend(loc="upper left", frameon=False, labelcolor=kolor_tekstu, fontsize=9)
+
+        self._figura_kosztow.tight_layout()
+        self._platno_kosztow.draw()
 
     def _zbuduj_liste_uwagi(
         self,

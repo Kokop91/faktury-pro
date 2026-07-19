@@ -10,7 +10,7 @@ from app.schemas.dashboard import (
     KafelkiDashboarduOut,
     PunktWykresuPrzychodowOut,
 )
-from app.services import dokumenty_kosztowe_service, raporty_service
+from app.services import dokumenty_kosztowe_service, raporty_service, rentownosc_service
 from app.services.platnosci import lista_naleznosci, oblicz_status_efektywny, zbuduj_fakture_out
 
 # Faktury robocze nie zostaly jeszcze "wystawione" w sensie biznesowym, a anulowane
@@ -102,6 +102,16 @@ def pobierz_dashboard(db: Session, dzisiaj: date | None = None) -> DashboardOut:
 
     liczba_dokumentow_kosztowych_nowych = dokumenty_kosztowe_service.liczba_nowych(db)
 
+    # Faza 25 - marza biezacego miesiaca i wykres przychody/koszty, ta sama
+    # "zero konfiguracji" filozofia co reszta dashboardu.
+    _poczatek_miesiaca, _koniec_miesiaca = rentownosc_service.zakres_dat(
+        dzisiaj.year, dzisiaj.month, "miesieczny"
+    )
+    marza_biezacy_miesiac = rentownosc_service.marza_okresu(
+        db, _poczatek_miesiaca, _koniec_miesiaca
+    )
+    wykres_przychodow_kosztow = rentownosc_service.wykres_przychody_koszty(db, dzisiaj)
+
     kafelki = KafelkiDashboarduOut(
         przychod_biezacy_miesiac_grosze=przychod_biezacy_miesiac_grosze,
         liczba_faktur_biezacy_miesiac=liczba_faktur_biezacy_miesiac,
@@ -119,4 +129,6 @@ def pobierz_dashboard(db: Session, dzisiaj: date | None = None) -> DashboardOut:
         faktury_po_terminie=[zbuduj_fakture_out(f, dzisiaj) for f in faktury_po_terminie],
         faktury_odrzucone_ksef=[zbuduj_fakture_out(f, dzisiaj) for f in faktury_odrzucone_ksef],
         ponizej_minimum=raporty_service.lista_ponizej_minimum(db, magazyn_id=None),
+        marza_biezacy_miesiac=marza_biezacy_miesiac,
+        wykres_przychodow_kosztow=wykres_przychodow_kosztow,
     )

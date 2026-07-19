@@ -18,6 +18,7 @@ from app.models.faktura import Faktura
 from app.models.firma import Firma
 from app.models.inwentaryzacja import Inwentaryzacja
 from app.models.klient import Klient
+from app.models.koszt_reczny import KosztReczny
 from app.models.licznik_numeracji import LicznikNumeracji
 from app.models.licznik_numeracji_inwentaryzacji import LicznikNumeracjiInwentaryzacji
 from app.models.licznik_numeracji_magazynowej import LicznikNumeracjiMagazynowej
@@ -72,4 +73,5 @@ __all__ = [
     "StatusDokumentuKosztowego",
     "PrzypomnieniePlatnosci",
     "TypPrzypomnienia",
+    "KosztReczny",
 ]

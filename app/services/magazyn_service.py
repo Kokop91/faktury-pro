@@ -87,6 +87,20 @@ def pobierz_produkt(db: Session, produkt_id: int) -> Produkt:
     return produkt
 
 
+def ustaw_koszt_zakupu(
+    db: Session, produkt_id: int, koszt_zakupu_grosze: int | None
+) -> Produkt:
+    """Faza 25 - jedyny sposob edycji istniejacego produktu dzis (Produkt
+    poza tym jest create-only, patrz brak PUT/PATCH w app/api/produkty.py).
+    Swiadomie waskie: tylko to jedno pole, zeby umozliwic uzupelnienie kosztu
+    na juz istniejacych produktach bez budowania pelnego edytora."""
+    produkt = pobierz_produkt(db, produkt_id)
+    produkt.koszt_zakupu_grosze = koszt_zakupu_grosze
+    db.commit()
+    db.refresh(produkt)
+    return produkt
+
+
 def lista_produktow(
     db: Session, skip: int, limit: int, tylko_aktywne: bool
 ) -> list[Produkt]:

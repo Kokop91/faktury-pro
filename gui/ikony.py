@@ -105,6 +105,21 @@ def _rysuj_oferta(rysuj: ImageDraw.ImageDraw, s: Callable[[float], float], w: fl
     rysuj.line([s(11), s(15.5), s(15.5), s(9.5)], fill="white", width=w)
 
 
+def _rysuj_rentownosc(rysuj: ImageDraw.ImageDraw, s: Callable[[float], float], w: float) -> None:
+    """Linia trendu rosnacego ze strzalka - symbolizuje analize rentownosci/
+    marzy (Faza 25), w odroznieniu od slupkowej ikony "dashboard"."""
+    rysuj.line(
+        [(s(4.5), s(18)), (s(9.5), s(12)), (s(13.5), s(15)), (s(19.5), s(6))],
+        fill="white",
+        width=w,
+        joint="curve",
+    )
+    rysuj.polygon(
+        [(s(19.5), s(6)), (s(14.5), s(6.5)), (s(19), s(10.5))],
+        fill="white",
+    )
+
+
 def _rysuj_cykl(rysuj: ImageDraw.ImageDraw, s: Callable[[float], float], w: float) -> None:
     """Dwa luki z grocikami (jak ikona "odswiez/powtorz") - symbolizuja
     powtarzajacy sie w czasie szablon faktury cyklicznej."""
@@ -126,6 +141,7 @@ _RYSOWNICE: dict[str, Callable[[ImageDraw.ImageDraw, Callable[[float], float], i
     "dashboard": _rysuj_dashboard,
     "cykliczne": _rysuj_cykl,
     "koszty": _rysuj_wplyw,
+    "rentownosc": _rysuj_rentownosc,
 }
 
 

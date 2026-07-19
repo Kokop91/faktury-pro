@@ -21,7 +21,7 @@ class FormularzProduktu(OknoFormularza):
     def __init__(self, master, on_zapisano: Callable[[], None]):
         super().__init__(master)
         self.title("Dodaj produkt")
-        self.geometry("420x520")
+        self.geometry("420x580")
 
         self._on_zapisano = on_zapisano
 
@@ -68,6 +68,21 @@ class FormularzProduktu(OknoFormularza):
         self._pole_cena = ctk.CTkEntry(kontener, font=styl.CZCIONKA_TRESC)
         self._pole_cena.insert(0, "0,00")
         self._pole_cena.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        # Faza 25 - opcjonalny koszt zakupu/wytworzenia, do wskaznika
+        # rentownosci per produkt (gui/windows/widok_rentownosci.py). Puste
+        # pole = None (appka nie zna kosztu), NIGDY traktowane jako 0.
+        ctk.CTkLabel(
+            kontener,
+            text="Koszt zakupu (opcjonalnie)",
+            font=styl.CZCIONKA_ETYKIETA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            anchor="w",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
+        self._pole_koszt_zakupu = ctk.CTkEntry(
+            kontener, font=styl.CZCIONKA_TRESC, placeholder_text="nieznany"
+        )
+        self._pole_koszt_zakupu.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
 
         ctk.CTkLabel(
             kontener,
@@ -166,6 +181,17 @@ class FormularzProduktu(OknoFormularza):
             self._banner.pokaz(f"Nieprawidłowa cena netto: {e}")
             return None
 
+        koszt_zakupu_tekst = self._pole_koszt_zakupu.get().strip()
+        koszt_zakupu_grosze = None
+        if koszt_zakupu_tekst:
+            try:
+                koszt_zakupu_grosze = formatowanie.parsuj_kwote(
+                    koszt_zakupu_tekst, wymagaj_dodatniej=False
+                )
+            except ValueError as e:
+                self._banner.pokaz(f"Nieprawidłowy koszt zakupu: {e}")
+                return None
+
         stawka = _KLUCZE_WG_ETYKIETY_STAWKI.get(self._var_stawka.get(), "23")
 
         self._banner.ukryj()
@@ -173,6 +199,7 @@ class FormularzProduktu(OknoFormularza):
             "nazwa": nazwa,
             "jednostka_miary": jednostka,
             "cena_netto_grosze": cena_grosze,
+            "koszt_zakupu_grosze": koszt_zakupu_grosze,
             "domyslna_stawka_vat": stawka,
             "jest_magazynowy": bool(self._var_towar.get()),
             "objety_zalacznikiem_15": bool(self._var_zalacznik_15.get()),

@@ -214,6 +214,15 @@ def pobierz_historie_ruchow_produktu(produkt_id: int) -> list[dict]:
     ).json()
 
 
+def ustaw_koszt_zakupu_produktu(produkt_id: int, koszt_zakupu_grosze: int | None) -> dict:
+    return _wykonaj(
+        "PATCH",
+        f"/produkty/{produkt_id}/koszt-zakupu",
+        TIMEOUT_ZAPIS,
+        json={"koszt_zakupu_grosze": koszt_zakupu_grosze},
+    ).json()
+
+
 def pobierz_magazyny(
     tylko_aktywne: bool = True, skip: int = 0, limit: int = 200
 ) -> list[dict]:
@@ -574,6 +583,50 @@ def pobierz_dokumenty_kosztowe(
 
 def liczba_nowych_dokumentow_kosztowych() -> int:
     return _wykonaj("GET", "/dokumenty-kosztowe/liczba-nowych", TIMEOUT_ODCZYT).json()["liczba_nowych"]
+
+
+def pobierz_koszty_reczne(
+    data_od: str | None = None,
+    data_do: str | None = None,
+    skip: int = 0,
+    limit: int = 200,
+) -> list[dict]:
+    parametry: dict = {"skip": skip, "limit": limit}
+    if data_od:
+        parametry["data_od"] = data_od
+    if data_do:
+        parametry["data_do"] = data_do
+    return _wykonaj("GET", "/koszty-reczne", TIMEOUT_ODCZYT, params=parametry).json()
+
+
+def utworz_koszt_reczny(dane: dict) -> dict:
+    return _wykonaj("POST", "/koszty-reczne", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def aktualizuj_koszt_reczny(koszt_id: int, dane: dict) -> dict:
+    return _wykonaj("PUT", f"/koszty-reczne/{koszt_id}", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def usun_koszt_reczny(koszt_id: int) -> None:
+    _wykonaj("DELETE", f"/koszty-reczne/{koszt_id}", TIMEOUT_ZAPIS)
+
+
+def pobierz_marze(rok: int, miesiac: int | None, wariant: str) -> dict:
+    parametry: dict = {"rok": rok, "wariant": wariant}
+    if miesiac is not None:
+        parametry["miesiac"] = miesiac
+    return _wykonaj("GET", "/rentownosc/marza", TIMEOUT_ODCZYT, params=parametry).json()
+
+
+def pobierz_rentownosc_produktow(rok: int, miesiac: int | None, wariant: str) -> list[dict]:
+    parametry: dict = {"rok": rok, "wariant": wariant}
+    if miesiac is not None:
+        parametry["miesiac"] = miesiac
+    return _wykonaj("GET", "/rentownosc/produkty", TIMEOUT_ODCZYT, params=parametry).json()
+
+
+def pobierz_prognoze_wplywow() -> dict:
+    return _wykonaj("GET", "/rentownosc/prognoza-wplywow", TIMEOUT_ODCZYT).json()
 
 
 def pobierz_dokument_kosztowy(dokument_id: int) -> dict:

@@ -12,6 +12,7 @@ from gui.windows.widok_klientow import WidokKlientow
 from gui.windows.widok_magazynu import WidokMagazynu
 from gui.windows.widok_naleznosci import WidokNaleznosci
 from gui.windows.widok_ofert import WidokOfert
+from gui.windows.widok_rentownosci import WidokRentownosci
 from gui.windows.widok_ustawien import WidokUstawien
 
 _KLUCZ_GEOMETRII = "geometria_okna_glownego"
@@ -211,6 +212,8 @@ class GlowneOkno(ctk.CTk):
             return WidokNaleznosci(self._kontener)
         if klucz == "koszty":
             return WidokDokumentowKosztowych(self._kontener)
+        if klucz == "rentownosc":
+            return WidokRentownosci(self._kontener)
         if klucz == "klienci":
             return WidokKlientow(self._kontener)
         if klucz == "magazyn":
@@ -252,6 +255,7 @@ class _PasekBoczny(ctk.CTkFrame):
         ("oferty", "Oferty"),
         ("naleznosci", "Należności"),
         ("koszty", "Dokumenty kosztowe"),
+        ("rentownosc", "Rentowność"),
         ("klienci", "Klienci"),
         ("magazyn", "Magazyn"),
         ("ustawienia", "Ustawienia"),
