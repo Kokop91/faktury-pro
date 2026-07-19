@@ -91,6 +91,22 @@ h1, h2 {
     text-transform: uppercase;
 }
 
+.ostrzezenie-oferta {
+    margin-bottom: 12pt;
+    padding: 8pt;
+    border: 2pt solid #b45309;
+    background: #fef3c7;
+}
+
+.ostrzezenie-oferta p {
+    margin: 0;
+    font-size: 12pt;
+    font-weight: bold;
+    text-align: center;
+    text-transform: uppercase;
+    color: #92400e;
+}
+
 .przyczyna-korekty h2 {
     font-size: 10pt;
     margin: 0 0 4pt 0;

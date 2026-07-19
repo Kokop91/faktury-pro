@@ -56,6 +56,14 @@ class Faktura(Base):
     )
     okres_cykliczny: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+    # Faza 24 - wypelnione wylacznie dla faktur wystawionych z zaakceptowanej
+    # oferty (app/services/oferty.py:wystaw_fakture_z_oferty). Sluzy zarowno
+    # do sledzenia historii (oferta -> faktura), jak i do zablokowania
+    # podwojnego wystawienia tej samej oferty (patrz Oferta.faktury_wygenerowane).
+    oferta_zrodlowa_id: Mapped[int | None] = mapped_column(
+        ForeignKey("oferty.id"), nullable=True
+    )
+
     # Faza 12B - stan wysylki do KSeF, niezalezny od `status` biznesowego
     # powyzej. numer_ksef i upo_xml sa wypelniane dopiero po przyjeciu przez
     # KSeF; przyczyna_odrzucenia_ksef - po odrzuceniu. ksef_numer_ref_sesji/
@@ -102,6 +110,9 @@ class Faktura(Base):
     )
 
     szablon_cykliczny: Mapped["SzablonCykliczny | None"] = relationship(
+        back_populates="faktury_wygenerowane"
+    )
+    oferta_zrodlowa: Mapped["Oferta | None"] = relationship(
         back_populates="faktury_wygenerowane"
     )
 

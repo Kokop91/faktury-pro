@@ -94,6 +94,17 @@ def _rysuj_wplyw(rysuj: ImageDraw.ImageDraw, s: Callable[[float], float], w: flo
     rysuj.polygon([(s(8), s(11)), (s(16), s(11)), (s(12), s(15.5))], fill="white")
 
 
+def _rysuj_oferta(rysuj: ImageDraw.ImageDraw, s: Callable[[float], float], w: float) -> None:
+    """Dokument (jak _rysuj_dokument) z ptaszkiem zamiast linii tekstu -
+    symbolizuje oferte/wycene oczekujaca na akceptacje klienta, w odroznieniu
+    od ikony "faktury" (juz wystawiony dokument ksiegowy)."""
+    rysuj.rounded_rectangle(
+        [s(5), s(3), s(19), s(21)], radius=s(2), outline="white", width=w
+    )
+    rysuj.line([s(8.5), s(13), s(11), s(15.5)], fill="white", width=w)
+    rysuj.line([s(11), s(15.5), s(15.5), s(9.5)], fill="white", width=w)
+
+
 def _rysuj_cykl(rysuj: ImageDraw.ImageDraw, s: Callable[[float], float], w: float) -> None:
     """Dwa luki z grocikami (jak ikona "odswiez/powtorz") - symbolizuja
     powtarzajacy sie w czasie szablon faktury cyklicznej."""
@@ -106,6 +117,7 @@ def _rysuj_cykl(rysuj: ImageDraw.ImageDraw, s: Callable[[float], float], w: floa
 
 _RYSOWNICE: dict[str, Callable[[ImageDraw.ImageDraw, Callable[[float], float], int], None]] = {
     "faktury": _rysuj_dokument,
+    "oferty": _rysuj_oferta,
     "naleznosci": _rysuj_wallet,
     "klienci": _rysuj_osoba,
     "magazyn": _rysuj_magazyn,

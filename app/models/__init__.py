@@ -6,6 +6,7 @@ from app.models.enums import (
     StatusFaktury,
     StatusInwentaryzacji,
     StatusKsef,
+    StatusOferty,
     StatusSzablonuCyklicznego,
     StawkaVat,
     TrybBlokadyStanu,
@@ -20,11 +21,14 @@ from app.models.klient import Klient
 from app.models.licznik_numeracji import LicznikNumeracji
 from app.models.licznik_numeracji_inwentaryzacji import LicznikNumeracjiInwentaryzacji
 from app.models.licznik_numeracji_magazynowej import LicznikNumeracjiMagazynowej
+from app.models.licznik_numeracji_ofert import LicznikNumeracjiOfert
 from app.models.magazyn import Magazyn
+from app.models.oferta import Oferta
 from app.models.platnosc_faktury import PlatnoscFaktury
 from app.models.pozycja_dokumentu_magazynowego import PozycjaDokumentuMagazynowego
 from app.models.pozycja_faktury import PozycjaFaktury
 from app.models.pozycja_inwentaryzacji import PozycjaInwentaryzacji
+from app.models.pozycja_oferty import PozycjaOferty
 from app.models.pozycja_szablonu_cyklicznego import PozycjaSzablonuCyklicznego
 from app.models.produkt import Produkt
 from app.models.przypomnienie_platnosci import PrzypomnieniePlatnosci
@@ -41,6 +45,7 @@ __all__ = [
     "LicznikNumeracji",
     "LicznikNumeracjiMagazynowej",
     "LicznikNumeracjiInwentaryzacji",
+    "LicznikNumeracjiOfert",
     "Produkt",
     "Magazyn",
     "StanMagazynowy",
@@ -50,10 +55,13 @@ __all__ = [
     "PozycjaInwentaryzacji",
     "SzablonCykliczny",
     "PozycjaSzablonuCyklicznego",
+    "Oferta",
+    "PozycjaOferty",
     "StawkaVat",
     "TypDokumentu",
     "StatusFaktury",
     "StatusKsef",
+    "StatusOferty",
     "TypDokumentuMagazynowego",
     "TrybBlokadyStanu",
     "StatusInwentaryzacji",

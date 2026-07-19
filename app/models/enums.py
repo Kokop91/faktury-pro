@@ -29,6 +29,20 @@ class StatusFaktury(str, enum.Enum):
     ANULOWANA = "anulowana"
 
 
+class StatusOferty(str, enum.Enum):
+    """Status oferty (Faza 24) - niezalezny od StatusFaktury, oferta NIE jest
+    dokumentem ksiegowym i nie podlega KSeF/JPK. WYGASLA jest wylacznie
+    wartoscia status_efektywny (patrz app/services/oferty.py:
+    oblicz_status_efektywny) - nigdy nie pojawia sie jako klucz ani wartosc w
+    DOZWOLONE_PRZEJSCIA_STATUSU, wiec nie da sie jej trwale zapisac."""
+
+    ROBOCZA = "robocza"
+    WYSLANA = "wyslana"
+    ZAAKCEPTOWANA = "zaakceptowana"
+    ODRZUCONA = "odrzucona"
+    WYGASLA = "wygasla"
+
+
 class StatusDokumentuKosztowego(str, enum.Enum):
     """Stan przegladu dokumentu kosztowego (Faza 12C) pobranego z KSeF - CZYSTO
     rejestrowy/informacyjny, bez integracji ksiegowej (to potencjalny temat

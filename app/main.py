@@ -15,6 +15,7 @@ from app.api import (
     ksef,
     magazyn,
     magazyny,
+    oferty,
     produkty,
     przypomnienia,
     raporty,
@@ -26,6 +27,7 @@ app = FastAPI(title="Faktury Pro")
 app.include_router(klienci.router)
 app.include_router(faktury.router)
 app.include_router(faktury_cykliczne.router)
+app.include_router(oferty.router)
 app.include_router(produkty.router)
 app.include_router(magazyny.router)
 app.include_router(magazyn.router)

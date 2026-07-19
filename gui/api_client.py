@@ -151,6 +151,48 @@ def pobierz_naleznosci() -> dict:
     return _wykonaj("GET", "/faktury/naleznosci", TIMEOUT_ODCZYT).json()
 
 
+def pobierz_oferty(
+    status: str | None = None,
+    klient_id: int | None = None,
+    skip: int = 0,
+    limit: int = 200,
+) -> list[dict]:
+    parametry = {"skip": skip, "limit": limit}
+    if status:
+        parametry["status"] = status
+    if klient_id is not None:
+        parametry["klient_id"] = klient_id
+    return _wykonaj("GET", "/oferty", TIMEOUT_ODCZYT, params=parametry).json()
+
+
+def pobierz_oferte(oferta_id: int) -> dict:
+    return _wykonaj("GET", f"/oferty/{oferta_id}", TIMEOUT_ODCZYT).json()
+
+
+def utworz_oferte(dane: dict) -> dict:
+    return _wykonaj("POST", "/oferty", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def aktualizuj_oferte(oferta_id: int, dane: dict) -> dict:
+    return _wykonaj("PUT", f"/oferty/{oferta_id}", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def zmien_status_oferty(oferta_id: int, status: str) -> dict:
+    return _wykonaj(
+        "PATCH", f"/oferty/{oferta_id}/status", TIMEOUT_ZAPIS, json={"status": status}
+    ).json()
+
+
+def wystaw_fakture_z_oferty(oferta_id: int) -> dict:
+    return _wykonaj(
+        "POST", f"/oferty/{oferta_id}/wystaw-fakture", TIMEOUT_ZAPIS
+    ).json()
+
+
+def pobierz_pdf_oferty(oferta_id: int) -> bytes:
+    return _wykonaj("GET", f"/oferty/{oferta_id}/pdf", TIMEOUT_PDF).content
+
+
 def pobierz_produkty(
     tylko_aktywne: bool = True, skip: int = 0, limit: int = 200
 ) -> list[dict]:

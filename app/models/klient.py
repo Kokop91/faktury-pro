@@ -38,3 +38,4 @@ class Klient(Base):
 
     firma: Mapped["Firma"] = relationship(back_populates="klienci")
     faktury: Mapped[list["Faktura"]] = relationship(back_populates="klient")
+    oferty: Mapped[list["Oferta"]] = relationship(back_populates="klient")

@@ -48,6 +48,16 @@ KOLORY_STATUSU: dict[str, tuple[str, str]] = {
     "anulowana": KOLOR_TEKST_DRUGORZEDNY,
 }
 
+# Kolor tekstu statusu oferty (Faza 24) - mirror KOLORY_STATUSU. "wygasla" uzywa
+# tej samej "pilnosci" co "po_terminie" dla faktur (termin minal, wymaga uwagi).
+KOLORY_STATUSU_OFERTY: dict[str, tuple[str, str]] = {
+    "robocza": KOLOR_TEKST_DRUGORZEDNY,
+    "wyslana": KOLOR_TEKST_GLOWNY,
+    "zaakceptowana": KOLOR_SUKCES,
+    "odrzucona": KOLOR_BLAD,
+    "wygasla": KOLOR_BLAD,
+}
+
 SZEROKOSC_SIDEBAR = 220
 ODSTEP_MIKRO = 4
 ODSTEP_ETYKIETA = 2

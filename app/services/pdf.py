@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 from weasyprint import HTML
 
-from app.models import Faktura, Klient
+from app.models import Faktura, Klient, Oferta
 from app.models.enums import StawkaVat, TypDokumentu
 from app.sciezki import katalog_bazowy
 from app.services.faktury import podsumowanie_wg_stawek
@@ -131,3 +131,41 @@ def generuj_pdf_faktury(
     html = szablon.render(**kontekst)
     pdf_bytes = HTML(string=html, base_url=str(TEMPLATES_DIR)).write_pdf()
     return pdf_bytes, faktura.numer
+
+
+def _pobierz_oferte_do_pdf(db: Session, oferta_id: int) -> Oferta:
+    zapytanie = (
+        select(Oferta)
+        .options(
+            selectinload(Oferta.pozycje),
+            joinedload(Oferta.klient).joinedload(Klient.firma),
+        )
+        .where(Oferta.id == oferta_id)
+    )
+    oferta = db.execute(zapytanie).unique().scalar_one_or_none()
+    if oferta is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nie znaleziono oferty o podanym id.",
+        )
+    return oferta
+
+
+def generuj_pdf_oferty(db: Session, oferta_id: int) -> tuple[bytes, str]:
+    """PDF oferty (Faza 24) - NIE dokument ksiegowy, dlatego renderowany z
+    dedykowanego, samodzielnego szablonu (app/templates/oferta.html), nie
+    przez bazowy.html/warianty (ten ostatni jest napisany wprost pod ksztalt
+    Faktury - termin_platnosci/wymaga_mpp/dokument_powiazany/KSeF - i nie ma
+    sensu naciagac go pod inny dokument)."""
+    oferta = _pobierz_oferte_do_pdf(db, oferta_id)
+    kontekst = {
+        "oferta": oferta,
+        "firma": oferta.klient.firma,
+        "klient": oferta.klient,
+        "podsumowanie_vat": podsumowanie_wg_stawek(oferta.pozycje),
+        "logo_uri": _logo_uri(oferta.klient.firma.logo_path),
+    }
+    szablon = _jinja_env.get_template("oferta.html")
+    html = szablon.render(**kontekst)
+    pdf_bytes = HTML(string=html, base_url=str(TEMPLATES_DIR)).write_pdf()
+    return pdf_bytes, oferta.numer

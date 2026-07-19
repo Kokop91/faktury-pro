@@ -13,6 +13,14 @@ ETYKIETY_STATUSU: dict[str, str] = {
     "anulowana": "Anulowana",
 }
 
+ETYKIETY_STATUSU_OFERTY: dict[str, str] = {
+    "robocza": "Robocza",
+    "wyslana": "Wysłana",
+    "zaakceptowana": "Zaakceptowana",
+    "odrzucona": "Odrzucona",
+    "wygasla": "Wygasła",
+}
+
 ETYKIETY_STATUSU_DOKUMENTU_KOSZTOWEGO: dict[str, str] = {
     "nowa": "Nowa",
     "zaakceptowana": "Zaakceptowana",
@@ -147,6 +155,14 @@ def kolor_statusu(status: str) -> str:
 
 def formatuj_typ_dokumentu(typ: str) -> str:
     return ETYKIETY_TYPU_DOKUMENTU.get(typ, typ)
+
+
+def formatuj_status_oferty(status: str) -> str:
+    return ETYKIETY_STATUSU_OFERTY.get(status, status)
+
+
+def kolor_statusu_oferty(status: str) -> tuple[str, str]:
+    return styl.KOLORY_STATUSU_OFERTY.get(status, styl.KOLOR_TEKST_GLOWNY)
 
 
 def formatuj_status_dokumentu_kosztowego(status: str) -> str:

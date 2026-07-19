@@ -11,6 +11,7 @@ from gui.windows.widok_faktur_cyklicznych import WidokFakturCyklicznych
 from gui.windows.widok_klientow import WidokKlientow
 from gui.windows.widok_magazynu import WidokMagazynu
 from gui.windows.widok_naleznosci import WidokNaleznosci
+from gui.windows.widok_ofert import WidokOfert
 from gui.windows.widok_ustawien import WidokUstawien
 
 _KLUCZ_GEOMETRII = "geometria_okna_glownego"
@@ -204,6 +205,8 @@ class GlowneOkno(ctk.CTk):
             return WidokFaktur(self._kontener)
         if klucz == "cykliczne":
             return WidokFakturCyklicznych(self._kontener)
+        if klucz == "oferty":
+            return WidokOfert(self._kontener)
         if klucz == "naleznosci":
             return WidokNaleznosci(self._kontener)
         if klucz == "koszty":
@@ -246,6 +249,7 @@ class _PasekBoczny(ctk.CTkFrame):
         ("dashboard", "Dashboard"),
         ("faktury", "Faktury"),
         ("cykliczne", "Faktury cykliczne"),
+        ("oferty", "Oferty"),
         ("naleznosci", "Należności"),
         ("koszty", "Dokumenty kosztowe"),
         ("klienci", "Klienci"),
