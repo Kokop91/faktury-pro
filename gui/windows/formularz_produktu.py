@@ -96,6 +96,32 @@ class FormularzProduktu(OknoFormularza):
             hover_color=styl.KOLOR_AKCENT_HOVER,
         ).pack(fill="x", pady=(0, styl.ODSTEP_MALY), anchor="w")
 
+        # Faza 21 (split payment) - swiadomy wybor uzytkownika, appka nie moze
+        # sama wiedziec, ze dany towar/usluga jest objety zalacznikiem nr 15.
+        self._var_zalacznik_15 = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            kontener,
+            text="Towar/usługa z załącznika nr 15 do ustawy o VAT",
+            font=styl.CZCIONKA_TRESC,
+            variable=self._var_zalacznik_15,
+            fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MIKRO), anchor="w")
+        ctk.CTkLabel(
+            kontener,
+            text=(
+                "Załącznik nr 15 to lista towarów i usług objętych obowiązkowym "
+                "mechanizmem podzielonej płatności (m.in. wyroby stalowe, złom, "
+                "elektronika, paliwa, części samochodowe, usługi budowlane) - "
+                "zaznacz, jeśli ten produkt się na niej znajduje."
+            ),
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            wraplength=380,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
         przyciski = ctk.CTkFrame(self, fg_color="transparent")
         przyciski.pack(fill="x", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY))
 
@@ -149,6 +175,7 @@ class FormularzProduktu(OknoFormularza):
             "cena_netto_grosze": cena_grosze,
             "domyslna_stawka_vat": stawka,
             "jest_magazynowy": bool(self._var_towar.get()),
+            "objety_zalacznikiem_15": bool(self._var_zalacznik_15.get()),
         }
 
     def _zapisz(self) -> None:

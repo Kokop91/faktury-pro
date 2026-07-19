@@ -28,6 +28,17 @@ class Produkt(Base):
     # w stany_magazynowe ani pozycji w dokumentach magazynowych.
     jest_magazynowy: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
+    # Faza 21 (split payment) - swiadomy wybor uzytkownika przy tworzeniu
+    # produktu: appka nie moze sama wiedziec, ze dany towar/usluga jest
+    # "wyrobem stalowym" czy inna pozycja z zalacznika nr 15 do ustawy o VAT
+    # bez informacji od czlowieka. Uzywane do automatycznego wykrywania
+    # obowiazku MPP na fakturze (app/services/mpp_service.py) przez
+    # dopasowanie PozycjaFaktury.nazwa po tekscie (ten sam wzorzec co
+    # dopasowanie WZ z Fazy 19 - PozycjaFaktury nie ma FK do Produkt).
+    objety_zalacznikiem_15: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+
     aktywny: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     utworzono: Mapped[datetime] = mapped_column(server_default=func.now())

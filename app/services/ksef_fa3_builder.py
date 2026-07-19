@@ -12,9 +12,11 @@ odpowiadajace typom dokumentu FAKTURA_VAT / FAKTURA_ZALICZKOWA /
 FAKTURA_KONCOWA / FAKTURA_KORYGUJACA. Swiadomie POMIJA (jako opcjonalne w
 XSD i nieuzywane przez model danych appki): Platnosc, WarunkiTransakcji,
 Zamowienie, Rozliczenie, Podmiot3, PodmiotUpowazniony, GTU/Procedura,
-oznaczenia specjalne (marza, nowe srodki transportu, MPP, TP) - wszystkie te
-pola sa opcjonalne w schemacie, wiec ich pominiecie nie narusza poprawnosci
-dokumentu dla zwyklej krajowej sprzedazy towarow/uslug.
+oznaczenia specjalne poza MPP (marza, nowe srodki transportu, TP) - wszystkie
+te pola sa opcjonalne w schemacie, wiec ich pominiecie nie narusza poprawnosci
+dokumentu dla zwyklej krajowej sprzedazy towarow/uslug. P_18A (mechanizm
+podzielonej platnosci) jest polem WYMAGANYM w schemacie (nie opcjonalnym) i
+mapowany jest z Faktura.wymaga_mpp od Fazy 21 (app/services/mpp_service.py).
 
 WAZNE OGRANICZENIE: pozycje ze stawka VAT "zw" (zwolnione) sa CELOWO
 zablokowane (patrz KsefKwalifikowalnoscError w _sprawdz_kwalifikowalnosc) -
@@ -218,7 +220,10 @@ def _zbuduj_fa(root: etree._Element, faktura: Faktura) -> None:
     _sub(adnotacje, "P_16", "2")
     _sub(adnotacje, "P_17", "2")
     _sub(adnotacje, "P_18", "2")
-    _sub(adnotacje, "P_18A", "2")
+    # Faza 21 - mechanizm podzielonej platnosci (art. 106e ust. 1 pkt 18a
+    # ustawy o VAT). "1" gdy Faktura.wymaga_mpp, w przeciwnym razie "2" -
+    # pole wymagane w schemacie (nie minOccurs=0), KSeF waliduje jego obecnosc.
+    _sub(adnotacje, "P_18A", "1" if faktura.wymaga_mpp else "2")
     zwolnienie = _sub(adnotacje, "Zwolnienie")
     _sub(zwolnienie, "P_19N", "1")
     nowe_srodki = _sub(adnotacje, "NoweSrodkiTransportu")

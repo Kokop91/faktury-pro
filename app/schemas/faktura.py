@@ -98,6 +98,10 @@ class FakturaCreate(BaseModel):
     dokument_powiazany_id: int | None = None
     przyczyna_korekty: str | None = Field(default=None, max_length=2000)
     pozycje: list[PozycjaFakturyCreate] = Field(default_factory=list)
+    # Faza 21 (split payment) - None = pozwol serwisowi wykryc obowiazek MPP
+    # automatycznie (app/services/mpp_service.py); True/False = swiadome
+    # reczne nadpisanie sugestii (dobrowolne MPP jest dozwolone).
+    wymaga_mpp: bool | None = None
 
     @model_validator(mode="after")
     def _sprawdz_zgodnosc_typu_dokumentu(self) -> "FakturaCreate":
@@ -123,6 +127,10 @@ class FakturaUpdate(BaseModel):
     dokument_powiazany_id: int | None = None
     przyczyna_korekty: str | None = Field(default=None, max_length=2000)
     pozycje: list[PozycjaFakturyCreate] | None = None
+    # Faza 21 - patrz komentarz przy FakturaCreate.wymaga_mpp. Klucz nieobecny
+    # w zadaniu (model_fields_set) = przelicz sugestie na nowo, jesli pozycje/
+    # klient sie zmienily; podana wartosc bool = reczne nadpisanie.
+    wymaga_mpp: bool | None = None
 
 
 class FakturaStatusUpdate(BaseModel):
@@ -168,6 +176,7 @@ class FakturaOut(BaseModel):
     numer_ksef: str | None
     przyczyna_odrzucenia_ksef: str | None
     ma_upo: bool
+    wymaga_mpp: bool
     pozycje: list[PozycjaFakturyOut]
     suma_netto_grosze: int
     suma_vat_grosze: int

@@ -26,6 +26,10 @@ class Firma(Base):
 
     bank_nazwa: Mapped[str | None] = mapped_column(String(255))
     bank_numer_konta: Mapped[str | None] = mapped_column(String(34))
+    # Faza 21 (split payment) - rachunek VAT wyswietlany na fakturach objetych
+    # MPP obok zwyklego numeru konta. Czysto informacyjne - appka nie zarzadza
+    # samymi przelewami ani nie sprawdza zgodnosci tego numeru z bankiem.
+    bank_numer_konta_vat: Mapped[str | None] = mapped_column(String(34))
 
     logo_path: Mapped[str | None] = mapped_column(String(500))
 

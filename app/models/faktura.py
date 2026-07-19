@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, Date, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -71,6 +71,13 @@ class Faktura(Base):
     przyczyna_odrzucenia_ksef: Mapped[str | None] = mapped_column(Text, nullable=True)
     ksef_numer_ref_sesji: Mapped[str | None] = mapped_column(String(36), nullable=True)
     ksef_numer_ref_faktury: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+    # Faza 21 - obowiazek mechanizmu podzielonej platnosci (art. 105a ust. 1,
+    # art. 106e ust. 1 pkt 18a i zalacznik nr 15 ustawy o VAT). Domyslnie
+    # wyliczane automatycznie przy tworzeniu/edycji (app/services/mpp_service.py),
+    # ale zawsze mozliwe do recznego nadpisania - dobrowolne zastosowanie MPP
+    # jest dozwolone nawet ponizej progu / dla towarow spoza zalacznika 15.
+    wymaga_mpp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     utworzono: Mapped[datetime] = mapped_column(server_default=func.now())
     zaktualizowano: Mapped[datetime] = mapped_column(

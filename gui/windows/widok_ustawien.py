@@ -30,6 +30,7 @@ POLA_FIRMY = [
     ("telefon", "Telefon", False),
     ("bank_nazwa", "Nazwa banku", False),
     ("bank_numer_konta", "Numer konta bankowego", False),
+    ("bank_numer_konta_vat", "Numer rachunku VAT (do MPP)", False),
 ]
 
 ETYKIETA_JDG = "Osoba fizyczna (JDG)"
@@ -452,7 +453,7 @@ class WidokUstawien(ctk.CTkFrame):
             dane["logo_path"] = self._logo_sciezka
         for klucz in (
             "ulica", "kod_pocztowy", "miejscowosc", "kraj", "email", "telefon",
-            "bank_nazwa", "bank_numer_konta",
+            "bank_nazwa", "bank_numer_konta", "bank_numer_konta_vat",
         ):
             wartosc = self._pola_firmy[klucz].get().strip()
             if wartosc:

@@ -17,6 +17,7 @@ class FirmaBase(BaseModel):
     telefon: str | None = Field(default=None, max_length=30)
     bank_nazwa: str | None = Field(default=None, max_length=255)
     bank_numer_konta: str | None = Field(default=None, max_length=34)
+    bank_numer_konta_vat: str | None = Field(default=None, max_length=34)
     logo_path: str | None = Field(default=None, max_length=500)
     domyslna_stawka_vat: StawkaVat = StawkaVat.STAWKA_23
     tryb_blokady_ujemnego_stanu: TrybBlokadyStanu = TrybBlokadyStanu.OSTRZEGAJ
@@ -46,6 +47,7 @@ class FirmaUpdate(BaseModel):
     telefon: str | None = Field(default=None, max_length=30)
     bank_nazwa: str | None = Field(default=None, max_length=255)
     bank_numer_konta: str | None = Field(default=None, max_length=34)
+    bank_numer_konta_vat: str | None = Field(default=None, max_length=34)
     logo_path: str | None = Field(default=None, max_length=500)
     domyslna_stawka_vat: StawkaVat | None = None
     tryb_blokady_ujemnego_stanu: TrybBlokadyStanu | None = None

@@ -12,6 +12,7 @@ class ProduktBase(BaseModel):
     cena_netto_grosze: int = Field(ge=0)
     domyslna_stawka_vat: StawkaVat = StawkaVat.STAWKA_23
     jest_magazynowy: bool
+    objety_zalacznikiem_15: bool = False
 
 
 class ProduktCreate(ProduktBase):

@@ -196,6 +196,11 @@ class SzczegolyFaktury(OknoFormularza):
                 None,
             ),
             ("Waluta", waluta_tekst, None),
+            (
+                "Split payment (MPP)",
+                "Tak — wymagana adnotacja" if faktura.get("wymaga_mpp") else "Nie",
+                styl.KOLOR_OSTRZEZENIE if faktura.get("wymaga_mpp") else None,
+            ),
         ]
         if faktura.get("numer_ksef"):
             wiersze_info.append(("Numer KSeF", faktura["numer_ksef"], None))

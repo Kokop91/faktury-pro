@@ -30,6 +30,7 @@ class FormularzFaktury(OknoFormularza):
         self._waluta_edytowana_recznie = False
         self._kurs_edytowany_recznie = False
         self._ostatnia_waluta_pobranego_kursu: str | None = None
+        self._wymaga_mpp_edytowany_recznie = False
 
         self._etykieta_ladowania = ctk.CTkLabel(
             self, text="Ładowanie...", font=styl.CZCIONKA_TRESC, text_color=styl.KOLOR_TEKST_DRUGORZEDNY
@@ -276,6 +277,40 @@ class FormularzFaktury(OknoFormularza):
         )
         ctk.CTkFrame(podsumowanie, fg_color="transparent", height=styl.ODSTEP_MALY).pack()
 
+        # Split payment / MPP (Faza 21) - domyslnie wykrywane automatycznie po
+        # zapisie (prog 15 000 zl brutto + towar/usluga z zalacznika 15 +
+        # status VAT nabywcy), ale zawsze mozliwe do recznego nadpisania -
+        # dobrowolne zastosowanie MPP jest dozwolone.
+        ramka_mpp = ctk.CTkFrame(
+            przewijany, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        ramka_mpp.grid(
+            row=8, column=0, columnspan=2, sticky="ew", padx=styl.ODSTEP_MALY, pady=(0, styl.ODSTEP_SREDNI)
+        )
+        self._var_wymaga_mpp = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            ramka_mpp,
+            text="Mechanizm podzielonej płatności (MPP / split payment)",
+            font=styl.CZCIONKA_TRESC_POGRUBIONA,
+            variable=self._var_wymaga_mpp,
+            command=lambda: setattr(self, "_wymaga_mpp_edytowany_recznie", True),
+            fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+        ).pack(fill="x", padx=styl.ODSTEP_SREDNI, pady=(styl.ODSTEP_SREDNI, styl.ODSTEP_MIKRO), anchor="w")
+        ctk.CTkLabel(
+            ramka_mpp,
+            text=(
+                "Wykrywane automatycznie po zapisaniu faktury (próg 15 000 zł "
+                "brutto, pozycja z załącznika 15, status VAT nabywcy) - to pole "
+                "możesz zaznaczyć/odznaczyć ręcznie, żeby nadpisać sugestię."
+            ),
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            wraplength=560,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", padx=styl.ODSTEP_SREDNI, pady=(0, styl.ODSTEP_SREDNI))
+
         # Przyciski akcji - poza przewijanym obszarem, zawsze widoczne
         pasek_przyciskow = ctk.CTkFrame(self, fg_color="transparent")
         pasek_przyciskow.grid(row=2, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY)
@@ -505,6 +540,11 @@ class FormularzFaktury(OknoFormularza):
         if faktura.get("przyczyna_korekty"):
             self._pole_przyczyna_korekty.insert("1.0", faktura["przyczyna_korekty"])
 
+        # Wartosc juz zapisana w bazie - NIE oznaczamy jako "edytowana recznie",
+        # zeby dalsza edycja pozycji/klienta w tym oknie nadal pozwalala
+        # serwisowi przeliczyc sugestie MPP na nowo po zapisie (patrz _zbierz_i_zwaliduj).
+        self._var_wymaga_mpp.set(bool(faktura.get("wymaga_mpp", False)))
+
         for pozycja in faktura.get("pozycje", []):
             wiersz = WierszPozycji(
                 self._kontener_wierszy,
@@ -608,6 +648,8 @@ class FormularzFaktury(OknoFormularza):
             dane["termin_platnosci"] = termin_platnosci.isoformat()
         if waluta:
             dane["waluta"] = waluta
+        if self._wymaga_mpp_edytowany_recznie:
+            dane["wymaga_mpp"] = bool(self._var_wymaga_mpp.get())
         return dane
 
     def _zapisz(self, wystaw: bool) -> None:
@@ -629,7 +671,15 @@ class FormularzFaktury(OknoFormularza):
         def sukces(wynik) -> None:
             self._on_zapisano()
             self.destroy()
-            pokaz_toast(self.master, f"Faktura {wynik['numer']} zapisana.")
+            komunikat = f"Faktura {wynik['numer']} zapisana."
+            if wynik.get("wymaga_mpp"):
+                pokaz_toast(
+                    self.master,
+                    f"{komunikat} Wymaga mechanizmu podzielonej płatności.",
+                    "ostrzezenie",
+                )
+            else:
+                pokaz_toast(self.master, komunikat)
 
         def blad(e: api_client.ApiError) -> None:
             self._ustaw_przyciski_aktywne(True)

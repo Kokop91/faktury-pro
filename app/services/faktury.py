@@ -18,6 +18,7 @@ from app.schemas.faktura import (
     PozycjaFakturyCreate,
     znajdz_blad_zgodnosci_typu_dokumentu,
 )
+from app.services import mpp_service
 from app.services.numeracja import nastepny_numer_faktury
 
 UDZIAL_STAWKI_VAT: dict[StawkaVat, Decimal] = {
@@ -240,6 +241,15 @@ def utworz_fakture(db: Session, dane: FakturaCreate) -> Faktura:
     )
     waluta = dane.waluta or klient.domyslna_waluta
     numer = nastepny_numer_faktury(db, dane.data_wystawienia.year)
+    pozycje = _przelicz_pozycje(dane.pozycje)
+
+    if dane.wymaga_mpp is None:
+        suma_brutto_grosze = sum(p.wartosc_brutto_grosze for p in pozycje)
+        wymaga_mpp = mpp_service.sugeruj_wymaga_mpp(
+            db, klient, suma_brutto_grosze, [p.nazwa for p in pozycje]
+        )
+    else:
+        wymaga_mpp = dane.wymaga_mpp
 
     faktura = Faktura(
         numer=numer,
@@ -253,7 +263,8 @@ def utworz_fakture(db: Session, dane: FakturaCreate) -> Faktura:
         status=StatusFaktury.ROBOCZA,
         dokument_powiazany_id=dane.dokument_powiazany_id,
         przyczyna_korekty=dane.przyczyna_korekty,
-        pozycje=_przelicz_pozycje(dane.pozycje),
+        pozycje=pozycje,
+        wymaga_mpp=wymaga_mpp,
     )
 
     db.add(faktura)
@@ -273,7 +284,7 @@ def aktualizuj_fakture(db: Session, faktura_id: int, dane: FakturaUpdate) -> Fak
             ),
         )
 
-    zmiany = dane.model_dump(exclude_unset=True, exclude={"pozycje"})
+    zmiany = dane.model_dump(exclude_unset=True, exclude={"pozycje", "wymaga_mpp"})
     if "klient_id" in zmiany:
         _pobierz_klienta_lub_404(db, zmiany["klient_id"])
 
@@ -299,6 +310,23 @@ def aktualizuj_fakture(db: Session, faktura_id: int, dane: FakturaUpdate) -> Fak
         faktura.pozycje.clear()
         db.flush()
         faktura.pozycje.extend(_przelicz_pozycje(dane.pozycje))
+
+    # wymaga_mpp: reczna wartosc (nawet False) zawsze wygrywa jako swiadome
+    # nadpisanie; w przeciwnym razie, jesli pozycje albo klient mogly wplynac
+    # na sugestie, przeliczamy ja na nowo - nigdy nie zostawiamy przestarzalej
+    # wartosci po zmianie danych, od ktorych zalezy (patrz mpp_service).
+    pola_podane = dane.model_fields_set
+    if "wymaga_mpp" in pola_podane and dane.wymaga_mpp is not None:
+        faktura.wymaga_mpp = dane.wymaga_mpp
+    elif dane.pozycje is not None or "klient_id" in zmiany:
+        klient_aktualny = db.get(Klient, faktura.klient_id)
+        suma_brutto_grosze = sum(p.wartosc_brutto_grosze for p in faktura.pozycje)
+        faktura.wymaga_mpp = mpp_service.sugeruj_wymaga_mpp(
+            db,
+            klient_aktualny,
+            suma_brutto_grosze,
+            [p.nazwa for p in faktura.pozycje],
+        )
 
     db.commit()
     db.refresh(faktura)

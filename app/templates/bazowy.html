@@ -31,6 +31,9 @@
         {% if firma.bank_nazwa or firma.bank_numer_konta %}
             <p>{{ firma.bank_nazwa or "" }} {{ firma.bank_numer_konta or "" }}</p>
         {% endif %}
+        {% if faktura.wymaga_mpp and firma.bank_numer_konta_vat %}
+            <p>Rachunek VAT: {{ firma.bank_numer_konta_vat }}</p>
+        {% endif %}
     </div>
     <div class="nabywca">
         <h2>Nabywca</h2>
@@ -50,6 +53,12 @@
     <p>Termin płatności: {{ faktura.termin_platnosci.strftime("%d.%m.%Y") }}</p>
     <p>Waluta: {{ faktura.waluta }}{% if faktura.waluta != "PLN" %} (kurs: {{ faktura.kurs_waluty }}){% endif %}</p>
 </section>
+
+{% if faktura.wymaga_mpp %}
+<section class="mpp-adnotacja">
+    <p>Mechanizm podzielonej płatności</p>
+</section>
+{% endif %}
 
 {% if pokaz_dokument_powiazany %}
 <section class="dokument-powiazany">

@@ -34,6 +34,7 @@ POLA_FIRMY_KREATORA = [
     ("telefon", "Telefon"),
     ("bank_nazwa", "Nazwa banku"),
     ("bank_numer_konta", "Numer konta bankowego"),
+    ("bank_numer_konta_vat", "Numer rachunku VAT (do MPP)"),
 ]
 
 _ETYKIETY_STAWEK_VAT = [
@@ -218,7 +219,7 @@ class KrokFirma(_KrokBazowy):
         dane: dict = {"nazwa": nazwa, "nip": nip}
         for klucz in (
             "ulica", "kod_pocztowy", "miejscowosc", "kraj", "email", "telefon",
-            "bank_nazwa", "bank_numer_konta",
+            "bank_nazwa", "bank_numer_konta", "bank_numer_konta_vat",
         ):
             wartosc = self._pola[klucz].get().strip()
             if wartosc:
