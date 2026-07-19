@@ -129,9 +129,9 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
     dialogowym, jeśli aktywne jest PRODUKCYJNE.
 - **Kursy walut:** publiczne API NBP
 - **Dane firm po NIP:** API GUS/REGON
-- **Pakowanie do dystrybucji (Faza 18A+18B+18C, Etap 3 — zrobione: sam plik
-  wykonywalny + prywatny PostgreSQL + instalator Windows; 18D — kreator
-  pierwszego uruchomienia — jeszcze NIE zrobiony):** appka pakowana przez **PyInstaller**
+- **Pakowanie do dystrybucji (Faza 18A+18B+18C+18D, Etap 3 KOMPLETNY: sam
+  plik wykonywalny + prywatny PostgreSQL + instalator Windows + kreator
+  pierwszego uruchomienia):** appka pakowana przez **PyInstaller**
   (`faktury_pro.spec` w katalogu głównym repo — celowo WYJĄTEK od reguły
   `*.spec` w `.gitignore`, to ręcznie utrzymywany plik, nie auto-wygenerowane
   rusztowanie). Tryb `--onedir` + `--windowed` (nie `--onefile` — onedir jest
@@ -285,6 +285,99 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
       Symulacja osieroconego Postgresa (zweryfikowana we wcześniejszej
       sesji, nie powtarzana tu) opisana wyżej w sekcji o odporności na
       osierocone procesy.
+  - **Kreator pierwszego uruchomienia (Faza 18D, Etap 3 KOMPLETNY):**
+    zastępuje wszystkie ręczne kroki, które dotychczas wykonywał deweloper
+    przez terminal (ręczny `python -c` wstawiający testową `Firmę`, ręczny
+    `alembic upgrade head`) czymś, co realny użytkownik końcowy może sam
+    przejść.
+    - **Kolejność startu appki (`gui/main.py`) zmieniona:** hasło appki
+      (Faza 6) jest wymagane PRZED startem bazy/serwera TYLKO wtedy, gdy już
+      istnieje (`auth.czy_haslo_ustawione()` — plik lokalny, sprawdzenie
+      natychmiastowe). Gdy hasła jeszcze nie ma (pierwsze uruchomienie),
+      stary ekran logowania (`gui/windows/ekran_logowania.py`) jest pomijany
+      w ogóle — ten ekran obsługuje teraz WYŁĄCZNIE logowanie istniejącym
+      hasłem, martwy tryb "ustaw hasło przy pierwszym starcie" został z niego
+      usunięty. Ustawienie hasła przeszło do Kroku 2 kreatora, który rusza
+      PO starcie backendu, bo Krok 1 (dane firmy) potrzebuje działającego API.
+    - **Pasek postępu startu backendu** (`gui/windows/ekran_startu.py`,
+      `pokaz_podczas()`) — bez niego odstęp między zamknięciem ekranu
+      logowania a pojawieniem się głównego okna (kilka sekund, dłużej przy
+      pierwszym `initdb` + pierwszych migracjach Alembic) był całkowicie
+      niemy, appka sprawiała wrażenie zawieszonej. Owija ISTNIEJĄCE, NIE
+      zmienione `_uruchom_prywatny_postgres_jesli_trzeba()` +
+      `_uruchom_serwer()` + `_czekaj_na_serwer()` w małe okno z
+      `ctk.CTkProgressBar(mode="indeterminate")` i tekstem statusu
+      ("Przygotowywanie bazy danych..." → "Uruchamianie serwera aplikacji...").
+    - **Wykrywanie pierwszego uruchomienia i sam kreator**
+      (`gui/windows/kreator_pierwszego_uruchomienia.py`,
+      `uruchom_kreator_jesli_potrzebny()`): brak rekordu `Firma` (`GET /firma`
+      → 404) LUB brak hasła appki → kreator zamiast głównego okna. Lista
+      kroków jest budowana DYNAMICZNIE wg tego, czego jeszcze brakuje —
+      dzięki temu kreator jest wznawialny: jeśli appka zamknie się (albo
+      użytkownik świadomie przerwie, po potwierdzeniu w oknie dialogowym)
+      między krokami, kolejne uruchomienie zaczyna od pierwszego wciąż
+      brakującego kroku, nie od początku, i nigdy nie próbuje ponownie
+      utworzyć już zapisanej `Firmy` (śledzone lokalnie w kroku, przełącza
+      się na `PUT` zamiast `POST` po pierwszym udanym zapisie). Instancje
+      kroków są tworzone leniwie i trzymane w pamięci (nie niszczone przy
+      "Wstecz"), żeby cofnięcie się nie gubiło wpisanych wartości.
+      - **Krok 1 — Dane firmy:** nazwa, NIP (+ przycisk "Pobierz z GUS",
+        Faza 14 — reużywa `gui/integracje_gui.py:pobierz_z_gus`, identycznie
+        jak Ustawienia), adres, dane bankowe, logo (opcjonalnie). Świadomie
+        POMIJA typ_podatnika/JDG/urząd skarbowy/tryb blokady ujemnego stanu
+        (zaawansowane pola JPK/magazynowe) — zostają wartościami domyślnymi
+        z modelu, konfigurowalne później w Ustawieniach.
+      - **Krok 2 — Hasło:** taka sama walidacja (min. 4 znaki, zgodność
+        powtórzenia) i to samo `auth.ustaw_haslo()` co dawny tryb ustawiania
+        w ekranie logowania, teraz jako krok kreatora zamiast osobnego okna.
+      - **Krok 3 — Ustawienia (jedyny pomijalny, przycisk "Pomiń"):**
+        domyślna stawka VAT (dropdown), informacja o formacie numeracji
+        faktur (`FV/RRRR/NNNN`) jako zwykły TEKST, nie ustawienie — appka
+        NIE MA dziś żadnego mechanizmu konfiguracji formatu/resetu numeracji
+        (`app/services/numeracja.py` ma to zakodowane na sztywno), więc
+        kreator nie obiecuje ustawienia, którego appka nie ma; oraz środowisko
+        KSeF (Testowe/Produkcyjne, domyślnie Testowe) z nietechnicznym
+        wyjaśnieniem różnicy i TYM SAMYM oknem potwierdzenia przy wyborze
+        Produkcyjne co w Ustawieniach (`widok_ustawien.py:_na_zmiane_srodowiska_ksef`)
+        — kreator NIGDY nie przełącza się cicho na produkcję.
+    - **Logo firmy — nowy, minimalny mechanizm** (`gui/logo.py:wybierz_i_skopiuj_logo()`):
+      `Firma.logo_path` istniał w modelu od Fazy 1 (i `app/services/pdf.py`
+      już go odczytywał do PDF), ale nie było żadnego sposobu go ustawić —
+      brakowało pola w schemacie Pydantic i przycisku w GUI. Naprawione:
+      `logo_path` (+ przy okazji `domyslna_stawka_vat`, też nieużywane od
+      Fazy 13) dodane do `FirmaBase`/`FirmaUpdate` w `app/schemas/firma.py`
+      (kolumny w bazie już istniały — ŻADNA nowa migracja Alembic nie była
+      potrzebna). Wybrany plik obrazu jest kopiowany do
+      `%LOCALAPPDATA%/FakturyPro/logo/logo.<rozszerzenie>` (stała nazwa —
+      jedna firma = jedno logo, nowy wybór nadpisuje poprzedni). Reużyte
+      też w Ustawieniach (`widok_ustawien.py` — karta "Dane firmy" dostała
+      te same dwa pola, logo i domyślna stawka VAT), żeby nie zostawić
+      użytkownika bez możliwości zmiany po zakończeniu kreatora.
+    - **Zweryfikowane na żywo:** pełna nowa sekwencja startu (uruchomienie
+      appki bez `auth.json` i bez rekordu `Firma` w bazie - symulacja
+      prawdziwego pierwszego użytkownika, przez prywatny Postgres 18B
+      izolowany od bazy deweloperskiej) - ekran logowania poprawnie POMINIĘTY,
+      pasek postępu pokazany, kreator wystartował na Kroku 1 z poprawnym
+      tekstem/polami (zrzut ekranu przez `PrintWindow`, bo widgety
+      customtkinter są rysowane na Canvas i nie mają drzewa dostępności UI
+      Automation). Wszystkie 3 kroki zweryfikowane wizualnie (zrzuty ekranu
+      Krok 1/2/3 - poprawny tytuł, podtytuł, pola, przyciski
+      Wstecz/Pomiń/Dalej-lub-Zakończ, banda środowiska KSeF). Cały łańcuch
+      zapisu zweryfikowany na żywo przez warstwę serwisową (bez HTTP, ten sam
+      kod co endpointy): `pobierz_firme` 404 na pustej bazie →
+      `utworz_firme` z `logo_path`+domyślnym `domyslna_stawka_vat=23%` →
+      `aktualizuj_firme` z samym `domyslna_stawka_vat` (Krok 3) → odczyt po
+      ponownym połączeniu z bazą potwierdza trwały zapis obu nowych pól.
+      **NIE zweryfikowane przez rzeczywiste kliknięcia myszą** (symulowane
+      kliknięcia/klawiatura konsekwentnie trafiały w tło, bo na tej maszynie
+      działająca w tle gra pełnoekranowa - Farming Simulator 22 - odbierała
+      fokus systemowy z powrotem po każdej próbie ustawienia go
+      programowo - potwierdzone przez `GetForegroundWindow` wracające do
+      okna gry; to ograniczenie środowiska testowego, nie appki) -
+      przejście Krok 1 → Krok 2 przyciskiem "Dalej" (walidacja + zapis przez
+      `uruchom_w_tle`), przycisk "Pobierz z GUS" w kreatorze, oraz wybór
+      pliku logo (`tkinter.filedialog`) wymagają jednego ręcznego przejścia
+      przez człowieka przed uznaniem fazy za w pełni potwierdzoną.
 
 ## Struktura katalogów (docelowa)
 ```

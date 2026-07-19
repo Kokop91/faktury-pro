@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.enums import TrybBlokadyStanu, TypPodatnika
+from app.models.enums import StawkaVat, TrybBlokadyStanu, TypPodatnika
 from app.schemas.klient import waliduj_nip
 
 
@@ -17,6 +17,8 @@ class FirmaBase(BaseModel):
     telefon: str | None = Field(default=None, max_length=30)
     bank_nazwa: str | None = Field(default=None, max_length=255)
     bank_numer_konta: str | None = Field(default=None, max_length=34)
+    logo_path: str | None = Field(default=None, max_length=500)
+    domyslna_stawka_vat: StawkaVat = StawkaVat.STAWKA_23
     tryb_blokady_ujemnego_stanu: TrybBlokadyStanu = TrybBlokadyStanu.OSTRZEGAJ
 
     # Faza 13 (JPK_V7) - patrz komentarz przy modelu Firma.
@@ -44,6 +46,8 @@ class FirmaUpdate(BaseModel):
     telefon: str | None = Field(default=None, max_length=30)
     bank_nazwa: str | None = Field(default=None, max_length=255)
     bank_numer_konta: str | None = Field(default=None, max_length=34)
+    logo_path: str | None = Field(default=None, max_length=500)
+    domyslna_stawka_vat: StawkaVat | None = None
     tryb_blokady_ujemnego_stanu: TrybBlokadyStanu | None = None
     typ_podatnika: TypPodatnika | None = None
     imie_pierwsze: str | None = Field(default=None, max_length=30)

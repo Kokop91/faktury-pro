@@ -219,6 +219,40 @@ def _uruchom_prywatny_postgres_jesli_trzeba():
     return postgres, None
 
 
+def _przygotuj_backend_z_paskiem_postepu():
+    """Owija start prywatnego Postgresa (jesli dotyczy) + migracje Alembic +
+    serwer FastAPI w pasek postepu (Faza 18D) - bez tego caly ten etap (kilka
+    sekund, dluzej przy pierwszym initdb+migracjach) byl calkowicie niemy.
+    Zadna z owijanych funkcji sie nie zmienia, tylko wykonuja sie teraz w tle
+    pod oknem `gui/windows/ekran_startu.py`.
+
+    Zwraca (postgres_prywatny, watek_serwera, blad) - identycznie jak dawny
+    bezposredni ciag wywolan w main()."""
+    from gui.windows.ekran_startu import pokaz_podczas
+
+    def zadanie(zglos_status):
+        zglos_status("Przygotowywanie bazy danych...")
+        postgres_prywatny, blad_postgresa = _uruchom_prywatny_postgres_jesli_trzeba()
+        if blad_postgresa is not None:
+            return postgres_prywatny, None, blad_postgresa
+
+        zglos_status("Uruchamianie serwera aplikacji...")
+        watek = _uruchom_serwer()
+        if not _czekaj_na_serwer(watek):
+            zatrzymaj_serwer(watek)
+            if postgres_prywatny is not None:
+                postgres_prywatny.zatrzymaj()
+            return None, None, (
+                "Serwer aplikacji nie uruchomił się poprawnie.\n\n"
+                "Sprawdź, czy port 8000 nie jest zajęty przez inny program "
+                "i czy baza danych (Docker / Postgres) jest uruchomiona."
+            )
+
+        return postgres_prywatny, watek, None
+
+    return pokaz_podczas(zadanie)
+
+
 def main() -> None:
     # customtkinter wlacza automatyczne DPI awareness (SetProcessDpiAwareness) na
     # Windows juz przy imporcie modulu (patrz ScalingTracker.deactivate_automatic_dpi_awareness
@@ -228,26 +262,41 @@ def main() -> None:
 
     nastawienia.zastosuj_tryb_wygladu()
 
-    from gui.windows.ekran_logowania import pokaz_ekran_logowania
+    from gui import auth
 
-    if not pokaz_ekran_logowania():
+    # Haslo appki jest wymagane PRZED startem bazy/serwera tylko, jesli juz
+    # istnieje (Faza 6) - to plik lokalny, sprawdzenie natychmiastowe, przed
+    # dotknieciem bazy. Gdy hasla jeszcze nie ma (pierwsze uruchomienie),
+    # stary ekran logowania jest pomijany w ogole - pytanie o haslo przechodzi
+    # do Kroku 2 kreatora pierwszego uruchomienia (Faza 18D), ktory rusza juz
+    # PO starcie backendu, bo Krok 1 (dane firmy) potrzebuje dzialajacego API.
+    if auth.czy_haslo_ustawione():
+        from gui.windows.ekran_logowania import pokaz_ekran_logowania
+
+        if not pokaz_ekran_logowania():
+            return
+
+    postgres_prywatny, watek, blad = _przygotuj_backend_z_paskiem_postepu()
+    if blad is not None:
+        _pokaz_blad_startu(blad)
         return
 
-    postgres_prywatny, blad_postgresa = _uruchom_prywatny_postgres_jesli_trzeba()
-    if blad_postgresa is not None:
-        _pokaz_blad_startu(blad_postgresa)
-        return
+    from gui.api_client import ApiError
+    from gui.windows.kreator_pierwszego_uruchomienia import uruchom_kreator_jesli_potrzebny
 
-    watek = _uruchom_serwer()
-    if not _czekaj_na_serwer(watek):
+    try:
+        kontynuowac = uruchom_kreator_jesli_potrzebny()
+    except ApiError as e:
         zatrzymaj_serwer(watek)
         if postgres_prywatny is not None:
             postgres_prywatny.zatrzymaj()
-        _pokaz_blad_startu(
-            "Serwer aplikacji nie uruchomił się poprawnie.\n\n"
-            "Sprawdź, czy port 8000 nie jest zajęty przez inny program "
-            "i czy baza danych (Docker / Postgres) jest uruchomiona."
-        )
+        _pokaz_blad_startu(f"Nie udało się przygotować aplikacji:\n\n{e.komunikat}")
+        return
+
+    if not kontynuowac:
+        zatrzymaj_serwer(watek)
+        if postgres_prywatny is not None:
+            postgres_prywatny.zatrzymaj()
         return
 
     from gui.windows.glowne_okno import GlowneOkno

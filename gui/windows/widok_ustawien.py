@@ -1,10 +1,12 @@
 from datetime import date
+from pathlib import Path
 from tkinter import messagebox
 
 import customtkinter as ctk
 
 from gui import api_client, auth, formatowanie, nastawienia, styl
 from gui.integracje_gui import pobierz_z_gus
+from gui.logo import wybierz_i_skopiuj_logo
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import (
     Banner,
@@ -35,6 +37,13 @@ ETYKIETA_SPOLKA = "Spółka / inna osoba niefizyczna"
 
 ETYKIETA_OSTRZEGAJ = "Ostrzegaj"
 ETYKIETA_BLOKUJ = "Blokuj"
+
+_ETYKIETY_STAWEK_VAT = [
+    formatowanie.ETYKIETY_STAWEK_VAT[s] for s in formatowanie.KOLEJNOSC_STAWEK_VAT
+]
+_KLUCZE_WG_ETYKIETY_STAWKI_VAT = {
+    formatowanie.ETYKIETY_STAWEK_VAT[s]: s for s in formatowanie.KOLEJNOSC_STAWEK_VAT
+}
 
 
 class WidokUstawien(ctk.CTkFrame):
@@ -162,6 +171,37 @@ class WidokUstawien(ctk.CTkFrame):
                 pole = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC)
                 pole.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
             self._pola_firmy[klucz] = pole
+
+        # -- logo i domyslna stawka VAT (Faza 18D - najpierw wprowadzane w
+        # kreatorze pierwszego uruchomienia, ale musza byc zmienialne tez tu,
+        # zeby nie zostawic uzytkownika bez mozliwosci poprawki po fakcie) --
+        ctk.CTkFrame(wewnatrz, fg_color=styl.KOLOR_OBRAMOWANIE, height=1).pack(
+            fill="x", pady=styl.ODSTEP_SREDNI
+        )
+        self._etykieta_pola(wewnatrz, "Logo firmy")
+        wiersz_logo = ctk.CTkFrame(wewnatrz, fg_color="transparent")
+        wiersz_logo.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+        wiersz_logo.grid_columnconfigure(0, weight=1)
+        self._logo_sciezka: str | None = None
+        self._etykieta_logo = ctk.CTkLabel(
+            wiersz_logo, text="Nie wybrano", font=styl.CZCIONKA_TRESC,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY, anchor="w",
+        )
+        self._etykieta_logo.grid(row=0, column=0, sticky="ew", padx=(0, styl.ODSTEP_MALY))
+        ctk.CTkButton(
+            wiersz_logo, text="Wybierz plik...", font=styl.CZCIONKA_DROBNA, width=110,
+            fg_color="transparent", border_width=1, border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY, hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._wybierz_logo,
+        ).grid(row=0, column=1)
+
+        self._etykieta_pola(wewnatrz, "Domyślna stawka VAT na fakturach")
+        self._var_domyslna_stawka_vat = ctk.StringVar(value=formatowanie.ETYKIETY_STAWEK_VAT["23"])
+        ctk.CTkOptionMenu(
+            wewnatrz, values=_ETYKIETY_STAWEK_VAT, variable=self._var_domyslna_stawka_vat,
+            font=styl.CZCIONKA_TRESC, fg_color=styl.KOLOR_AKCENT, button_color=styl.KOLOR_AKCENT,
+            button_hover_color=styl.KOLOR_AKCENT_HOVER,
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MALY))
 
         # -- sprzedaz ponizej stanu magazynowego (Faza 8) - konfigurowalne wg
         # PLAN_PROJEKTU.md 3.5, ale do teraz appka zawsze dzialala w trybie
@@ -315,6 +355,14 @@ class WidokUstawien(ctk.CTkFrame):
             self._var_tryb_blokady.set(
                 ETYKIETA_BLOKUJ if firma.get("tryb_blokady_ujemnego_stanu") == "blokuj" else ETYKIETA_OSTRZEGAJ
             )
+            stawka_vat = firma.get("domyslna_stawka_vat")
+            if stawka_vat in formatowanie.ETYKIETY_STAWEK_VAT:
+                self._var_domyslna_stawka_vat.set(formatowanie.ETYKIETY_STAWEK_VAT[stawka_vat])
+            if firma.get("logo_path"):
+                self._logo_sciezka = firma["logo_path"]
+                self._etykieta_logo.configure(
+                    text=Path(firma["logo_path"]).name, text_color=styl.KOLOR_TEKST_GLOWNY
+                )
             if firma.get("imie_pierwsze"):
                 self._pole_imie.delete(0, "end")
                 self._pole_imie.insert(0, firma["imie_pierwsze"])
@@ -360,6 +408,12 @@ class WidokUstawien(ctk.CTkFrame):
             wypelnij,
         )
 
+    def _wybierz_logo(self) -> None:
+        sciezka = wybierz_i_skopiuj_logo(self)
+        if sciezka:
+            self._logo_sciezka = sciezka
+            self._etykieta_logo.configure(text=Path(sciezka).name, text_color=styl.KOLOR_TEKST_GLOWNY)
+
     def _zapisz_firme(self) -> None:
         nazwa = self._pola_firmy["nazwa"].get().strip()
         nip = self._pola_firmy["nip"].get().strip()
@@ -392,7 +446,10 @@ class WidokUstawien(ctk.CTkFrame):
             "tryb_blokady_ujemnego_stanu": (
                 "blokuj" if self._var_tryb_blokady.get() == ETYKIETA_BLOKUJ else "ostrzegaj"
             ),
+            "domyslna_stawka_vat": _KLUCZE_WG_ETYKIETY_STAWKI_VAT[self._var_domyslna_stawka_vat.get()],
         }
+        if self._logo_sciezka:
+            dane["logo_path"] = self._logo_sciezka
         for klucz in (
             "ulica", "kod_pocztowy", "miejscowosc", "kraj", "email", "telefon",
             "bank_nazwa", "bank_numer_konta",
