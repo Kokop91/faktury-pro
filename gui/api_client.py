@@ -542,3 +542,41 @@ def zmien_status_dokumentu_kosztowego(dokument_id: int, status: str) -> dict:
     return _wykonaj(
         "PATCH", f"/dokumenty-kosztowe/{dokument_id}/status", TIMEOUT_ZAPIS, json={"status": status}
     ).json()
+
+
+# -- konfiguracja poczty SMTP (Faza 23) ---------------------------------------
+TIMEOUT_EMAIL = 20.0
+
+
+def pobierz_ustawienia_email() -> dict:
+    return _wykonaj("GET", "/email/ustawienia", TIMEOUT_ODCZYT).json()
+
+
+def zapisz_ustawienia_email(dane: dict) -> dict:
+    return _wykonaj("PUT", "/email/ustawienia", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def testuj_polaczenie_email() -> dict:
+    return _wykonaj("POST", "/email/testuj-polaczenie", TIMEOUT_EMAIL).json()
+
+
+# -- przypomnienia o platnosciach (Faza 23) -----------------------------------
+# Wysylka moze obejmowac wiele pozycji naraz (kazda to osobne polaczenie SMTP) -
+# stad dluzszy timeout niz pojedyncze wywolanie.
+TIMEOUT_PRZYPOMNIENIA_WYSYLKA = 60.0
+
+
+def pobierz_przypomnienia_do_wyslania() -> list[dict]:
+    return _wykonaj("GET", "/przypomnienia/do-wyslania", TIMEOUT_ODCZYT).json()
+
+
+def wyslij_przypomnienia(pozycje: list[dict]) -> list[dict]:
+    return _wykonaj(
+        "POST", "/przypomnienia/wyslij", TIMEOUT_PRZYPOMNIENIA_WYSYLKA, json={"pozycje": pozycje}
+    ).json()
+
+
+def pobierz_historie_przypomnien_faktury(faktura_id: int) -> list[dict]:
+    return _wykonaj(
+        "GET", f"/faktury/{faktura_id}/przypomnienia", TIMEOUT_ODCZYT
+    ).json()

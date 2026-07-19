@@ -29,6 +29,14 @@ class FirmaBase(BaseModel):
     data_urodzenia: date | None = None
     kod_urzedu_skarbowego: str | None = Field(default=None, min_length=4, max_length=4)
 
+    # Faza 23 - harmonogram przypomnien o platnosci, patrz komentarz przy
+    # modelu Firma. None/False = dany rodzaj wylaczony.
+    przypomnienia_dni_przed: int | None = Field(default=None, ge=0, le=365)
+    przypomnienia_w_dniu_terminu: bool = False
+    przypomnienia_dni_po: int | None = Field(default=None, ge=0, le=365)
+    przypomnienia_szablon_temat: str | None = Field(default=None, max_length=255)
+    przypomnienia_szablon_tresc: str | None = Field(default=None, max_length=5000)
+
     _waliduj_nip = field_validator("nip")(waliduj_nip)
 
 
@@ -56,6 +64,12 @@ class FirmaUpdate(BaseModel):
     nazwisko: str | None = Field(default=None, max_length=81)
     data_urodzenia: date | None = None
     kod_urzedu_skarbowego: str | None = Field(default=None, min_length=4, max_length=4)
+
+    przypomnienia_dni_przed: int | None = Field(default=None, ge=0, le=365)
+    przypomnienia_w_dniu_terminu: bool | None = None
+    przypomnienia_dni_po: int | None = Field(default=None, ge=0, le=365)
+    przypomnienia_szablon_temat: str | None = Field(default=None, max_length=255)
+    przypomnienia_szablon_tresc: str | None = Field(default=None, max_length=5000)
 
     _waliduj_nip = field_validator("nip")(waliduj_nip)
 

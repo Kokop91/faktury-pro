@@ -19,6 +19,26 @@ ETYKIETY_STATUSU_DOKUMENTU_KOSZTOWEGO: dict[str, str] = {
     "do_wyjasnienia": "Do wyjaśnienia",
 }
 
+ETYKIETY_TYPU_PRZYPOMNIENIA: dict[str, str] = {
+    "przed_terminem": "Przed terminem",
+    "w_dniu_terminu": "W dniu terminu",
+    "po_terminie": "Ponaglenie (po terminie)",
+}
+
+
+def formatuj_typ_przypomnienia(typ: str) -> str:
+    return ETYKIETY_TYPU_PRZYPOMNIENIA.get(typ, typ)
+
+
+def kolor_typu_przypomnienia(typ: str) -> tuple[str, str]:
+    # przed_terminem=neutralny, w_dniu_terminu=ostrzegawczy, po_terminie=czerwony -
+    # ta sama rosnaca "pilnosc" co kolor_statusu (styl.KOLORY_STATUSU).
+    return {
+        "w_dniu_terminu": styl.KOLOR_OSTRZEZENIE,
+        "po_terminie": styl.KOLOR_BLAD,
+    }.get(typ, styl.KOLOR_TEKST_GLOWNY)
+
+
 ETYKIETY_STATUSU_KSEF: dict[str, str] = {
     "nie_wyslana": "Nie wysłana",
     "wysylanie_w_toku": "Wysyłanie w toku",

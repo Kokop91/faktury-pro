@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.api import (
     dashboard,
     dokumenty_kosztowe,
+    email,
     faktury,
     faktury_cykliczne,
     firma,
@@ -15,6 +16,7 @@ from app.api import (
     magazyn,
     magazyny,
     produkty,
+    przypomnienia,
     raporty,
 )
 from app.database import get_db
@@ -34,6 +36,8 @@ app.include_router(firma.router)
 app.include_router(integracje.router)
 app.include_router(ksef.router)
 app.include_router(dokumenty_kosztowe.router)
+app.include_router(email.router)
+app.include_router(przypomnienia.router)
 
 
 @app.get("/health")

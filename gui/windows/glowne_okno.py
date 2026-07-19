@@ -57,6 +57,9 @@ class GlowneOkno(ctk.CTk):
         # co faktury cykliczne powyzej. Czysto lokalny odczyt pliku
         # (gui/kopia_zapasowa.py), wiec bez uruchom_w_tle/opoznienia sieciowego.
         self.after(500, self._sprawdz_backup)
+        # Faza 23 - identyczny wzorzec "sprawdz przy starcie, nigdy nie
+        # wymuszaj" co faktury cykliczne (Faza 15).
+        self.after(600, self._sprawdz_przypomnienia_platnosci)
 
     def _sprawdz_faktury_cykliczne(self) -> None:
         def zadanie():
@@ -111,6 +114,31 @@ class GlowneOkno(ctk.CTk):
             dni_od_ostatniego=stan["dni_od_ostatniego"],
             on_przejdz=lambda: self._pokaz_widok("ustawienia"),
         )
+
+    def _sprawdz_przypomnienia_platnosci(self) -> None:
+        def zadanie():
+            return api_client.pobierz_przypomnienia_do_wyslania()
+
+        def sukces(kandydaci: list[dict]) -> None:
+            if not kandydaci:
+                return
+            from gui.windows.dialog_przypomnien_platnosci import DialogPrzypomnienPlatnosci
+
+            DialogPrzypomnienPlatnosci(
+                self, kandydaci, on_wyslano=self._po_wyslaniu_przypomnien
+            )
+
+        def blad(_e) -> None:
+            pass  # cichy brak powiadomienia startowego (jak faktury cykliczne/koszty)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _po_wyslaniu_przypomnien(self) -> None:
+        for klucz in ("faktury", "naleznosci", "dashboard"):
+            widok = self._widoki.get(klucz)
+            odswiez = getattr(widok, "odswiez", None)
+            if callable(odswiez):
+                odswiez()
 
     def _odswiez_odznake_kosztow(self) -> None:
         def zadanie():

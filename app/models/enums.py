@@ -94,6 +94,17 @@ class StatusSzablonuCyklicznego(str, enum.Enum):
     WSTRZYMANY = "wstrzymany"
 
 
+class TypPrzypomnienia(str, enum.Enum):
+    """Trzy niezalezne rodzaje przypomnien o platnosci (Faza 23) - kazdy
+    wysylany co najwyzej RAZ na fakture (patrz unique constraint na
+    PrzypomnieniePlatnosci w app/models/przypomnienie_platnosci.py), niezaleznie
+    od tego, ile razy zmieni sie liczba dni w harmonogramie w Ustawieniach."""
+
+    PRZED_TERMINEM = "przed_terminem"
+    W_DNIU_TERMINU = "w_dniu_terminu"
+    PO_TERMINIE = "po_terminie"
+
+
 class TypPodatnika(str, enum.Enum):
     """Forma prawna firmy (Faza 13 - wplywa na ksztalt sekcji Podmiot1 w
     JPK_V7: osoba fizyczna wymaga imienia/nazwiska/daty urodzenia, osoba

@@ -11,6 +11,7 @@ from app.models.enums import (
     TrybBlokadyStanu,
     TypDokumentu,
     TypDokumentuMagazynowego,
+    TypPrzypomnienia,
 )
 from app.models.faktura import Faktura
 from app.models.firma import Firma
@@ -26,6 +27,7 @@ from app.models.pozycja_faktury import PozycjaFaktury
 from app.models.pozycja_inwentaryzacji import PozycjaInwentaryzacji
 from app.models.pozycja_szablonu_cyklicznego import PozycjaSzablonuCyklicznego
 from app.models.produkt import Produkt
+from app.models.przypomnienie_platnosci import PrzypomnieniePlatnosci
 from app.models.stan_magazynowy import StanMagazynowy
 from app.models.szablon_cykliczny import SzablonCykliczny
 from app.models.weryfikacja_bialej_listy import WeryfikacjaBialejListy
@@ -60,4 +62,6 @@ __all__ = [
     "WeryfikacjaBialejListy",
     "DokumentKosztowy",
     "StatusDokumentuKosztowego",
+    "PrzypomnieniePlatnosci",
+    "TypPrzypomnienia",
 ]

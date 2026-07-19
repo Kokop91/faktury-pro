@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, Enum, String
+from sqlalchemy import Boolean, Date, Enum, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -61,6 +61,17 @@ class Firma(Base):
         nullable=False,
         default=TrybBlokadyStanu.OSTRZEGAJ,
     )
+
+    # Faza 23 - harmonogram przypomnien o platnosci, kazdy z trzech rodzajow
+    # niezaleznie wylaczalny (None/False = wylaczony). Szablon tresci jest
+    # opcjonalny - pusty (None) oznacza uzycie wbudowanego domyslnego szablonu
+    # (patrz app/services/przypomnienia_service.py), zeby funkcja dzialala od
+    # razu bez wymuszania konfiguracji przed pierwszym uzyciem.
+    przypomnienia_dni_przed: Mapped[int | None] = mapped_column(Integer)
+    przypomnienia_w_dniu_terminu: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    przypomnienia_dni_po: Mapped[int | None] = mapped_column(Integer)
+    przypomnienia_szablon_temat: Mapped[str | None] = mapped_column(String(255))
+    przypomnienia_szablon_tresc: Mapped[str | None] = mapped_column(Text)
 
     utworzono: Mapped[datetime] = mapped_column(server_default=func.now())
     zaktualizowano: Mapped[datetime] = mapped_column(

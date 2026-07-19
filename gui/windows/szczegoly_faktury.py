@@ -37,6 +37,12 @@ KOLUMNY_PLATNOSCI = [
     ("notatka", "Notatka", 4),
 ]
 
+KOLUMNY_PRZYPOMNIEN = [
+    ("typ", "Rodzaj", 3),
+    ("adres_email", "Adres e-mail", 3),
+    ("wyslano_o", "Wysłano", 2),
+]
+
 ETYKIETY_STAWEK_VAT = {"23": "23%", "8": "8%", "5": "5%", "0": "0%", "zw": "zw."}
 
 # Statusy faktury, dla ktorych rejestrowanie platnosci nie ma sensu biznesowego
@@ -65,6 +71,7 @@ class SzczegolyFaktury(OknoFormularza):
         self._faktura_id = faktura_id
         self._faktura: dict | None = None
         self._platnosci: list[dict] = []
+        self._historia_przypomnien: list[dict] = []
         self._firma: dict | None = None
         self._srodowisko_ksef = "testowe"
         self._produkty_magazynowe: list[dict] = []
@@ -113,19 +120,24 @@ class SzczegolyFaktury(OknoFormularza):
                 )
             except api_client.ApiError:
                 wz_istniejace = []
+            try:
+                historia_przypomnien = api_client.pobierz_historie_przypomnien_faktury(faktura_id)
+            except api_client.ApiError:
+                historia_przypomnien = []
             return (
                 faktura, nazwa_klienta, platnosci, firma, srodowisko_ksef,
-                produkty, wz_istniejace,
+                produkty, wz_istniejace, historia_przypomnien,
             )
 
         def sukces(wynik) -> None:
             (
                 faktura, nazwa_klienta, platnosci, firma, srodowisko_ksef,
-                produkty, wz_istniejace,
+                produkty, wz_istniejace, historia_przypomnien,
             ) = wynik
             self._faktura = faktura
             self._nazwa_klienta = nazwa_klienta
             self._platnosci = platnosci
+            self._historia_przypomnien = historia_przypomnien
             self._firma = firma
             self._srodowisko_ksef = srodowisko_ksef
             # Tylko towary magazynowe - uslugi nigdy nie wystepuja w dokumentach
@@ -488,6 +500,24 @@ class SzczegolyFaktury(OknoFormularza):
                         wraplength=560,
                         justify="left",
                     ).pack(side="left", padx=(styl.ODSTEP_MALY, 0))
+
+        if self._historia_przypomnien:
+            ctk.CTkLabel(
+                self,
+                text="Historia przypomnień o płatności",
+                font=styl.NAGLOWEK_2,
+                text_color=styl.KOLOR_TEKST_GLOWNY,
+            ).grid(row=9, column=0, sticky="w", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_MALY))
+
+            tabela_przypomnien = Tabela(self, kolumny=KOLUMNY_PRZYPOMNIEN, height=110)
+            tabela_przypomnien.grid(
+                row=10, column=0, sticky="ew", padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY)
+            )
+            formatery_przypomnien = {
+                "typ": lambda p: formatowanie.formatuj_typ_przypomnienia(p["typ"]),
+                "wyslano_o": lambda p: formatowanie.formatuj_data_czas(p["wyslano_o"]),
+            }
+            tabela_przypomnien.ustaw_dane(self._historia_przypomnien, formatery=formatery_przypomnien)
 
     def _wygeneruj_wz(self) -> None:
         FormularzWzZFaktury(

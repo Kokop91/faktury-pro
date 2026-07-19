@@ -66,6 +66,8 @@ class WidokUstawien(ctk.CTkFrame):
         self._zbuduj_karte_backupu(wrapper)
         self._zbuduj_karte_integracji_gus(wrapper)
         self._zbuduj_karte_ksef(wrapper)
+        self._zbuduj_karte_email(wrapper)
+        self._zbuduj_karte_przypomnien(wrapper)
         self._zbuduj_karte_hasla(wrapper)
 
     def _zbuduj_karte_wygladu(self, master) -> None:
@@ -990,6 +992,349 @@ class WidokUstawien(ctk.CTkFrame):
         def blad(e: api_client.ApiError) -> None:
             ustaw_tekst_ladowania(self._przycisk_ksef_testuj, False, "Testuj połączenie z KSeF")
             self._banner_ksef.pokaz(e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    # -- konfiguracja poczty SMTP (Faza 23) - fundament pod przypomnienia o
+    # platnosciach ponizej. Appka NIE MIALA zadnej infrastruktury wysylki
+    # e-mail przed ta faza, mimo ze byla zaplanowana dla Etapu 1 -------------
+
+    def _zbuduj_karte_email(self, master) -> None:
+        karta = ctk.CTkFrame(
+            master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        karta.pack(pady=(0, styl.ODSTEP_SREDNI), fill="x")
+
+        ctk.CTkLabel(
+            karta,
+            text="Konfiguracja poczty (SMTP)",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+        ).pack(
+            padx=styl.ODSTEP_DUZY,
+            pady=(styl.ODSTEP_DUZY, styl.ODSTEP_SREDNI),
+            anchor="w",
+        )
+
+        wewnatrz = ctk.CTkFrame(karta, fg_color="transparent", width=320)
+        wewnatrz.pack(padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY), fill="x")
+
+        ctk.CTkLabel(
+            wewnatrz,
+            text="Wymagana do wysyłki przypomnień o płatnościach (poniżej).",
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            wraplength=320,
+            justify="left",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._banner_email = Banner(wewnatrz)
+        self._banner_email.ustaw_geometrie(
+            lambda: self._banner_email.pack(fill="x", pady=(0, styl.ODSTEP_MALY), before=self._pierwsze_pole_email)
+        )
+
+        self._etykieta_pola(wewnatrz, "Serwer SMTP (host)")
+        self._pole_email_host = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC)
+        self._pole_email_host.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+        self._pierwsze_pole_email = self._pole_email_host
+
+        self._etykieta_pola(wewnatrz, "Port")
+        self._pole_email_port = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC)
+        self._pole_email_port.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._etykieta_pola(wewnatrz, "Szyfrowanie")
+        self._var_email_szyfrowanie = ctk.StringVar(value="STARTTLS")
+        ctk.CTkSegmentedButton(
+            wewnatrz,
+            values=["STARTTLS", "SSL", "Brak"],
+            variable=self._var_email_szyfrowanie,
+            font=styl.CZCIONKA_TRESC,
+            selected_color=styl.KOLOR_AKCENT,
+            selected_hover_color=styl.KOLOR_AKCENT_HOVER,
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._etykieta_pola(wewnatrz, "Użytkownik (login)")
+        self._pole_email_uzytkownik = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC)
+        self._pole_email_uzytkownik.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._etykieta_pola(wewnatrz, "Hasło")
+        self._pole_email_haslo = ctk.CTkEntry(
+            wewnatrz, show="•", font=styl.CZCIONKA_TRESC,
+            placeholder_text="(zapisane - wpisz nowe, żeby zmienić)",
+        )
+        self._pole_email_haslo.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._etykieta_pola(wewnatrz, "Adres nadawcy (opcjonalnie, domyślnie = login)")
+        self._pole_email_nadawca_adres = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC)
+        self._pole_email_nadawca_adres.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._etykieta_pola(wewnatrz, "Nazwa nadawcy (opcjonalnie)")
+        self._pole_email_nadawca_nazwa = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC)
+        self._pole_email_nadawca_nazwa.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._przycisk_email_zapisz = ctk.CTkButton(
+            wewnatrz, text="Zapisz ustawienia poczty", fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER, command=self._zapisz_ustawienia_email,
+        )
+        self._przycisk_email_zapisz.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._przycisk_email_testuj = ctk.CTkButton(
+            wewnatrz, text="Testuj połączenie", fg_color="transparent", border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE, text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY, command=self._testuj_polaczenie_email,
+        )
+        self._przycisk_email_testuj.pack(fill="x")
+
+        self._wczytaj_ustawienia_email()
+
+    def _wczytaj_ustawienia_email(self) -> None:
+        def zadanie():
+            return api_client.pobierz_ustawienia_email()
+
+        def sukces(dane: dict) -> None:
+            if dane.get("host"):
+                self._pole_email_host.insert(0, dane["host"])
+            self._pole_email_port.insert(0, str(dane.get("port", 587)))
+            if dane.get("uzytkownik"):
+                self._pole_email_uzytkownik.insert(0, dane["uzytkownik"])
+            if dane.get("nadawca_adres"):
+                self._pole_email_nadawca_adres.insert(0, dane["nadawca_adres"])
+            if dane.get("nadawca_nazwa"):
+                self._pole_email_nadawca_nazwa.insert(0, dane["nadawca_nazwa"])
+            self._var_email_szyfrowanie.set(
+                {"starttls": "STARTTLS", "ssl": "SSL", "brak": "Brak"}.get(
+                    dane.get("szyfrowanie", "starttls"), "STARTTLS"
+                )
+            )
+            if dane.get("ma_haslo"):
+                self._pole_email_haslo.configure(placeholder_text="(zapisane - wpisz nowe, żeby zmienić)")
+            else:
+                self._pole_email_haslo.configure(placeholder_text="Wpisz hasło...")
+
+        def blad(e: api_client.ApiError) -> None:
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _zapisz_ustawienia_email(self) -> None:
+        self._banner_email.ukryj()
+        port_tekst = self._pole_email_port.get().strip()
+        try:
+            port = int(port_tekst) if port_tekst else 587
+        except ValueError:
+            self._banner_email.pokaz("Port musi być liczbą całkowitą.")
+            return
+
+        dane: dict = {
+            "host": self._pole_email_host.get().strip(),
+            "port": port,
+            "uzytkownik": self._pole_email_uzytkownik.get().strip(),
+            "szyfrowanie": {"STARTTLS": "starttls", "SSL": "ssl", "Brak": "brak"}[
+                self._var_email_szyfrowanie.get()
+            ],
+        }
+        haslo = self._pole_email_haslo.get()
+        if haslo:
+            dane["haslo"] = haslo
+        nadawca_adres = self._pole_email_nadawca_adres.get().strip()
+        if nadawca_adres:
+            dane["nadawca_adres"] = nadawca_adres
+        nadawca_nazwa = self._pole_email_nadawca_nazwa.get().strip()
+        if nadawca_nazwa:
+            dane["nadawca_nazwa"] = nadawca_nazwa
+
+        ustaw_tekst_ladowania(self._przycisk_email_zapisz, True, "Zapisz ustawienia poczty")
+
+        def zadanie():
+            return api_client.zapisz_ustawienia_email(dane)
+
+        def sukces(wynik: dict) -> None:
+            ustaw_tekst_ladowania(self._przycisk_email_zapisz, False, "Zapisz ustawienia poczty")
+            self._pole_email_haslo.delete(0, "end")
+            if wynik.get("ma_haslo"):
+                self._pole_email_haslo.configure(placeholder_text="(zapisane - wpisz nowe, żeby zmienić)")
+            pokaz_toast(self, "Ustawienia poczty zapisane.")
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_email_zapisz, False, "Zapisz ustawienia poczty")
+            self._banner_email.pokaz(e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _testuj_polaczenie_email(self) -> None:
+        self._banner_email.ukryj()
+        ustaw_tekst_ladowania(self._przycisk_email_testuj, True, "Testuj połączenie", "Łączenie...")
+
+        def zadanie():
+            return api_client.testuj_polaczenie_email()
+
+        def sukces(wynik: dict) -> None:
+            ustaw_tekst_ladowania(self._przycisk_email_testuj, False, "Testuj połączenie")
+            if wynik["powodzenie"]:
+                pokaz_toast(self, wynik["komunikat"], "sukces")
+            else:
+                self._banner_email.pokaz(wynik["komunikat"])
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_email_testuj, False, "Testuj połączenie")
+            self._banner_email.pokaz(e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    # -- przypomnienia o platnosciach (Faza 23) -------------------------------
+
+    def _zbuduj_karte_przypomnien(self, master) -> None:
+        karta = ctk.CTkFrame(
+            master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        karta.pack(pady=(0, styl.ODSTEP_SREDNI), fill="x")
+
+        ctk.CTkLabel(
+            karta,
+            text="Przypomnienia o płatnościach",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+        ).pack(
+            padx=styl.ODSTEP_DUZY,
+            pady=(styl.ODSTEP_DUZY, styl.ODSTEP_SREDNI),
+            anchor="w",
+        )
+
+        wewnatrz = ctk.CTkFrame(karta, fg_color="transparent", width=320)
+        wewnatrz.pack(padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY), fill="x")
+
+        ctk.CTkLabel(
+            wewnatrz,
+            text=(
+                "Każdy z trzech rodzajów przypomnienia można włączyć niezależnie. "
+                "Appka NIGDY nie wysyła nic automatycznie - przy starcie pokazuje "
+                "listę do zatwierdzenia (jak faktury cykliczne)."
+            ),
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            wraplength=320,
+            justify="left",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._banner_przypomnienia = Banner(wewnatrz)
+        self._banner_przypomnienia.ustaw_geometrie(
+            lambda: self._banner_przypomnienia.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+        )
+
+        self._etykieta_pola(wewnatrz, "Dni przed terminem (puste = wyłączone)")
+        self._pole_dni_przed = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC, placeholder_text="np. 3")
+        self._pole_dni_przed.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._var_w_dniu_terminu = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            wewnatrz, text="Wysyłaj w dniu terminu płatności", font=styl.CZCIONKA_TRESC,
+            variable=self._var_w_dniu_terminu, fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MALY), anchor="w")
+
+        self._etykieta_pola(wewnatrz, "Dni po terminie - ponaglenie (puste = wyłączone)")
+        self._pole_dni_po = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC, placeholder_text="np. 7")
+        self._pole_dni_po.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        ctk.CTkFrame(wewnatrz, fg_color=styl.KOLOR_OBRAMOWANIE, height=1).pack(
+            fill="x", pady=(0, styl.ODSTEP_SREDNI)
+        )
+
+        self._etykieta_pola(wewnatrz, "Temat wiadomości")
+        self._pole_szablon_temat = ctk.CTkEntry(
+            wewnatrz, font=styl.CZCIONKA_TRESC,
+            placeholder_text="Przypomnienie o płatności — faktura {numer_faktury}",
+        )
+        self._pole_szablon_temat.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        self._etykieta_pola(wewnatrz, "Treść wiadomości")
+        self._pole_szablon_tresc = ctk.CTkTextbox(wewnatrz, height=140, font=styl.CZCIONKA_TRESC)
+        self._pole_szablon_tresc.pack(fill="x", pady=(0, styl.ODSTEP_MIKRO))
+
+        ctk.CTkLabel(
+            wewnatrz,
+            text=(
+                "Dostępne pola: {numer_faktury} {kwota_pozostala} {termin_platnosci} "
+                "{nazwa_firmy} {nazwa_klienta} {typ_przypomnienia}. Puste pola = "
+                "użyty zostanie wbudowany szablon domyślny."
+            ),
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            wraplength=320,
+            justify="left",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._przycisk_przypomnienia_zapisz = ctk.CTkButton(
+            wewnatrz, text="Zapisz ustawienia przypomnień", fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER, command=self._zapisz_ustawienia_przypomnien,
+        )
+        self._przycisk_przypomnienia_zapisz.pack(fill="x")
+
+        self._wczytaj_ustawienia_przypomnien()
+
+    def _wczytaj_ustawienia_przypomnien(self) -> None:
+        def zadanie():
+            return api_client.pobierz_firme()
+
+        def sukces(firma: dict) -> None:
+            if firma.get("przypomnienia_dni_przed") is not None:
+                self._pole_dni_przed.insert(0, str(firma["przypomnienia_dni_przed"]))
+            self._var_w_dniu_terminu.set(bool(firma.get("przypomnienia_w_dniu_terminu")))
+            if firma.get("przypomnienia_dni_po") is not None:
+                self._pole_dni_po.insert(0, str(firma["przypomnienia_dni_po"]))
+            if firma.get("przypomnienia_szablon_temat"):
+                self._pole_szablon_temat.insert(0, firma["przypomnienia_szablon_temat"])
+            if firma.get("przypomnienia_szablon_tresc"):
+                self._pole_szablon_tresc.insert("1.0", firma["przypomnienia_szablon_tresc"])
+
+        def blad(e: api_client.ApiError) -> None:
+            if e.status_code != 404:
+                komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _zapisz_ustawienia_przypomnien(self) -> None:
+        self._banner_przypomnienia.ukryj()
+
+        def parsuj_dni(tekst: str, nazwa: str) -> int | None:
+            tekst = tekst.strip()
+            if not tekst:
+                return None
+            if not tekst.isdigit():
+                raise ValueError(f"„{nazwa}” musi być liczbą całkowitą nieujemną.")
+            return int(tekst)
+
+        try:
+            dni_przed = parsuj_dni(self._pole_dni_przed.get(), "Dni przed terminem")
+            dni_po = parsuj_dni(self._pole_dni_po.get(), "Dni po terminie")
+        except ValueError as e:
+            self._banner_przypomnienia.pokaz(str(e))
+            return
+
+        dane: dict = {
+            "przypomnienia_dni_przed": dni_przed,
+            "przypomnienia_w_dniu_terminu": bool(self._var_w_dniu_terminu.get()),
+            "przypomnienia_dni_po": dni_po,
+            "przypomnienia_szablon_temat": self._pole_szablon_temat.get().strip() or None,
+            "przypomnienia_szablon_tresc": self._pole_szablon_tresc.get("1.0", "end-1c").strip() or None,
+        }
+
+        ustaw_tekst_ladowania(self._przycisk_przypomnienia_zapisz, True, "Zapisz ustawienia przypomnień")
+
+        def zadanie():
+            if not self._firma_istnieje:
+                raise api_client.ApiError(
+                    "Uzupełnij najpierw dane firmy (karta „Dane firmy” powyżej)."
+                )
+            return api_client.aktualizuj_firme(dane)
+
+        def sukces(_wynik) -> None:
+            ustaw_tekst_ladowania(self._przycisk_przypomnienia_zapisz, False, "Zapisz ustawienia przypomnień")
+            pokaz_toast(self, "Ustawienia przypomnień zapisane.")
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_przypomnienia_zapisz, False, "Zapisz ustawienia przypomnień")
+            self._banner_przypomnienia.pokaz(e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
 

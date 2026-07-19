@@ -15,10 +15,12 @@ from app.schemas.faktura import (
     WyslijKsefZbiorczoWynikOut,
     WyslijZbiorczoIn,
 )
+from app.schemas.przypomnienia import PrzypomnieniePlatnosciOut
 from app.services import faktury as faktury_service
 from app.services import ksef_service
 from app.services import pdf as pdf_service
 from app.services import platnosci as platnosci_service
+from app.services import przypomnienia_service
 
 router = APIRouter(prefix="/faktury", tags=["faktury"])
 
@@ -67,6 +69,11 @@ def szczegoly_faktury(faktura_id: int, db: Session = Depends(get_db)):
 @router.get("/{faktura_id}/platnosci", response_model=list[PlatnoscOut])
 def lista_platnosci_faktury(faktura_id: int, db: Session = Depends(get_db)):
     return platnosci_service.pobierz_platnosci_faktury(db, faktura_id)
+
+
+@router.get("/{faktura_id}/przypomnienia", response_model=list[PrzypomnieniePlatnosciOut])
+def historia_przypomnien_faktury(faktura_id: int, db: Session = Depends(get_db)):
+    return przypomnienia_service.historia_faktury(db, faktura_id)
 
 
 @router.post(
