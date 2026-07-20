@@ -476,6 +476,61 @@ tests/
 - Każda migracja Alembic ma opisową nazwę (`add_invoice_status_field`, nie `update1`)
 - Commit po każdej zakończonej, działającej funkcjonalności — commit message opisowy po polsku lub angielsku, konsekwentnie
 
+## Wersjonowanie i aktualizacje
+
+Appka ma świadomość własnej wersji i prosty, RĘCZNY mechanizm informowania
+użytkownika o dostępności nowszej wersji (przycisk "Sprawdź aktualizacje" w
+Ustawieniach) — CELOWO bez automatycznego pobierania/instalowania. Appka
+nigdy sama niczego nie instaluje; użytkownik zawsze pobiera i uruchamia nowy
+instalator ręcznie, tak jak za pierwszym razem.
+
+**Trzy miejsca z numerem wersji — przy KAŻDYM wydaniu nowej wersji trzeba
+zaktualizować WSZYSTKIE TRZY, ręcznie, w tej kolejności:**
+
+1. **`app/wersja.py`** — stała `WERSJA` — to jest numer wersji, który appka
+   o SOBIE wie i pokazuje w Ustawieniach ("Faktury Pro w wersji X.Y.Z") oraz
+   z którym porównuje się przy sprawdzaniu aktualizacji. Zmień na nowy numer
+   PRZED zbudowaniem instalatora dla tego wydania.
+2. **`installer.iss`** — `#define AppWersja "X.Y.Z"` (linia z definicją na
+   górze pliku) — numer wersji zbudowanego instalatora (widoczny w nazwie
+   pliku wynikowego `FakturyPro-Setup-X.Y.Z.exe`, we właściwościach Windows
+   "Aplikacje i funkcje", w tytule kreatora instalacji). MUSI być identyczny
+   z `app/wersja.py`, inaczej appka po instalacji pokazywałaby inny numer w
+   Ustawieniach niż widniał w nazwie pobranego instalatora — myląco dla
+   użytkownika.
+3. **`wersja_aktualna.txt`** (korzeń repozytorium) — plik z JEDNĄ LINIĄ
+   tekstu (sam numer wersji, np. `1.1.0`, nic więcej) — TO JEST plik, który
+   appka faktycznie odpytuje przez internet (surowy URL GitHub,
+   `https://raw.githubusercontent.com/Kokop91/faktury-pro/main/wersja_aktualna.txt`,
+   patrz `app/services/aktualizacje_service.py`), żeby wiedzieć, czy istnieje
+   coś nowszego niż wersja zainstalowana u użytkownika. **To jedyny krok z
+   tej trójki, który trzeba zrobić PO zbudowaniu i opublikowaniu instalatora
+   (nie przed)** — dopóki nowy instalator nie jest jeszcze dostępny do
+   pobrania, ten plik powinien nadal wskazywać STARĄ wersję, żeby appka nie
+   informowała użytkowników o aktualizacji, której jeszcze nie da się pobrać.
+
+**Krok po kroku przy publikowaniu poprawki (np. po zamknięciu kolejnej
+większej fazy):**
+
+1. Zaktualizuj `app/wersja.py:WERSJA` i `installer.iss:AppWersja` na nowy
+   numer (ta sama wartość w obu).
+2. Zbuduj appkę i instalator jak zwykle (`pyinstaller faktury_pro.spec` →
+   `scripts/dolacz_postgres_do_buildu.py` → `ISCC.exe installer.iss` — pełna
+   sekwencja opisana wyżej, sekcja "Instalator Windows").
+3. Udostępnij zbudowany `Output/FakturyPro-Setup-X.Y.Z.exe` w miejscu, skąd
+   użytkownicy go pobierają (np. wydanie/release na GitHub w tym
+   repozytorium).
+4. DOPIERO TERAZ zaktualizuj `wersja_aktualna.txt` na nowy numer, zatwierdź
+   (`git commit`) i wypchnij (`git push`) do gałęzi `main` tego repozytorium
+   — appki użytkowników zaczną pokazywać baner "Dostępna nowsza wersja"
+   przy najbliższym kliknięciu "Sprawdź aktualizacje" (appka nigdy nie
+   sprawdza tego sama/automatycznie w tle, wyłącznie na żądanie użytkownika).
+
+**Numeracja**: proste semver (`MAJOR.MINOR.PATCH`, np. `1.0.0` → `1.1.0`) —
+podnoś MINOR przy zamknięciu większej fazy/funkcjonalności, PATCH przy
+drobnej poprawce/naprawie błędu. Appka porównuje wersje NUMERYCZNIE (nie
+tekstowo), więc `1.10.0` jest poprawnie rozpoznawane jako nowsze niż `1.9.0`.
+
 ## Zasady pracy w tej sesji
 - Nie implementuj więcej niż jedną fazę na raz (patrz `PLAN_PROJEKTU.md` za zakresem faz)
 - Przed dużymi zmianami strukturalnymi zaproponuj plan (Plan Mode), poczekaj na akceptację

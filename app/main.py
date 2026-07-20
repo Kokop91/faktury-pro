@@ -3,6 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api import (
+    aktualizacje,
     dashboard,
     dokumenty_kosztowe,
     email,
@@ -44,6 +45,7 @@ app.include_router(koszty_reczne.router)
 app.include_router(rentownosc.router)
 app.include_router(email.router)
 app.include_router(przypomnienia.router)
+app.include_router(aktualizacje.router)
 
 
 @app.get("/health")

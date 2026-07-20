@@ -734,3 +734,15 @@ def pobierz_historie_przypomnien_faktury(faktura_id: int) -> list[dict]:
     return _wykonaj(
         "GET", f"/faktury/{faktura_id}/przypomnienia", TIMEOUT_ODCZYT
     ).json()
+
+
+# -- swiadomosc wersji i sprawdzanie aktualizacji -----------------------------
+# Backend sam czeka az TIMEOUT_S (5s, app/services/aktualizacje_service.py) na
+# odpowiedz z GitHub - wlasny timeout GUI musi miec zapas ponad to, inaczej
+# GUI moglby przerwac polaczenie tuz przed tym, jak backend i tak zaraz
+# odpowie (ten sam wzorzec zapasu co TIMEOUT_INTEGRACJA wyzej).
+TIMEOUT_AKTUALIZACJE = 10.0
+
+
+def sprawdz_aktualizacje() -> dict:
+    return _wykonaj("GET", "/aktualizacje/sprawdz", TIMEOUT_AKTUALIZACJE).json()

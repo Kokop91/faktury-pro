@@ -1,9 +1,11 @@
+import webbrowser
 from datetime import date, datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
+from app.wersja import WERSJA
 from gui import api_client, auth, formatowanie, nastawienia, styl
 from gui import kopia_zapasowa as kz
 from gui.integracje_gui import pobierz_z_gus
@@ -69,6 +71,7 @@ class WidokUstawien(ctk.CTkFrame):
         self._zbuduj_karte_email(wrapper)
         self._zbuduj_karte_przypomnien(wrapper)
         self._zbuduj_karte_hasla(wrapper)
+        self._zbuduj_karte_o_aplikacji(wrapper)
 
     def _zbuduj_karte_wygladu(self, master) -> None:
         karta = ctk.CTkFrame(
@@ -1342,7 +1345,7 @@ class WidokUstawien(ctk.CTkFrame):
         karta = ctk.CTkFrame(
             master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
         )
-        karta.pack(fill="x")
+        karta.pack(pady=(0, styl.ODSTEP_SREDNI), fill="x")
 
         ctk.CTkLabel(
             karta,
@@ -1429,5 +1432,110 @@ class WidokUstawien(ctk.CTkFrame):
         def blad(e) -> None:
             self._przycisk.configure(state="normal")
             komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    def _zbuduj_karte_o_aplikacji(self, master) -> None:
+        karta = ctk.CTkFrame(
+            master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        karta.pack(fill="x")
+
+        ctk.CTkLabel(
+            karta,
+            text="O aplikacji",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+        ).pack(
+            padx=styl.ODSTEP_DUZY,
+            pady=(styl.ODSTEP_DUZY, styl.ODSTEP_SREDNI),
+            anchor="w",
+        )
+
+        wewnatrz = ctk.CTkFrame(karta, fg_color="transparent", width=320)
+        wewnatrz.pack(padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY), fill="x")
+
+        ctk.CTkLabel(
+            wewnatrz,
+            text=f"Faktury Pro w wersji {WERSJA}",
+            font=styl.CZCIONKA_TRESC,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            anchor="w",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        # Baner dostepnosci nowszej wersji - CELOWO trwaly (nie znikajacy
+        # sam, w odroznieniu od pokaz_toast ponizej), zeby link do pobrania
+        # zostal widoczny, dopoki uzytkownik sam nie zamknie karty Ustawien.
+        # Ukryty domyslnie - pokazywany tylko po sprawdzeniu, ktore faktycznie
+        # znajdzie nowsza wersje.
+        self._baner_aktualizacji = ctk.CTkFrame(
+            wewnatrz, fg_color=styl.KOLOR_OSTRZEZENIE_TLO, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        self._etykieta_baneru_aktualizacji = ctk.CTkLabel(
+            self._baner_aktualizacji,
+            text="",
+            font=styl.CZCIONKA_TRESC,
+            text_color=styl.KOLOR_OSTRZEZENIE,
+            anchor="w",
+            justify="left",
+            wraplength=260,
+        )
+        self._etykieta_baneru_aktualizacji.pack(
+            padx=styl.ODSTEP_SREDNI, pady=(styl.ODSTEP_MALY, 0), fill="x"
+        )
+        ctk.CTkButton(
+            self._baner_aktualizacji,
+            text="Pobierz nową wersję",
+            font=styl.CZCIONKA_TRESC,
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OSTRZEZENIE,
+            text_color=styl.KOLOR_OSTRZEZENIE,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=lambda: webbrowser.open(self._url_pobierania_aktualizacji),
+        ).pack(padx=styl.ODSTEP_SREDNI, pady=styl.ODSTEP_MALY, fill="x")
+        self._url_pobierania_aktualizacji = ""
+        # Nie .pack() tutaj - dopiero _pokaz_baner_aktualizacji() go pokazuje.
+
+        self._przycisk_sprawdz_aktualizacje = ctk.CTkButton(
+            wewnatrz,
+            text="Sprawdź aktualizacje",
+            font=styl.CZCIONKA_TRESC,
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._sprawdz_aktualizacje,
+        )
+        self._przycisk_sprawdz_aktualizacje.pack(fill="x")
+
+    def _pokaz_baner_aktualizacji(self, wersja_najnowsza: str, url_pobierania: str) -> None:
+        self._url_pobierania_aktualizacji = url_pobierania
+        self._etykieta_baneru_aktualizacji.configure(
+            text=f"Dostępna nowsza wersja {wersja_najnowsza}."
+        )
+        self._baner_aktualizacji.pack(
+            fill="x", pady=(0, styl.ODSTEP_SREDNI), before=self._przycisk_sprawdz_aktualizacje
+        )
+
+    def _sprawdz_aktualizacje(self) -> None:
+        ustaw_tekst_ladowania(
+            self._przycisk_sprawdz_aktualizacje, True, "Sprawdź aktualizacje", "Sprawdzanie..."
+        )
+
+        def zadanie():
+            return api_client.sprawdz_aktualizacje()
+
+        def sukces(wynik: dict) -> None:
+            ustaw_tekst_ladowania(self._przycisk_sprawdz_aktualizacje, False, "Sprawdź aktualizacje")
+            if wynik["dostepna_nowsza_wersja"]:
+                self._pokaz_baner_aktualizacji(wynik["wersja_najnowsza"], wynik["url_pobierania"])
+            else:
+                pokaz_toast(self, "Masz najnowszą wersję aplikacji.", typ="sukces")
+
+        def blad(e) -> None:
+            ustaw_tekst_ladowania(self._przycisk_sprawdz_aktualizacje, False, "Sprawdź aktualizacje")
+            pokaz_toast(self, "Nie udało się sprawdzić dostępności aktualizacji.", typ="ostrzezenie")
 
         uruchom_w_tle(self, zadanie, sukces, blad)
