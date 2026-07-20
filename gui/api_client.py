@@ -4,6 +4,9 @@ BASE_URL = "http://127.0.0.1:8000"
 TIMEOUT_ODCZYT = 5.0
 TIMEOUT_ZAPIS = 10.0
 TIMEOUT_PDF = 30.0
+# Import CSV (Faza 26) moze obejmowac setki wierszy przetwarzanych sekwencyjnie
+# w jednym zadaniu - dluzszy timeout niz zwykly zapis pojedynczego rekordu.
+TIMEOUT_IMPORT_CSV = 30.0
 
 
 class ApiError(Exception):
@@ -117,6 +120,16 @@ def usun_klienta(klient_id: int) -> None:
     _wykonaj("DELETE", f"/klienci/{klient_id}", TIMEOUT_ZAPIS)
 
 
+def podglad_importu_klientow(wiersze: list[dict]) -> list[dict]:
+    return _wykonaj(
+        "POST", "/klienci/import/podglad", TIMEOUT_IMPORT_CSV, json=wiersze
+    ).json()
+
+
+def importuj_klientow(wiersze: list[dict]) -> list[dict]:
+    return _wykonaj("POST", "/klienci/import", TIMEOUT_IMPORT_CSV, json=wiersze).json()
+
+
 def utworz_fakture(dane: dict) -> dict:
     return _wykonaj("POST", "/faktury", TIMEOUT_ZAPIS, json=dane).json()
 
@@ -206,6 +219,16 @@ def pobierz_produkt(produkt_id: int) -> dict:
 
 def utworz_produkt(dane: dict) -> dict:
     return _wykonaj("POST", "/produkty", TIMEOUT_ZAPIS, json=dane).json()
+
+
+def podglad_importu_produktow(wiersze: list[dict]) -> list[dict]:
+    return _wykonaj(
+        "POST", "/produkty/import/podglad", TIMEOUT_IMPORT_CSV, json=wiersze
+    ).json()
+
+
+def importuj_produkty(wiersze: list[dict]) -> list[dict]:
+    return _wykonaj("POST", "/produkty/import", TIMEOUT_IMPORT_CSV, json=wiersze).json()
 
 
 def pobierz_historie_ruchow_produktu(produkt_id: int) -> list[dict]:

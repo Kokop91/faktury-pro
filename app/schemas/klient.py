@@ -55,3 +55,39 @@ class KlientOut(KlientBase):
     aktywny: bool
     utworzono: datetime
     zaktualizowano: datetime
+
+
+class KlientImportWiersz(BaseModel):
+    """Jeden wiersz importu CSV (Faza 26) - wszystkie pola oprocz numer_wiersza
+    sa opcjonalne (w odroznieniu od KlientCreate), bo kazdy wiersz jest
+    walidowany NIEZALEZNIE w warstwie serwisowej (klienci_service.importuj_klientow) -
+    brakujace/bledne pole ma skutkowac pominieciem TEGO wiersza z czytelnym
+    powodem, a nie odrzuceniem calego zadania przez FastAPI/pydantic (co
+    zablokowaloby import pozostalych, poprawnych wierszy). GUI (gui/windows/
+    dialog_importu_klientow.py) juz przeksztalcilo surowy tekst z pliku CSV na
+    wlasciwe typy (np. termin platnosci na int) - ten schemat tylko przenosi
+    dane, nie odpowiada za parsowanie formatu pliku."""
+
+    numer_wiersza: int
+    nazwa: str | None = None
+    nip: str | None = None
+    ulica: str | None = None
+    kod_pocztowy: str | None = None
+    miejscowosc: str | None = None
+    kraj: str | None = None
+    email: str | None = None
+    telefon: str | None = None
+    domyslna_waluta: str | None = None
+    domyslny_termin_platnosci_dni: int | None = None
+
+
+class KlientImportWynik(BaseModel):
+    """Wynik przetworzenia jednego wiersza importu - `sukces=False` niesie
+    czytelny powod w `komunikat` (albo z walidacji KlientCreate, albo z
+    wykrycia duplikatu NIP), zeby GUI mogl pokazac pelne podsumowanie
+    zaimportowane/pominiete zamiast cichego czesciowego niepowodzenia."""
+
+    numer_wiersza: int
+    sukces: bool
+    komunikat: str | None = None
+    klient: KlientOut | None = None

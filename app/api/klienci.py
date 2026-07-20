@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.klient import KlientCreate, KlientOut, KlientUpdate
+from app.schemas.klient import (
+    KlientCreate,
+    KlientImportWiersz,
+    KlientImportWynik,
+    KlientOut,
+    KlientUpdate,
+)
 from app.services import klienci as klienci_service
 
 router = APIRouter(prefix="/klienci", tags=["klienci"])
@@ -11,6 +17,21 @@ router = APIRouter(prefix="/klienci", tags=["klienci"])
 @router.post("", response_model=KlientOut, status_code=201)
 def dodaj_klienta(dane: KlientCreate, db: Session = Depends(get_db)):
     return klienci_service.utworz_klienta(db, dane)
+
+
+@router.post("/import/podglad", response_model=list[KlientImportWynik])
+def podglad_importu_klientow(
+    wiersze: list[KlientImportWiersz], db: Session = Depends(get_db)
+):
+    """Walidacja "sucha" (Faza 26) - identyczna logika co faktyczny import,
+    ale niczego nie zapisuje. Wywolywane z kroku podgladu w GUI PRZED
+    kliknieciem "Importuj"."""
+    return klienci_service.importuj_klientow(db, wiersze, zapisz=False)
+
+
+@router.post("/import", response_model=list[KlientImportWynik])
+def importuj_klientow(wiersze: list[KlientImportWiersz], db: Session = Depends(get_db)):
+    return klienci_service.importuj_klientow(db, wiersze, zapisz=True)
 
 
 @router.get("", response_model=list[KlientOut])

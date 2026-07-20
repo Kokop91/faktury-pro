@@ -37,6 +37,31 @@ class ProduktKosztZakupuUpdate(BaseModel):
     koszt_zakupu_grosze: int | None = Field(default=None, ge=0)
 
 
+class ProduktImportWiersz(BaseModel):
+    """Jeden wiersz importu CSV (Faza 26) - patrz KlientImportWiersz
+    (app/schemas/klient.py) po uzasadnienie, dlaczego wszystkie pola sa tu
+    opcjonalne mimo ze ProduktCreate wymaga wiekszosci z nich. GUI (gui/windows/
+    dialog_importu_produktow.py) rozpoznaje towar/usluge z tekstu kolumny (jesli
+    zmapowana) albo stosuje domyslny wybrany typ - `jest_magazynowy` przychodzi
+    tu juz jako gotowy bool, nigdy surowy tekst."""
+
+    numer_wiersza: int
+    nazwa: str | None = None
+    jednostka_miary: str | None = None
+    cena_netto_grosze: int | None = None
+    koszt_zakupu_grosze: int | None = None
+    domyslna_stawka_vat: str | None = None
+    jest_magazynowy: bool | None = None
+    objety_zalacznikiem_15: bool | None = None
+
+
+class ProduktImportWynik(BaseModel):
+    numer_wiersza: int
+    sukces: bool
+    komunikat: str | None = None
+    produkt: ProduktOut | None = None
+
+
 class MagazynBase(BaseModel):
     nazwa: str = Field(min_length=1, max_length=255)
     lokalizacja: str | None = Field(default=None, max_length=500)

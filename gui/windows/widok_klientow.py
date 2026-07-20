@@ -1,8 +1,10 @@
 import customtkinter as ctk
 
 from gui import api_client, ikony, nastawienia, styl
+from gui.eksport_csv import eksportuj_do_csv
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu
+from gui.widgets_pomocnicze import komunikat_bledu, ustaw_tekst_ladowania
+from gui.windows.dialog_importu_klientow import DialogImportuKlientow
 from gui.windows.formularz_klienta import FormularzKlienta
 from gui.windows.tabela import Tabela
 
@@ -12,6 +14,23 @@ KOLUMNY = [
     ("miejscowosc", "Miejscowość", 2),
     ("email", "Email", 2),
     ("telefon", "Telefon", 1),
+]
+
+# Faza 26 - eksport pelnego katalogu klientow (nie tylko tego, co akurat jest
+# zaladowane/przefiltrowane w tabeli), zeby "dane nie byly uwiezione w appce"
+# faktycznie obejmowalo WSZYSTKICH klientow, aktywnych i nieaktywnych.
+KOLUMNY_CSV_KLIENTOW = [
+    ("nazwa", "Nazwa"),
+    ("nip", "NIP"),
+    ("ulica", "Ulica"),
+    ("kod_pocztowy", "Kod pocztowy"),
+    ("miejscowosc", "Miejscowość"),
+    ("kraj", "Kraj"),
+    ("email", "Email"),
+    ("telefon", "Telefon"),
+    ("domyslna_waluta", "Domyślna waluta"),
+    ("domyslny_termin_platnosci_dni", "Termin płatności (dni)"),
+    ("aktywny", "Aktywny"),
 ]
 
 _KLUCZ_SORTOWANIE = "sortowanie_klienci"
@@ -51,6 +70,31 @@ class WidokKlientow(ctk.CTkFrame):
         self._pole_szukaj.grid(row=0, column=1, padx=(0, styl.ODSTEP_SREDNI))
         self._pole_szukaj.bind("<KeyRelease>", lambda _z: self._odswiez_tabele())
 
+        self._przycisk_eksportuj = ctk.CTkButton(
+            pasek_naglowka,
+            text="Eksportuj do CSV",
+            font=styl.CZCIONKA_TRESC,
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._eksportuj_csv,
+        )
+        self._przycisk_eksportuj.grid(row=0, column=2, padx=(0, styl.ODSTEP_MALY))
+
+        ctk.CTkButton(
+            pasek_naglowka,
+            text="Importuj z CSV",
+            font=styl.CZCIONKA_TRESC,
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._otworz_import_csv,
+        ).grid(row=0, column=3, padx=(0, styl.ODSTEP_MALY))
+
         ctk.CTkButton(
             pasek_naglowka,
             text="Dodaj klienta",
@@ -60,7 +104,7 @@ class WidokKlientow(ctk.CTkFrame):
             fg_color=styl.KOLOR_AKCENT,
             hover_color=styl.KOLOR_AKCENT_HOVER,
             command=self._otworz_formularz,
-        ).grid(row=0, column=2)
+        ).grid(row=0, column=4)
 
         sortowanie_zapisane = nastawienia.wczytaj(_KLUCZ_SORTOWANIE)
         sortowanie_poczatkowe = (
@@ -113,3 +157,37 @@ class WidokKlientow(ctk.CTkFrame):
 
     def _otworz_edycji(self, wiersz: dict) -> None:
         FormularzKlienta(self, on_zapisano=self.odswiez, klient=wiersz)
+
+    def _otworz_import_csv(self) -> None:
+        DialogImportuKlientow(self, on_zaimportowano=self.odswiez)
+
+    def _eksportuj_csv(self) -> None:
+        ustaw_tekst_ladowania(self._przycisk_eksportuj, True, "Eksportuj do CSV", "Wczytywanie...")
+
+        def zadanie():
+            return _pobierz_wszystkich_klientow()
+
+        def sukces(klienci: list[dict]) -> None:
+            ustaw_tekst_ladowania(self._przycisk_eksportuj, False, "Eksportuj do CSV")
+            formatery = {"aktywny": lambda k: "Tak" if k["aktywny"] else "Nie"}
+            eksportuj_do_csv(self, klienci, KOLUMNY_CSV_KLIENTOW, "klienci.csv", formatery=formatery)
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_eksportuj, False, "Eksportuj do CSV")
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+
+def _pobierz_wszystkich_klientow() -> list[dict]:
+    """Eksport CSV (Faza 26) ma objac WSZYSTKICH klientow, nie tylko strone
+    zaladowana do widoku (GET /klienci ma twardy limit 200 na zapytanie) -
+    dopina kolejne strony, dopoki serwer zwraca pelna strone."""
+    wszyscy: list[dict] = []
+    skip = 0
+    while True:
+        strona = api_client.pobierz_klientow(tylko_aktywni=False, skip=skip, limit=200)
+        wszyscy.extend(strona)
+        if len(strona) < 200:
+            return wszyscy
+        skip += 200

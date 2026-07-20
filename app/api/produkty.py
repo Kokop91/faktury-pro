@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.magazyn import (
     ProduktCreate,
+    ProduktImportWiersz,
+    ProduktImportWynik,
     ProduktKosztZakupuUpdate,
     ProduktOut,
     RuchMagazynowyOut,
@@ -16,6 +18,19 @@ router = APIRouter(prefix="/produkty", tags=["magazyn"])
 @router.post("", response_model=ProduktOut, status_code=201)
 def dodaj_produkt(dane: ProduktCreate, db: Session = Depends(get_db)):
     return magazyn_service.utworz_produkt(db, dane)
+
+
+@router.post("/import/podglad", response_model=list[ProduktImportWynik])
+def podglad_importu_produktow(
+    wiersze: list[ProduktImportWiersz], db: Session = Depends(get_db)
+):
+    """Walidacja "sucha" (Faza 26) - patrz app/api/klienci.py:podglad_importu_klientow."""
+    return magazyn_service.importuj_produkty(db, wiersze, zapisz=False)
+
+
+@router.post("/import", response_model=list[ProduktImportWynik])
+def importuj_produkty(wiersze: list[ProduktImportWiersz], db: Session = Depends(get_db)):
+    return magazyn_service.importuj_produkty(db, wiersze, zapisz=True)
 
 
 @router.get("", response_model=list[ProduktOut])

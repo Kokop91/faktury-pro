@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -18,10 +19,23 @@ from app.schemas.magazyn import (
     DokumentMagazynowyCreate,
     MagazynCreate,
     ProduktCreate,
+    ProduktImportWiersz,
+    ProduktImportWynik,
     RuchMagazynowyOut,
     StanMagazynowyOut,
 )
 from app.services.numeracja_magazynowa import nastepny_numer_dokumentu_magazynowego
+
+
+def _sformatuj_blad_walidacji(e: ValidationError) -> str:
+    """Mirror app/services/klienci.py:_sformatuj_blad_walidacji - zduplikowane
+    celowo, patrz _pobierz_jedyna_firme powyzej po to samo uzasadnienie."""
+    pierwszy = e.errors()[0]
+    komunikat = str(pierwszy.get("msg", ""))
+    if komunikat.startswith("Value error, "):
+        komunikat = komunikat[len("Value error, ") :]
+    pole = ".".join(str(czesc) for czesc in pierwszy.get("loc", ()) if czesc != "body")
+    return f"{pole}: {komunikat}" if pole else komunikat
 
 # Typy dokumentow zwiekszajace stan w magazynie docelowym vs zmniejszajace stan
 # w magazynie zrodlowym - MM robi obie rzeczy naraz. Patrz PLAN_PROJEKTU.md 3.3.
@@ -109,6 +123,73 @@ def lista_produktow(
         zapytanie = zapytanie.where(Produkt.aktywny.is_(True))
     zapytanie = zapytanie.order_by(Produkt.nazwa).offset(skip).limit(limit)
     return list(db.execute(zapytanie).scalars().all())
+
+
+def importuj_produkty(
+    db: Session, wiersze: list[ProduktImportWiersz], zapisz: bool
+) -> list[ProduktImportWynik]:
+    """Import zbiorczy z pliku CSV (Faza 26) - mirror
+    app/services/klienci.py:importuj_klientow (patrz tam po pelne uzasadnienie
+    `zapisz=False` jako "suchej" walidacji uzywanej do podgladu w GUI). Produkt
+    nie ma zadnego naturalnego unikalnego pola jak NIP klienta, wiec duplikat
+    jest wykrywany po nazwie (bez rozroznienia wielkosci liter) - wystarczajace
+    zeby uchronic przed przypadkowym zaimportowaniem tego samego katalogu
+    dwa razy (Produkt jest create-only, wiec bledny duplikat nie da sie potem
+    naprawic edycja - patrz komentarz przy utworz_produkt)."""
+    nazwy_w_bazie = {
+        nazwa.strip().lower() for nazwa in db.execute(select(Produkt.nazwa)).scalars().all()
+    }
+    nazwy_w_tym_imporcie: set[str] = set()
+
+    wyniki: list[ProduktImportWynik] = []
+    for wiersz in wiersze:
+        surowe = wiersz.model_dump(exclude={"numer_wiersza"}, exclude_none=True)
+        nazwa_znormalizowana = str(surowe.get("nazwa", "")).strip().lower()
+
+        if nazwa_znormalizowana and (
+            nazwa_znormalizowana in nazwy_w_bazie
+            or nazwa_znormalizowana in nazwy_w_tym_imporcie
+        ):
+            wyniki.append(
+                ProduktImportWynik(
+                    numer_wiersza=wiersz.numer_wiersza,
+                    sukces=False,
+                    komunikat=(
+                        f"Produkt „{surowe.get('nazwa')}” już istnieje w katalogu "
+                        "(albo powtarza się w pliku)."
+                    ),
+                )
+            )
+            continue
+
+        try:
+            dane = ProduktCreate(**surowe)
+        except ValidationError as e:
+            wyniki.append(
+                ProduktImportWynik(
+                    numer_wiersza=wiersz.numer_wiersza,
+                    sukces=False,
+                    komunikat=_sformatuj_blad_walidacji(e),
+                )
+            )
+            continue
+
+        if nazwa_znormalizowana:
+            nazwy_w_tym_imporcie.add(nazwa_znormalizowana)
+
+        if not zapisz:
+            wyniki.append(ProduktImportWynik(numer_wiersza=wiersz.numer_wiersza, sukces=True))
+            continue
+
+        produkt = utworz_produkt(db, dane)
+        wyniki.append(
+            ProduktImportWynik(
+                numer_wiersza=wiersz.numer_wiersza,
+                sukces=True,
+                produkt=produkt,
+            )
+        )
+    return wyniki
 
 
 # --- Magazyny ---

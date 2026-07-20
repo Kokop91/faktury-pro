@@ -3,8 +3,10 @@ from decimal import Decimal
 import customtkinter as ctk
 
 from gui import api_client, formatowanie, ikony, nastawienia, styl
+from gui.eksport_csv import eksportuj_do_csv
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu
+from gui.widgets_pomocnicze import komunikat_bledu, ustaw_tekst_ladowania
+from gui.windows.dialog_importu_produktow import DialogImportuProduktow
 from gui.windows.formularz_produktu import FormularzProduktu
 from gui.windows.szczegoly_produktu import SzczegolyProduktu
 from gui.windows.tabela import Tabela
@@ -15,6 +17,19 @@ KOLUMNY = [
     ("cena_netto_grosze", "Cena netto", 2),
     ("typ", "Typ", 1),
     ("stan", "Stan", 2),
+]
+
+# Faza 26 - eksport pelnego katalogu (nie tylko aktywnych/przefiltrowanych w
+# widoku) - patrz mirror w gui/windows/widok_klientow.py:KOLUMNY_CSV_KLIENTOW.
+KOLUMNY_CSV_PRODUKTOW = [
+    ("nazwa", "Nazwa"),
+    ("jednostka_miary", "Jednostka miary"),
+    ("cena_netto_grosze", "Cena netto"),
+    ("koszt_zakupu_grosze", "Koszt zakupu"),
+    ("domyslna_stawka_vat", "Stawka VAT"),
+    ("jest_magazynowy", "Typ"),
+    ("objety_zalacznikiem_15", "Załącznik nr 15 (MPP)"),
+    ("aktywny", "Aktywny"),
 ]
 
 FILTR_WSZYSTKIE = "Wszystkie"
@@ -79,6 +94,31 @@ class PanelProduktow(ctk.CTkFrame):
         self._pole_szukaj.grid(row=0, column=2, padx=(styl.ODSTEP_SREDNI, styl.ODSTEP_SREDNI), sticky="w")
         self._pole_szukaj.bind("<KeyRelease>", lambda _z: self._odswiez_tabele())
 
+        self._przycisk_eksportuj = ctk.CTkButton(
+            pasek_naglowka,
+            text="Eksportuj do CSV",
+            font=styl.CZCIONKA_TRESC,
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._eksportuj_csv,
+        )
+        self._przycisk_eksportuj.grid(row=0, column=3, padx=(0, styl.ODSTEP_MALY))
+
+        ctk.CTkButton(
+            pasek_naglowka,
+            text="Importuj z CSV",
+            font=styl.CZCIONKA_TRESC,
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._otworz_import_csv,
+        ).grid(row=0, column=4, padx=(0, styl.ODSTEP_MALY))
+
         ctk.CTkButton(
             pasek_naglowka,
             text="Dodaj produkt",
@@ -88,7 +128,7 @@ class PanelProduktow(ctk.CTkFrame):
             fg_color=styl.KOLOR_AKCENT,
             hover_color=styl.KOLOR_AKCENT_HOVER,
             command=self._otworz_formularz,
-        ).grid(row=0, column=3)
+        ).grid(row=0, column=5)
 
         sortowanie_zapisane = nastawienia.wczytaj(_KLUCZ_SORTOWANIE)
         sortowanie_poczatkowe = (
@@ -186,3 +226,51 @@ class PanelProduktow(ctk.CTkFrame):
 
     def _otworz_szczegoly(self, wiersz: dict) -> None:
         SzczegolyProduktu(self, produkt_id=wiersz["id"])
+
+    def _otworz_import_csv(self) -> None:
+        DialogImportuProduktow(self, on_zaimportowano=self.odswiez)
+
+    def _eksportuj_csv(self) -> None:
+        ustaw_tekst_ladowania(self._przycisk_eksportuj, True, "Eksportuj do CSV", "Wczytywanie...")
+
+        def zadanie():
+            return _pobierz_wszystkie_produkty()
+
+        def sukces(produkty: list[dict]) -> None:
+            ustaw_tekst_ladowania(self._przycisk_eksportuj, False, "Eksportuj do CSV")
+            formatery = {
+                "cena_netto_grosze": lambda p: formatowanie.grosze_do_wpisu(p["cena_netto_grosze"]),
+                "koszt_zakupu_grosze": lambda p: (
+                    formatowanie.grosze_do_wpisu(p["koszt_zakupu_grosze"])
+                    if p["koszt_zakupu_grosze"] is not None
+                    else ""
+                ),
+                "domyslna_stawka_vat": lambda p: formatowanie.ETYKIETY_STAWEK_VAT.get(
+                    p["domyslna_stawka_vat"], p["domyslna_stawka_vat"]
+                ),
+                "jest_magazynowy": lambda p: "Towar" if p["jest_magazynowy"] else "Usługa",
+                "objety_zalacznikiem_15": lambda p: "Tak" if p["objety_zalacznikiem_15"] else "Nie",
+                "aktywny": lambda p: "Tak" if p["aktywny"] else "Nie",
+            }
+            eksportuj_do_csv(
+                self, produkty, KOLUMNY_CSV_PRODUKTOW, "produkty.csv", formatery=formatery
+            )
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_eksportuj, False, "Eksportuj do CSV")
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+
+def _pobierz_wszystkie_produkty() -> list[dict]:
+    """Mirror gui/windows/widok_klientow.py:_pobierz_wszystkich_klientow -
+    eksport CSV ma objac caly katalog, nie tylko strone widoczna w panelu."""
+    wszystkie: list[dict] = []
+    skip = 0
+    while True:
+        strona = api_client.pobierz_produkty(tylko_aktywne=False, skip=skip, limit=200)
+        wszystkie.extend(strona)
+        if len(strona) < 200:
+            return wszystkie
+        skip += 200

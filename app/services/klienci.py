@@ -1,9 +1,27 @@
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Firma, Klient
-from app.schemas.klient import KlientCreate, KlientUpdate
+from app.schemas.klient import (
+    KlientCreate,
+    KlientImportWiersz,
+    KlientImportWynik,
+    KlientUpdate,
+)
+
+
+def _sformatuj_blad_walidacji(e: ValidationError) -> str:
+    """Pierwszy blad z ValidationError, w czytelnej formie 'pole: powod' -
+    reuzywane w importuj_klientow, zeby GUI nie musialo znac ksztaltu bledow
+    pydantic (te same, ktore normalnie widzialoby jako odpowiedz HTTP 422)."""
+    pierwszy = e.errors()[0]
+    komunikat = str(pierwszy.get("msg", ""))
+    if komunikat.startswith("Value error, "):
+        komunikat = komunikat[len("Value error, ") :]
+    pole = ".".join(str(czesc) for czesc in pierwszy.get("loc", ()) if czesc != "body")
+    return f"{pole}: {komunikat}" if pole else komunikat
 
 
 def _pobierz_jedyna_firme(db: Session) -> Firma:
@@ -56,6 +74,68 @@ def aktualizuj_klienta(db: Session, klient_id: int, dane: KlientUpdate) -> Klien
     db.commit()
     db.refresh(klient)
     return klient
+
+
+def importuj_klientow(
+    db: Session, wiersze: list[KlientImportWiersz], zapisz: bool
+) -> list[KlientImportWynik]:
+    """Import zbiorczy z pliku CSV (Faza 26). Kazdy wiersz jest walidowany
+    NIEZALEZNIE - bledny wiersz nie przerywa importu pozostalych, uzytkownik
+    dostaje pelne podsumowanie zaimportowane/pominiete z przyczynami zamiast
+    cichej czesciowej porazki.
+
+    `zapisz=False` to tryb "suchej" walidacji (wywolywany z kroku podgladu w
+    GUI, PRZED faktycznym importem) - wykonuje DOKLADNIE ta sama walidacje,
+    w tym wykrywanie duplikatow NIP wzgledem calej bazy i wewnatrz samego
+    pliku, ale nigdy nie zapisuje do bazy. Jedno zrodlo prawdy dla obu trybow,
+    zeby podglad w GUI nigdy nie obiecywal czegos innego niz to, co faktycznie
+    zaimportuje sie po kliknieciu "Importuj"."""
+    nipy_w_bazie = {nip for nip in db.execute(select(Klient.nip)).scalars().all() if nip}
+    nipy_w_tym_imporcie: set[str] = set()
+
+    wyniki: list[KlientImportWynik] = []
+    for wiersz in wiersze:
+        surowe = wiersz.model_dump(exclude={"numer_wiersza"}, exclude_none=True)
+        nip = surowe.get("nip")
+
+        if nip and (nip in nipy_w_bazie or nip in nipy_w_tym_imporcie):
+            wyniki.append(
+                KlientImportWynik(
+                    numer_wiersza=wiersz.numer_wiersza,
+                    sukces=False,
+                    komunikat=f"NIP {nip} już istnieje (w bazie albo powtarza się w pliku).",
+                )
+            )
+            continue
+
+        try:
+            dane = KlientCreate(**surowe)
+        except ValidationError as e:
+            wyniki.append(
+                KlientImportWynik(
+                    numer_wiersza=wiersz.numer_wiersza,
+                    sukces=False,
+                    komunikat=_sformatuj_blad_walidacji(e),
+                )
+            )
+            continue
+
+        if nip:
+            nipy_w_tym_imporcie.add(nip)
+
+        if not zapisz:
+            wyniki.append(KlientImportWynik(numer_wiersza=wiersz.numer_wiersza, sukces=True))
+            continue
+
+        klient = utworz_klienta(db, dane)
+        wyniki.append(
+            KlientImportWynik(
+                numer_wiersza=wiersz.numer_wiersza,
+                sukces=True,
+                klient=klient,
+            )
+        )
+    return wyniki
 
 
 def usun_klienta(db: Session, klient_id: int) -> None:
