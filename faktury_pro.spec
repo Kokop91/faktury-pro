@@ -92,6 +92,15 @@ a = Analysis(  # noqa: F821
         (str(ROOT / "app" / "xsd"), "app/xsd"),
         (str(ROOT / "alembic.ini"), "."),
         (str(ROOT / "alembic"), "alembic"),
+        # assets/icon.ico: EXE(icon=...) nizej wypala ikone w zasoby samego pliku
+        # .exe (widoczna w Eksploratorze/skrotach), ale to NIE ustawia ikony okna
+        # w czasie dzialania - customtkinter/Tk nadpisuje ja wlasna, domyslna
+        # ikona (feather) przy tworzeniu kazdego roota, stad appka faktycznie
+        # pokazywala ta domyslna ikone na pasku zadań mimo poprawnie ustawionego
+        # icon= tutaj. Naprawa (gui/ikona_okna.py woluje root.iconbitmap(...))
+        # potrzebuje pliku .ico dostepnego w czasie dzialania, wiec musi byc
+        # dolaczony tutaj jako zwykly zasob, tak jak szablony/schematy powyzej.
+        (str(ROOT / "assets"), "assets"),
         # Binaria PostgreSQL (Faza 18B) CELOWO nie sa tutaj - patrz duzy
         # komentarz na gorze tego pliku. Dolaczane PO zbudowaniu przez
         # scripts/dolacz_postgres_do_buildu.py.

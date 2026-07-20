@@ -18,6 +18,7 @@ import customtkinter as ctk
 
 from gui import api_client, auth, formatowanie, styl
 from gui.api_client import ApiError
+from gui.ikona_okna import ustaw_ikone
 from gui.integracje_gui import pobierz_z_gus
 from gui.logo import wybierz_i_skopiuj_logo
 from gui.watki import uruchom_w_tle
@@ -442,6 +443,7 @@ class _Kreator(ctk.CTk):
 
     def __init__(self, firma_istnieje: bool, haslo_ustawione: bool):
         super().__init__()
+        ustaw_ikone(self)
         self.ukonczono = False
 
         self.title("Faktury Pro — pierwsze uruchomienie")

@@ -253,7 +253,29 @@ def _przygotuj_backend_z_paskiem_postepu():
     return pokaz_podczas(zadanie)
 
 
+def _ustaw_app_user_model_id() -> None:
+    """Bez tego Windows grupuje/identyfikuje proces appki pod domyslnym
+    AppUserModelID wyprowadzonym z samej sciezki .exe - w praktyce prowadzi to
+    do mylenia appki z hostujacym ja interpreterem (np. przy uruchomieniu z
+    poziomu skrotu kontra bezposrednio) przy grupowaniu okien na pasku zadan i
+    przy wiazaniu przypietego skrotu z dzialajacym oknem. Ustawiane jawnym
+    identyfikatorem PRZED utworzeniem jakiegokolwiek okna Tk (patrz wywolanie
+    na samym poczatku main()), zeby obowiazywalo od pierwszego okna
+    (ekran logowania / splash startu). Bezpieczne wywolac zawsze (appka jest
+    Windows-only - patrz CLAUDE.md, uzywa juz win32crypt/DPAPI do tokena
+    KSeF), wiec bez gatowania po sys.frozen jak w przypadku FONTCONFIG_PATH
+    wyzej (ktory dotyczy tylko wersji spakowanej)."""
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("FakturyPro.Desktop")
+    except Exception:
+        pass
+
+
 def main() -> None:
+    _ustaw_app_user_model_id()
+
     # customtkinter wlacza automatyczne DPI awareness (SetProcessDpiAwareness) na
     # Windows juz przy imporcie modulu (patrz ScalingTracker.deactivate_automatic_dpi_awareness
     # = False domyslnie) - dla ostrego renderowania na ekranach skalowanych NIE wolno

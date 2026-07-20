@@ -3,6 +3,7 @@ import re
 import customtkinter as ctk
 
 from gui import api_client, ikony, nastawienia, styl
+from gui.ikona_okna import ustaw_ikone
 from gui.watki import uruchom_w_tle
 from gui.windows.widok_dashboard import WidokDashboard
 from gui.windows.widok_dokumentow_kosztowych import WidokDokumentowKosztowych
@@ -22,6 +23,7 @@ _WZORZEC_GEOMETRII = re.compile(r"^\d+x\d+\+-?\d+\+-?\d+$")
 class GlowneOkno(ctk.CTk):
     def __init__(self):
         super().__init__()
+        ustaw_ikone(self)
         self.title("Faktury Pro")
         self.geometry("1150x720")
         self.minsize(900, 600)

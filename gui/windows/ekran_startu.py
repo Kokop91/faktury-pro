@@ -5,6 +5,7 @@ from typing import Callable, TypeVar
 import customtkinter as ctk
 
 from gui import styl
+from gui.ikona_okna import ustaw_ikone
 
 T = TypeVar("T")
 
@@ -18,6 +19,7 @@ class _EkranStartu(ctk.CTk):
 
     def __init__(self):
         super().__init__()
+        ustaw_ikone(self)
         self.title("Faktury Pro")
         self.geometry("360x160")
         self.resizable(False, False)

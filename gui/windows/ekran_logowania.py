@@ -1,6 +1,7 @@
 import customtkinter as ctk
 
 from gui import auth, styl
+from gui.ikona_okna import ustaw_ikone
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu
 
@@ -17,6 +18,7 @@ class _EkranLogowania(ctk.CTk):
 
     def __init__(self):
         super().__init__()
+        ustaw_ikone(self)
         self.zalogowano = False
 
         self.title("Faktury Pro — logowanie")
