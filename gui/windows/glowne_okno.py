@@ -1,3 +1,4 @@
+import logging
 import re
 
 import customtkinter as ctk
@@ -18,6 +19,14 @@ from gui.windows.widok_ustawien import WidokUstawien
 
 _KLUCZ_GEOMETRII = "geometria_okna_glownego"
 _WZORZEC_GEOMETRII = re.compile(r"^\d+x\d+\+-?\d+\+-?\d+$")
+
+# Sprawdzenia przy starcie (ponizej) sa CELOWO ciche wobec uzytkownika -
+# appka nie ma pokazywac okna z bledem przy KAZDYM uruchomieniu tylko dlatego,
+# ze np. KSeF akurat ma przerwe techniczna. "Cichy" nie powinien jednak
+# znaczyc "bez sladu" (patrz przeglad odpornosci appki na problemy sieciowe) -
+# logujemy, zeby awaria byla mozliwa do zdiagnozowania (plik logu, patrz
+# gui/main.py:_skonfiguruj_logowanie), zamiast znikac bez sladu.
+_log = logging.getLogger(__name__)
 
 
 class GlowneOkno(ctk.CTk):
@@ -78,8 +87,10 @@ class GlowneOkno(ctk.CTk):
                 self, zalegle, on_wygenerowano=self._po_wygenerowaniu_cyklicznych
             )
 
-        def blad(_e) -> None:
-            pass  # cichy brak powiadomienia startowego nie powinien przeszkadzac w pracy
+        def blad(e) -> None:
+            # Cichy brak powiadomienia startowego nie powinien przeszkadzac w
+            # pracy, ale zalogowane - patrz komentarz przy _log powyzej.
+            _log.warning("Sprawdzenie zaleglych faktur cyklicznych przy starcie nie powiodlo sie: %s", e)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
 
@@ -100,8 +111,11 @@ class GlowneOkno(ctk.CTk):
                 if callable(odswiez):
                     odswiez()
 
-        def blad(_e) -> None:
-            pass  # cichy brak powiadomienia startowego (jak przy fakturach cyklicznych)
+        def blad(e) -> None:
+            # Ten check FAKTYCZNIE dotyka sieci (zapytanie do KSeF) - tu
+            # zalogowanie ma najwieksze znaczenie z calej czwórki (np.
+            # wygasly/nieprawidlowy token, przerwa techniczna KSeF).
+            _log.warning("Sprawdzenie nowych kosztow KSeF przy starcie nie powiodlo sie: %s", e)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
 
@@ -132,8 +146,8 @@ class GlowneOkno(ctk.CTk):
                 self, kandydaci, on_wyslano=self._po_wyslaniu_przypomnien
             )
 
-        def blad(_e) -> None:
-            pass  # cichy brak powiadomienia startowego (jak faktury cykliczne/koszty)
+        def blad(e) -> None:
+            _log.warning("Sprawdzenie przypomnien o platnosciach przy starcie nie powiodlo sie: %s", e)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
 
@@ -151,8 +165,10 @@ class GlowneOkno(ctk.CTk):
         def sukces(liczba: int) -> None:
             self._pasek_boczny.ustaw_odznake("koszty", liczba)
 
-        def blad(_e) -> None:
-            pass  # odznaka to tylko wskazowka - brak polaczenia nie powinien przeszkadzac w pracy
+        def blad(e) -> None:
+            # Odznaka to tylko wskazowka - brak polaczenia nie powinien
+            # przeszkadzac w pracy, ale zalogowane jak reszta checkow wyzej.
+            _log.warning("Odswiezenie odznaki liczby nowych dokumentow kosztowych nie powiodlo sie: %s", e)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
 

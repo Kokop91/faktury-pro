@@ -382,7 +382,9 @@ class FormularzOferty(OknoFormularza):
         except ValueError as e:
             bledy.append(f"Oferta ważna do: {e}")
 
-        waluta = self._pole_waluta.get().strip() or None
+        waluta = self._pole_waluta.get().strip().upper() or None
+        if waluta is not None and (len(waluta) != 3 or not waluta.isalpha()):
+            bledy.append("Waluta musi być trzyliterowym kodem (np. PLN, EUR, USD).")
 
         kurs_waluty = None
         try:

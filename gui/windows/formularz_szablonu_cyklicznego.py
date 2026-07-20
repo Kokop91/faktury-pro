@@ -341,7 +341,9 @@ class FormularzSzablonuCyklicznego(OknoFormularza):
         if data_poczatku and data_konca and data_konca < data_poczatku:
             bledy.append("Data zakończenia nie może być wcześniejsza niż data początku.")
 
-        waluta = self._pole_waluta.get().strip() or None
+        waluta = self._pole_waluta.get().strip().upper() or None
+        if waluta is not None and (len(waluta) != 3 or not waluta.isalpha()):
+            bledy.append("Waluta musi być trzyliterowym kodem (np. PLN, EUR, USD).")
 
         if not self._wiersze_pozycji:
             bledy.append("Dodaj co najmniej jedną pozycję.")

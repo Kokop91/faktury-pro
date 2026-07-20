@@ -65,6 +65,17 @@ KLUCZ_KATALOG_DOCELOWY = "backup_katalog_docelowy"
 KLUCZ_OSTATNI_BACKUP = "backup_ostatni_udany"
 PROG_DNI_PRZETERMINOWANIA = 7
 
+# Bez tego pg_dump/pg_restore/psql moglyby "zawiesic sie" bez konca (np.
+# katalog docelowy wskazuje na zerwany dysk sieciowy, zablokowana tabela) -
+# watek w tle (uruchom_w_tle) nigdy by sie nie zakonczyl, przycisk zostalby
+# na stale "Wykonywanie kopii zapasowej.../Przywracanie danych..." bez zadnego
+# komunikatu. Hojny limit (dump/restore faktycznie przenosi dane, moze byc
+# duzy) kontra krotki limit dla samych DROP/CREATE DATABASE (czyste DDL,
+# powinno byc niemal natychmiastowe - dlugie oczekiwanie tam oznacza realny
+# problem, np. nieoczekiwanie zablokowana baza).
+TIMEOUT_DUMP_RESTORE_S = 600.0
+TIMEOUT_DDL_S = 30.0
+
 NAZWA_BAZY_W_ARCHIWUM = "baza.dump"
 NAZWA_MANIFESTU = "manifest.json"
 
@@ -186,12 +197,31 @@ def wykonaj_backup(katalog_docelowy: Path, haslo: str) -> Path:
     return docelowy
 
 
+def _uruchom(polecenie: list[str], timeout: float, opis_narzedzia: str) -> subprocess.CompletedProcess:
+    """Wspolny wrapper na subprocess.run dla wszystkich wywolan narzedzi
+    Postgresa w tym module - jedno miejsce pilnujace, zeby ZADNE z nich nie
+    moglo wisiec bez konca (patrz TIMEOUT_DUMP_RESTORE_S/TIMEOUT_DDL_S wyzej)."""
+    try:
+        return subprocess.run(
+            polecenie,
+            capture_output=True,
+            text=True,
+            creationflags=_flagi_bez_okna(),
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise BladKopiiZapasowej(
+            f"{opis_narzedzia} nie zakończył działania w wyznaczonym czasie "
+            f"({int(timeout)}s). Sprawdź, czy katalog docelowy jest dostępny "
+            "(np. czy dysk sieciowy/chmurowy nie jest odłączony) i spróbuj ponownie."
+        ) from e
+
+
 def _uruchom_pg_dump(plik_docelowy: Path) -> None:
-    wynik = subprocess.run(
+    wynik = _uruchom(
         [str(_binarka("pg_dump")), "-Fc", "-f", str(plik_docelowy), _adres_bazy()],
-        capture_output=True,
-        text=True,
-        creationflags=_flagi_bez_okna(),
+        TIMEOUT_DUMP_RESTORE_S,
+        "Tworzenie kopii bazy danych (pg_dump)",
     )
     if wynik.returncode != 0:
         raise BladKopiiZapasowej(
@@ -267,11 +297,10 @@ def przywroc_z_backupu(plik_kopii: Path, haslo: str) -> None:
 
 
 def _uruchom_psql(polecenie: str) -> None:
-    wynik = subprocess.run(
+    wynik = _uruchom(
         [str(_binarka("psql")), _adres_administracyjny(), "-c", polecenie],
-        capture_output=True,
-        text=True,
-        creationflags=_flagi_bez_okna(),
+        TIMEOUT_DDL_S,
+        "Przygotowanie bazy danych (psql)",
     )
     if wynik.returncode != 0:
         raise BladKopiiZapasowej(
@@ -287,11 +316,10 @@ def _odtworz_baze(plik_dumpu: Path) -> None:
     _uruchom_psql(f'DROP DATABASE IF EXISTS "{nazwa}" WITH (FORCE)')
     _uruchom_psql(f'CREATE DATABASE "{nazwa}"')
 
-    wynik = subprocess.run(
+    wynik = _uruchom(
         [str(_binarka("pg_restore")), "-d", _adres_bazy(), str(plik_dumpu)],
-        capture_output=True,
-        text=True,
-        creationflags=_flagi_bez_okna(),
+        TIMEOUT_DUMP_RESTORE_S,
+        "Przywracanie bazy danych (pg_restore)",
     )
     if wynik.returncode != 0:
         raise BladKopiiZapasowej(

@@ -6,7 +6,10 @@ import requests
 from fastapi import HTTPException, status
 
 BASE_URL = "https://api.nbp.pl/api/exchangerates/rates/a"
-TIMEOUT_S = 5.0
+# 5s bylo zbyt ciasne dla wolniejszych/mniej stabilnych lacz - zrownane z
+# timeoutem GUS (app/services/gus_service.py), tez prostego zapytania GET/SOAP
+# do zewnetrznego serwisu panstwowego.
+TIMEOUT_S = 10.0
 KOD_WALUTY_REGEX = re.compile(r"^[A-Za-z]{3}$")
 
 # Zakres wstecz przy szukaniu ostatniej dostepnej tabeli przed data docelowa -

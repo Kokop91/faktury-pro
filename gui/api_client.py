@@ -16,6 +16,36 @@ class ApiError(Exception):
         self.status_code = status_code
 
 
+# Backstop dla pol, ktore NIE maja wlasnego field_validator z polskim
+# komunikatem (patrz np. Field(max_length=...)/Field(gt=...) w app/schemas/) -
+# bez tego uzytkownik nietechniczny widzialby surowy, angielski komunikat
+# Pydantic (np. "String should have at most 255 characters"). Klucze to
+# standardowe wartosci pola "type" w bledach walidacji Pydantic v2/FastAPI
+# 422 (`blad["type"]`), niezalezne od tresci "msg" - stabilniejsze niz
+# parsowanie tekstu komunikatu. Kazda funkcja dostaje `ctx` (slownik z
+# ograniczeniem, np. {"max_length": 255}) i buduje z niego zdanie po polsku.
+_SZABLONY_BLEDOW_WALIDACJI: dict = {
+    "string_too_long": lambda ctx: f"może mieć maksymalnie {ctx.get('max_length')} znaków",
+    "string_too_short": lambda ctx: f"musi mieć co najmniej {ctx.get('min_length')} znaków",
+    "greater_than": lambda ctx: f"musi być większe niż {ctx.get('gt')}",
+    "greater_than_equal": lambda ctx: f"musi być większe lub równe {ctx.get('ge')}",
+    "less_than": lambda ctx: f"musi być mniejsze niż {ctx.get('lt')}",
+    "less_than_equal": lambda ctx: f"musi być mniejsze lub równe {ctx.get('le')}",
+    "missing": lambda ctx: "pole jest wymagane",
+    "int_parsing": lambda ctx: "musi być liczbą całkowitą",
+    "int_type": lambda ctx: "musi być liczbą całkowitą",
+    "float_parsing": lambda ctx: "musi być liczbą",
+    "float_type": lambda ctx: "musi być liczbą",
+    "decimal_parsing": lambda ctx: "musi być liczbą",
+    "string_type": lambda ctx: "musi być tekstem",
+    "bool_parsing": lambda ctx: "musi być wartością tak/nie",
+    "bool_type": lambda ctx: "musi być wartością tak/nie",
+    "date_parsing": lambda ctx: "musi być poprawną datą",
+    "date_from_datetime_parsing": lambda ctx: "musi być poprawną datą",
+    "enum": lambda ctx: "nieprawidłowa wartość",
+}
+
+
 def _sformatuj_blad(odpowiedz: requests.Response) -> str:
     try:
         dane = odpowiedz.json()
@@ -33,11 +63,17 @@ def _sformatuj_blad(odpowiedz: requests.Response) -> str:
             if not isinstance(blad, dict):
                 komunikaty.append(str(blad))
                 continue
-            komunikat = str(blad.get("msg", blad))
-            # Pydantic v2 dokleja "Value error, " przed komunikatem z ValueError
-            # rzucanym w field_validator/model_validator - usuwamy dla czytelnosci.
-            if komunikat.startswith("Value error, "):
-                komunikat = komunikat[len("Value error, ") :]
+
+            szablon = _SZABLONY_BLEDOW_WALIDACJI.get(blad.get("type"))
+            if szablon is not None:
+                komunikat = szablon(blad.get("ctx") or {})
+            else:
+                komunikat = str(blad.get("msg", blad))
+                # Pydantic v2 dokleja "Value error, " przed komunikatem z ValueError
+                # rzucanym w field_validator/model_validator - usuwamy dla czytelnosci.
+                if komunikat.startswith("Value error, "):
+                    komunikat = komunikat[len("Value error, ") :]
+
             lokalizacja = [
                 str(czesc) for czesc in blad.get("loc", []) if czesc != "body"
             ]
