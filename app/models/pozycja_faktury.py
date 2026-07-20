@@ -11,7 +11,9 @@ class PozycjaFaktury(Base):
     __tablename__ = "pozycje_faktury"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    faktura_id: Mapped[int] = mapped_column(ForeignKey("faktury.id"), nullable=False)
+    faktura_id: Mapped[int] = mapped_column(
+        ForeignKey("faktury.id"), nullable=False, index=True
+    )
 
     nazwa: Mapped[str] = mapped_column(String(500), nullable=False)
     ilosc: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)

@@ -21,7 +21,9 @@ class Faktura(Base):
         default=TypDokumentu.FAKTURA_VAT,
     )
 
-    klient_id: Mapped[int] = mapped_column(ForeignKey("klienci.id"), nullable=False)
+    klient_id: Mapped[int] = mapped_column(
+        ForeignKey("klienci.id"), nullable=False, index=True
+    )
 
     data_wystawienia: Mapped[date] = mapped_column(Date, nullable=False)
     data_sprzedazy: Mapped[date] = mapped_column(Date, nullable=False)
@@ -36,6 +38,7 @@ class Faktura(Base):
         Enum(StatusFaktury, name="status_faktury"),
         nullable=False,
         default=StatusFaktury.ROBOCZA,
+        index=True,
     )
 
     # Odniesienie do innego dokumentu: dla FAKTURA_KORYGUJACA/NOTA_KORYGUJACA to dokument

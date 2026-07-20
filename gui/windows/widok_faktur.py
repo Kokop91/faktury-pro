@@ -32,6 +32,15 @@ KOLUMNY = [
 _KLUCZ_FILTR_STATUS = "filtr_status_faktur"
 _KLUCZ_SORTOWANIE = "sortowanie_faktury"
 
+# GET /faktury zwraca maks. 200 wierszy na zapytanie (limit=200, twardy
+# gorny limit walidowany w app/api/faktury.py) - bez doladowywania kolejnych
+# stron faktury powyzej tej liczby byly po prostu CICHO niewidoczne w tym
+# widoku. "Zaladuj wiecej" dopina kolejna strone do juz wyswietlonej listy
+# zamiast pobierac wszystko naraz (dla kilku tysiecy faktur zaladowanie
+# wszystkiego jednorazowo zmaterializowaloby dziesiatki tysiecy prawdziwych
+# widgetow Tkinter w gui/windows/tabela.py - Tabela nie wirtualizuje wierszy).
+LIMIT_STRONY_FAKTUR = 200
+
 
 class WidokFaktur(ctk.CTkFrame):
     def __init__(self, master):
@@ -41,6 +50,7 @@ class WidokFaktur(ctk.CTkFrame):
 
         self._klienci_wg_id: dict[int, str] = {}
         self._ostatnie_faktury: list[dict] = []
+        self._ma_wiecej_faktur = False
         self._srodowisko_ksef = "testowe"
         self._etykiety_statusow = ["Wszystkie"] + list(
             formatowanie.ETYKIETY_STATUSU.values()
@@ -170,6 +180,20 @@ class WidokFaktur(ctk.CTkFrame):
             pady=(0, styl.ODSTEP_DUZY),
         )
 
+        self._przycisk_wiecej = ctk.CTkButton(
+            self,
+            text="Załaduj więcej faktur",
+            font=styl.CZCIONKA_TRESC,
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._zaladuj_wiecej,
+        )
+        # Gridowany dopiero w _zaktualizuj_przycisk_wiecej(), gdy faktycznie
+        # jest wiecej stron do zaladowania - patrz tam.
+
     def fokus_wyszukiwania(self) -> None:
         self._pole_szukaj.focus_set()
 
@@ -195,7 +219,9 @@ class WidokFaktur(ctk.CTkFrame):
             # tylko_aktywni=False celowo - faktura moze odnosic sie do klienta,
             # ktory zostal miedzyczasie dezaktywowany (soft-delete).
             klienci = api_client.pobierz_klientow(tylko_aktywni=False, limit=200)
-            faktury = api_client.pobierz_faktury(status=status_klucz, limit=200)
+            faktury = api_client.pobierz_faktury(
+                status=status_klucz, skip=0, limit=LIMIT_STRONY_FAKTUR
+            )
             try:
                 srodowisko = api_client.pobierz_ustawienia_ksef()["srodowisko"]
             except api_client.ApiError:
@@ -206,8 +232,10 @@ class WidokFaktur(ctk.CTkFrame):
             klienci, faktury, srodowisko = wynik
             self._klienci_wg_id = {k["id"]: k["nazwa"] for k in klienci}
             self._ostatnie_faktury = faktury
+            self._ma_wiecej_faktur = len(faktury) == LIMIT_STRONY_FAKTUR
             self._srodowisko_ksef = srodowisko
             self._odswiez_tabele()
+            self._zaktualizuj_przycisk_wiecej()
             tekst, kolor_tekstu, kolor_tla = formatuj_srodowisko_ksef(srodowisko)
             self._etykieta_srodowisko.configure(text=tekst, text_color=kolor_tekstu, fg_color=kolor_tla)
             self._na_zmiane_zaznaczenia()
@@ -216,6 +244,37 @@ class WidokFaktur(ctk.CTkFrame):
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
+
+    def _zaktualizuj_przycisk_wiecej(self) -> None:
+        if self._ma_wiecej_faktur:
+            self._przycisk_wiecej.grid(
+                row=3, column=0, pady=(0, styl.ODSTEP_DUZY)
+            )
+        else:
+            self._przycisk_wiecej.grid_remove()
+
+    def _zaladuj_wiecej(self) -> None:
+        status_klucz = self._klucze_wg_etykiety.get(self._filtr_var.get())
+        skip = len(self._ostatnie_faktury)
+
+        def zadanie():
+            return api_client.pobierz_faktury(
+                status=status_klucz, skip=skip, limit=LIMIT_STRONY_FAKTUR
+            )
+
+        def sukces(strona: list[dict]) -> None:
+            self._ostatnie_faktury = self._ostatnie_faktury + strona
+            self._ma_wiecej_faktur = len(strona) == LIMIT_STRONY_FAKTUR
+            self._odswiez_tabele()
+            self._zaktualizuj_przycisk_wiecej()
+            ustaw_tekst_ladowania(self._przycisk_wiecej, False, "Załaduj więcej faktur")
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_wiecej, False, "Załaduj więcej faktur")
+            komunikat_bledu(self, e.komunikat)
+
+        ustaw_tekst_ladowania(self._przycisk_wiecej, True, "Załaduj więcej faktur", "Ładowanie...")
+        uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _na_zmiane_zaznaczenia(self) -> None:
         liczba = len(self._tabela.pobierz_zaznaczone_id())

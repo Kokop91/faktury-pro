@@ -40,6 +40,10 @@ OPCJE_FILTRA = [FILTR_WSZYSTKIE, FILTR_TOWARY, FILTR_USLUGI]
 _KLUCZ_FILTR = "filtr_typ_produktow"
 _KLUCZ_SORTOWANIE = "sortowanie_produkty"
 
+# Mirror LIMIT_STRONY_FAKTUR w gui/windows/widok_faktur.py - patrz tam po
+# uzasadnienie "Zaladuj wiecej" zamiast pobierania wszystkiego naraz.
+LIMIT_STRONY_PRODUKTOW = 200
+
 
 class PanelProduktow(ctk.CTkFrame):
     """Stan magazynowy pokazany tu jako SUMA ze wszystkich magazynow (jedna
@@ -56,6 +60,7 @@ class PanelProduktow(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
 
         self._produkty: list[dict] = []
+        self._ma_wiecej_produktow = False
         self._ilosc_wg_produktu: dict[int, Decimal] = {}
         self._ponizej_minimum_wg_produktu: dict[int, bool] = {}
 
@@ -146,6 +151,19 @@ class PanelProduktow(ctk.CTkFrame):
         )
         self._tabela.grid(row=1, column=0, sticky="nsew")
 
+        self._przycisk_wiecej = ctk.CTkButton(
+            self,
+            text="Załaduj więcej produktów",
+            font=styl.CZCIONKA_TRESC,
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._zaladuj_wiecej,
+        )
+        # Gridowany dopiero w _zaktualizuj_przycisk_wiecej() - patrz tam.
+
     def fokus_wyszukiwania(self) -> None:
         self._pole_szukaj.focus_set()
 
@@ -155,13 +173,16 @@ class PanelProduktow(ctk.CTkFrame):
 
     def odswiez(self) -> None:
         def zadanie():
-            produkty = api_client.pobierz_produkty(tylko_aktywne=True, limit=200)
+            produkty = api_client.pobierz_produkty(
+                tylko_aktywne=True, skip=0, limit=LIMIT_STRONY_PRODUKTOW
+            )
             stany = api_client.pobierz_stany_magazynowe()
             return produkty, stany
 
         def sukces(wynik) -> None:
             produkty, stany = wynik
             self._produkty = produkty
+            self._ma_wiecej_produktow = len(produkty) == LIMIT_STRONY_PRODUKTOW
 
             self._ilosc_wg_produktu = {}
             self._ponizej_minimum_wg_produktu = {}
@@ -174,11 +195,40 @@ class PanelProduktow(ctk.CTkFrame):
                     self._ponizej_minimum_wg_produktu[produkt_id] = True
 
             self._odswiez_tabele()
+            self._zaktualizuj_przycisk_wiecej()
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
+
+    def _zaktualizuj_przycisk_wiecej(self) -> None:
+        if self._ma_wiecej_produktow:
+            self._przycisk_wiecej.grid(row=2, column=0, pady=(styl.ODSTEP_MALY, 0))
+        else:
+            self._przycisk_wiecej.grid_remove()
+
+    def _zaladuj_wiecej(self) -> None:
+        skip = len(self._produkty)
+
+        def zadanie():
+            return api_client.pobierz_produkty(
+                tylko_aktywne=True, skip=skip, limit=LIMIT_STRONY_PRODUKTOW
+            )
+
+        def sukces(strona: list[dict]) -> None:
+            self._produkty = self._produkty + strona
+            self._ma_wiecej_produktow = len(strona) == LIMIT_STRONY_PRODUKTOW
+            self._odswiez_tabele()
+            self._zaktualizuj_przycisk_wiecej()
+            ustaw_tekst_ladowania(self._przycisk_wiecej, False, "Załaduj więcej produktów")
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_wiecej, False, "Załaduj więcej produktów")
+            komunikat_bledu(self, e.komunikat)
+
+        ustaw_tekst_ladowania(self._przycisk_wiecej, True, "Załaduj więcej produktów", "Ładowanie...")
+        uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _odswiez_tabele(self) -> None:
         filtr = self._var_filtr.get()

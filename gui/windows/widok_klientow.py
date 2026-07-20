@@ -35,6 +35,10 @@ KOLUMNY_CSV_KLIENTOW = [
 
 _KLUCZ_SORTOWANIE = "sortowanie_klienci"
 
+# Mirror LIMIT_STRONY_FAKTUR w gui/windows/widok_faktur.py - patrz tam po
+# uzasadnienie "Zaladuj wiecej" zamiast pobierania wszystkiego naraz.
+LIMIT_STRONY_KLIENTOW = 200
+
 
 class WidokKlientow(ctk.CTkFrame):
     def __init__(self, master):
@@ -43,6 +47,7 @@ class WidokKlientow(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
 
         self._klienci: list[dict] = []
+        self._ma_wiecej_klientow = False
 
         pasek_naglowka = ctk.CTkFrame(self, fg_color="transparent")
         pasek_naglowka.grid(
@@ -128,21 +133,66 @@ class WidokKlientow(ctk.CTkFrame):
             pady=(0, styl.ODSTEP_DUZY),
         )
 
+        self._przycisk_wiecej = ctk.CTkButton(
+            self,
+            text="Załaduj więcej klientów",
+            font=styl.CZCIONKA_TRESC,
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            command=self._zaladuj_wiecej,
+        )
+        # Gridowany dopiero w _zaktualizuj_przycisk_wiecej() - patrz tam.
+
     def fokus_wyszukiwania(self) -> None:
         self._pole_szukaj.focus_set()
 
     def odswiez(self) -> None:
         def zadanie():
-            return api_client.pobierz_klientow(tylko_aktywni=True, limit=200)
+            return api_client.pobierz_klientow(
+                tylko_aktywni=True, skip=0, limit=LIMIT_STRONY_KLIENTOW
+            )
 
         def sukces(klienci: list[dict]) -> None:
             self._klienci = klienci
+            self._ma_wiecej_klientow = len(klienci) == LIMIT_STRONY_KLIENTOW
             self._odswiez_tabele()
+            self._zaktualizuj_przycisk_wiecej()
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
+
+    def _zaktualizuj_przycisk_wiecej(self) -> None:
+        if self._ma_wiecej_klientow:
+            self._przycisk_wiecej.grid(row=2, column=0, pady=(0, styl.ODSTEP_DUZY))
+        else:
+            self._przycisk_wiecej.grid_remove()
+
+    def _zaladuj_wiecej(self) -> None:
+        skip = len(self._klienci)
+
+        def zadanie():
+            return api_client.pobierz_klientow(
+                tylko_aktywni=True, skip=skip, limit=LIMIT_STRONY_KLIENTOW
+            )
+
+        def sukces(strona: list[dict]) -> None:
+            self._klienci = self._klienci + strona
+            self._ma_wiecej_klientow = len(strona) == LIMIT_STRONY_KLIENTOW
+            self._odswiez_tabele()
+            self._zaktualizuj_przycisk_wiecej()
+            ustaw_tekst_ladowania(self._przycisk_wiecej, False, "Załaduj więcej klientów")
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_wiecej, False, "Załaduj więcej klientów")
+            komunikat_bledu(self, e.komunikat)
+
+        ustaw_tekst_ladowania(self._przycisk_wiecej, True, "Załaduj więcej klientów", "Ładowanie...")
+        uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _odswiez_tabele(self) -> None:
         szukana_fraza = self._pole_szukaj.get().strip().lower()

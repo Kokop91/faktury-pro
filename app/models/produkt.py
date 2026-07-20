@@ -14,7 +14,7 @@ class Produkt(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     firma_id: Mapped[int] = mapped_column(ForeignKey("firmy.id"), nullable=False)
 
-    nazwa: Mapped[str] = mapped_column(String(255), nullable=False)
+    nazwa: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     jednostka_miary: Mapped[str] = mapped_column(String(20), nullable=False)
     cena_netto_grosze: Mapped[int] = mapped_column(BigInteger, nullable=False)
     # Faza 25 - koszt zakupu/wytworzenia jednostkowy, OPCJONALNY (appka nie zna
