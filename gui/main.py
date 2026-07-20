@@ -182,6 +182,13 @@ def _pokaz_blad_startu(tekst: str) -> None:
     root.destroy()
 
 
+def _pokaz_juz_uruchomione() -> None:
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showinfo("Faktury Pro", "Faktury Pro już jest uruchomione.")
+    root.destroy()
+
+
 def _uruchom_prywatny_postgres_jesli_trzeba():
     """Zwraca uruchomiony PostgresPrywatny, albo None, jesli appka dziala w
     trybie deweloperskim (DATABASE_URL podane jawnie w .env - patrz
@@ -274,6 +281,22 @@ def _ustaw_app_user_model_id() -> None:
 
 
 def main() -> None:
+    # Blokada pojedynczej instancji (patrz gui/blokada_instancji.py po pelne
+    # uzasadnienie) - sprawdzana JAKO PIERWSZA rzecz w main(), przed
+    # jakimkolwiek oknem, backendem czy prywatnym Postgresem. Bez tego dwa
+    # rownoczesnie dzialajace procesy Faktury Pro probowalyby naraz zajac
+    # ten sam port lokalnego serwera i te sama baze danych.
+    from gui.blokada_instancji import (
+        aktywuj_istniejace_okno,
+        uzyskaj_blokade,
+        zwolnij_blokade,
+    )
+
+    if not uzyskaj_blokade():
+        aktywuj_istniejace_okno()
+        _pokaz_juz_uruchomione()
+        return
+
     _ustaw_app_user_model_id()
 
     # customtkinter wlacza automatyczne DPI awareness (SetProcessDpiAwareness) na
@@ -334,6 +357,7 @@ def main() -> None:
         zatrzymaj_serwer(watek)
         if postgres_prywatny is not None:
             postgres_prywatny.zatrzymaj()
+        zwolnij_blokade()
         okno.destroy()
 
     okno.protocol("WM_DELETE_WINDOW", _przy_zamknieciu)
