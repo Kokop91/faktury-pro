@@ -1,24 +1,22 @@
 import json
-import os
 from pathlib import Path
 
 import bcrypt
 
-# Appka jest jednostanowiskowa (Faza 6, patrz CLAUDE.md) - haslo do niej samej
-# trzymamy jako pojedynczy hash bcrypt w pliku w katalogu uzytkownika systemu,
+from app.profil import katalog_aktywnego_profilu
+
+# Kazdy profil firmy ma WLASNE, niezalezne haslo appki (Faza 25) - hash bcrypt
+# zyje w katalogu aktywnego profilu (app/profil.py:katalog_aktywnego_profilu),
 # CELOWO poza baza PostgreSQL (haslo do appki musi dzialac, zanim jakikolwiek
 # serwer/baza w ogole wystartuje) i poza repozytorium (nigdy nie zyje w
-# katalogu projektu, wiec nie ma ryzyka wrzucenia go do gita).
-NAZWA_KATALOGU = "FakturyPro"
+# katalogu projektu, wiec nie ma ryzyka wrzucenia go do gita). W trybie
+# deweloperskim (bez profili) spada na wspolny katalog globalny, dokladnie
+# jak przed Faza 25.
 NAZWA_PLIKU = "auth.json"
 
 
 def _katalog_konfiguracji() -> Path:
-    if os.name == "nt":
-        podstawa = os.environ.get("APPDATA") or str(Path.home())
-    else:
-        podstawa = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(podstawa) / NAZWA_KATALOGU
+    return katalog_aktywnego_profilu()
 
 
 def _plik_auth() -> Path:

@@ -307,6 +307,35 @@ def main() -> None:
 
     nastawienia.zastosuj_tryb_wygladu()
 
+    # Wiele profili firm (Faza 25) - ekran wyboru profilu jest PIERWSZA rzecza
+    # po blokadzie instancji/wygladzie, PRZED dotychczasowym ekranem hasla i
+    # PRZED startem backendu/prywatnego Postgresa, bo od wybranego profilu
+    # zalezy, do KTOREJ bazy appka sie polaczy - musi byc rozstrzygniete,
+    # zanim app.config zostanie w ogole zaimportowane (patrz app/profil.py).
+    # W trybie deweloperskim (.env z jawnym DATABASE_URL) profile nie
+    # istnieja w ogole - appka laczy sie z baza administrowana recznie przez
+    # dewelopera, dokladnie jak przed ta faza.
+    from app import profil
+
+    profil_wybrany = None  # WynikWyboruProfilu | None
+    if not profil.czy_tryb_deweloperski():
+        from gui import migracja_profili
+
+        migracja_profili.migruj_jesli_trzeba()
+
+        from gui.windows.ekran_wyboru_profilu import pokaz_ekran_wyboru_profilu
+
+        profil_wybrany = pokaz_ekran_wyboru_profilu()
+        if profil_wybrany is None:
+            zwolnij_blokade()
+            return
+
+        profil.ustaw_aktywny_profil(profil_wybrany.profil.id, profil_wybrany.profil.nazwa_bazy)
+
+        from gui import profile_rejestr
+
+        profile_rejestr.oznacz_uzyty(profil_wybrany.profil.id)
+
     from gui import auth
 
     # Haslo appki jest wymagane PRZED startem bazy/serwera tylko, jesli juz
@@ -347,6 +376,22 @@ def main() -> None:
         if postgres_prywatny is not None:
             postgres_prywatny.zatrzymaj()
         return
+
+    if profil_wybrany is not None:
+        # Domyka nazwe wyswietlana profilu w rejestrze (Faza 25) - potrzebne
+        # zarowno dla nowo utworzonego profilu (kreator dopiero co zapisal
+        # Firme), jak i dla zmigrowanego profilu "legacy" (Firma juz
+        # istniala, wiec kreator w ogole sie nie pokazal - to jedyne miejsce,
+        # ktore odswiezy jego placeholder "Nowa firma" na prawdziwa nazwe).
+        # Nie krytyczne - blad tutaj nie przerywa startu appki, tylko
+        # zostawia nazwe w pickerze nieaktualna do nastepnego udanego startu.
+        from gui import api_client, profile_rejestr
+
+        try:
+            firma = api_client.pobierz_firme()
+            profile_rejestr.ustaw_nazwe(profil_wybrany.profil.id, firma["nazwa"])
+        except ApiError:
+            pass
 
     from gui.windows.glowne_okno import GlowneOkno
 

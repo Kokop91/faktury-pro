@@ -4,16 +4,18 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Ustawienia integracji KSeF (Faza 12A) trzymane lokalnie poza baza danych i
-# poza repozytorium - ten sam katalog co haslo appki (gui/auth.py) i ustawienia
-# GUS (integracje_ustawienia.py), ale WLASNY plik: token KSeF jest sekretem
-# innego rodzaju niz haslo appki - appka musi go moc ODCZYTAC (wysyla go do
-# KSeF przy kazdym uwierzytelnieniu), wiec nie moze byc jednokierunkowym
-# hashem jak bcrypt. Jest zaszyfrowany odwracalnie przez Windows DPAPI
-# (CryptProtectData/CryptUnprotectData) - odszyfrowanie jest mozliwe tylko
-# na tym samym koncie Windows na tym samym komputerze (ten sam mechanizm,
-# ktorego np. Chrome uzywa do zapisanych hasel).
-NAZWA_KATALOGU = "FakturyPro"
+from app.profil import katalog_aktywnego_profilu
+
+# Ustawienia integracji KSeF (Faza 12A) sa daną PER-PROFILU (Faza 25) - kazda
+# firma ma wlasne srodowisko/token KSeF, zyja w katalogu aktywnego profilu
+# (app/profil.py:katalog_aktywnego_profilu), ten sam katalog co haslo appki
+# (gui/auth.py) i ustawienia GUS (integracje_ustawienia.py), ale WLASNY plik:
+# token KSeF jest sekretem innego rodzaju niz haslo appki - appka musi go moc
+# ODCZYTAC (wysyla go do KSeF przy kazdym uwierzytelnieniu), wiec nie moze byc
+# jednokierunkowym hashem jak bcrypt. Jest zaszyfrowany odwracalnie przez
+# Windows DPAPI (CryptProtectData/CryptUnprotectData) - odszyfrowanie jest
+# mozliwe tylko na tym samym koncie Windows na tym samym komputerze (ten sam
+# mechanizm, ktorego np. Chrome uzywa do zapisanych hasel).
 NAZWA_PLIKU = "ksef.json"
 
 DOMYSLNE_SRODOWISKO = "testowe"
@@ -29,11 +31,7 @@ _CRYPTPROTECT_UI_FORBIDDEN = 0x1
 
 
 def _katalog_konfiguracji() -> Path:
-    if os.name == "nt":
-        podstawa = os.environ.get("APPDATA") or str(Path.home())
-    else:
-        podstawa = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(podstawa) / NAZWA_KATALOGU
+    return katalog_aktywnego_profilu()
 
 
 def _plik_ustawien() -> Path:

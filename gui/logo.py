@@ -1,21 +1,20 @@
-import os
 import shutil
 from pathlib import Path
 from tkinter import filedialog
 
-# Ten sam katalog-bazowy wzorzec co gui/postgres_serwer.py:_katalog_appdata() -
-# %LOCALAPPDATA%, bo logo to dane uzytkownika (podobnie jak prywatna baza
-# Postgresa), nie male ustawienie roamingowe jak auth.json/ustawienia.json
-# (te siedza w %APPDATA%, patrz gui/auth.py i gui/nastawienia.py).
-NAZWA_KATALOGU = "FakturyPro"
+from app.profil import katalog_aktywnego_profilu
+
+# Logo firmy jest daną PER-PROFILU (Faza 25) - żyje w katalogu aktywnego
+# profilu (app/profil.py:katalog_aktywnego_profilu), tak jak auth.json/
+# ksef.json/ustawienia_profilu.json. W trybie deweloperskim (bez profili)
+# spada na wspólny katalog globalny, dokładnie jak przed Fazą 25.
 NAZWA_PODKATALOGU_LOGO = "logo"
 
 ROZSZERZENIA_OBRAZOW = [("Obrazy", "*.png *.jpg *.jpeg"), ("Wszystkie pliki", "*.*")]
 
 
 def _katalog_logo() -> Path:
-    podstawa = os.environ.get("LOCALAPPDATA") or str(Path.home())
-    return Path(podstawa) / NAZWA_KATALOGU / NAZWA_PODKATALOGU_LOGO
+    return katalog_aktywnego_profilu() / NAZWA_PODKATALOGU_LOGO
 
 
 def katalog_logo() -> Path:

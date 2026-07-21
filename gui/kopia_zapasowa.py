@@ -40,6 +40,7 @@ to zwykle narzedzia klienckie laczace sie po DATABASE_URL, ktore appka i tak
 juz ma pod reka.
 """
 import base64
+import io
 import json
 import os
 import shutil
@@ -54,7 +55,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from app.sciezki import katalog_bazowy
-from gui import logo, nastawienia
+from gui import logo, nastawienia_profilu
 
 MAGIC = b"FPBK"
 WERSJA_FORMATU = 1
@@ -133,15 +134,17 @@ def _wyprowadz_klucz(haslo: str, sol: bytes) -> bytes:
 
 
 # -- ustawienia lokalne (folder docelowy, data ostatniego backupu) ----------
-# Trzymane w tym samym pliku co reszta lokalnych ustawien appki (gui/nastawienia.py,
-# %APPDATA%/FakturyPro/ustawienia.json) - to sciezka folderu i znacznik czasu,
-# nie sekrety, wiec nie potrzebuja DPAPI (w odroznieniu od hasla szyfrowania,
-# ktore w ogole nigdzie nie jest zapisywane - patrz docstring modulu).
+# Trzymane w gui/nastawienia_profilu.py (Faza 25) - PER-PROFIL, bo katalog
+# docelowy i historia backupu jednej firmy nie maja nic wspolnego z druga
+# (%LOCALAPPDATA%/FakturyPro/profiles/<id>/ustawienia_profilu.json). To
+# sciezka folderu i znacznik czasu, nie sekrety, wiec nie potrzebuja DPAPI
+# (w odroznieniu od hasla szyfrowania, ktore w ogole nigdzie nie jest
+# zapisywane - patrz docstring modulu).
 
 
 def stan_backupu() -> dict:
-    katalog = nastawienia.wczytaj(KLUCZ_KATALOG_DOCELOWY)
-    ostatni_tekst = nastawienia.wczytaj(KLUCZ_OSTATNI_BACKUP)
+    katalog = nastawienia_profilu.wczytaj(KLUCZ_KATALOG_DOCELOWY)
+    ostatni_tekst = nastawienia_profilu.wczytaj(KLUCZ_OSTATNI_BACKUP)
     ostatni = datetime.fromisoformat(ostatni_tekst) if ostatni_tekst else None
     dni_od_ostatniego = (datetime.now(timezone.utc) - ostatni).days if ostatni else None
     return {
@@ -155,11 +158,11 @@ def stan_backupu() -> dict:
 
 
 def ustaw_katalog_docelowy(sciezka: str) -> None:
-    nastawienia.zapisz(KLUCZ_KATALOG_DOCELOWY, sciezka)
+    nastawienia_profilu.zapisz(KLUCZ_KATALOG_DOCELOWY, sciezka)
 
 
 def _oznacz_wykonany_backup() -> None:
-    nastawienia.zapisz(KLUCZ_OSTATNI_BACKUP, datetime.now(timezone.utc).isoformat())
+    nastawienia_profilu.zapisz(KLUCZ_OSTATNI_BACKUP, datetime.now(timezone.utc).isoformat())
 
 
 # -- tworzenie kopii ----------------------------------------------------
@@ -229,11 +232,30 @@ def _uruchom_pg_dump(plik_docelowy: Path) -> None:
         )
 
 
+def _nazwa_firmy_biezacej() -> str | None:
+    """Nazwa firmy (Firma.nazwa) w chwili wykonania backupu - trafia do
+    manifestu WYLACZNIE jako informacja pomocnicza dla podejrzyj_manifest()/
+    ostrzezenia przy przywracaniu backupu niepasujacego do aktywnego profilu
+    (Faza 25), nigdzie indziej nie jest uzywana. None, jesli baza jest jeszcze
+    pusta (backup wykonany przed skonfigurowaniem firmy) - taki manifest po
+    prostu nigdy nie wywola ostrzezenia o niezgodnosci."""
+    from app.database import SessionLocal
+    from app.models import Firma
+
+    db = SessionLocal()
+    try:
+        firma = db.query(Firma).first()
+        return firma.nazwa if firma is not None else None
+    finally:
+        db.close()
+
+
 def _zbuduj_archiwum(plik_zip: Path, plik_dumpu: Path) -> None:
     manifest = {
         "wersja_formatu": WERSJA_FORMATU,
         "utworzono": datetime.now(timezone.utc).isoformat(),
         "nazwa_bazy": _nazwa_bazy(),
+        "nazwa_firmy": _nazwa_firmy_biezacej(),
     }
     with zipfile.ZipFile(plik_zip, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(NAZWA_MANIFESTU, json.dumps(manifest, indent=2))
@@ -248,14 +270,10 @@ def _zbuduj_archiwum(plik_zip: Path, plik_dumpu: Path) -> None:
 # -- przywracanie ----------------------------------------------------
 
 
-def przywroc_z_backupu(plik_kopii: Path, haslo: str) -> None:
-    """Przywraca dane z pliku kopii zapasowej, NADPISUJAC calkowicie biezaca
-    baze danych. Zatrzymuje watek serwera FastAPI (dla polaczen SQLAlchemy),
-    ale zostawia prywatny Postgres dzialajacy, bo pg_restore/psql musza sie z
-    nim polaczyc. Wywolujacy (gui/windows/widok_ustawien.py) jest
-    odpowiedzialny za PELNE zamkniecie i wymuszenie ponownego uruchomienia
-    appki PO powodzeniu tej funkcji - stan appki w pamieci (otwarte okna,
-    zaladowane dane) jest niespojny z nowa zawartoscia bazy."""
+def _odszyfruj_archiwum(plik_kopii: Path, haslo: str) -> bytes:
+    """Wspolny pierwszy krok przywroc_z_backupu() i podejrzyj_manifest() -
+    walidacja magic/wersji + odszyfrowanie ZIP-a, bez dotykania bazy danych
+    ani serwera FastAPI. Rzuca BladKopiiZapasowej/NieprawidloweHaslo."""
     plik_kopii = Path(plik_kopii)
     surowe = plik_kopii.read_bytes()
     if surowe[:4] != MAGIC:
@@ -271,11 +289,42 @@ def przywroc_z_backupu(plik_kopii: Path, haslo: str) -> None:
     token = surowe[5 + DLUGOSC_SOLI :]
     klucz = _wyprowadz_klucz(haslo, sol)
     try:
-        zip_bajty = Fernet(klucz).decrypt(token)
+        return Fernet(klucz).decrypt(token)
     except InvalidToken as e:
         raise NieprawidloweHaslo(
             "Nieprawidłowe hasło szyfrowania kopii zapasowej (albo plik jest uszkodzony)."
         ) from e
+
+
+def podejrzyj_manifest(plik_kopii: Path, haslo: str) -> dict:
+    """Odszyfrowuje i zwraca WYLACZNIE manifest.json z pliku kopii zapasowej -
+    bez dotykania bazy danych, bez zatrzymywania serwera FastAPI (Faza 25).
+    Uzywane PRZED faktycznym przywroceniem, zeby ostrzec uzytkownika, jesli
+    wybrany plik nalezy do INNEJ firmy niz aktywny profil (patrz
+    gui/windows/dialog_kopii_zapasowej.py). Rzuca te same wyjatki co
+    przywroc_z_backupu przy nieprawidlowym pliku/hasle."""
+    zip_bajty = _odszyfruj_archiwum(plik_kopii, haslo)
+    with zipfile.ZipFile(io.BytesIO(zip_bajty)) as zf:
+        try:
+            surowy_manifest = zf.read(NAZWA_MANIFESTU)
+        except KeyError as e:
+            raise BladKopiiZapasowej("Archiwum kopii zapasowej jest niekompletne.") from e
+    try:
+        return json.loads(surowy_manifest)
+    except json.JSONDecodeError as e:
+        raise BladKopiiZapasowej("Archiwum kopii zapasowej jest niekompletne.") from e
+
+
+def przywroc_z_backupu(plik_kopii: Path, haslo: str) -> None:
+    """Przywraca dane z pliku kopii zapasowej, NADPISUJAC calkowicie biezaca
+    baze danych. Zatrzymuje watek serwera FastAPI (dla polaczen SQLAlchemy),
+    ale zostawia prywatny Postgres dzialajacy, bo pg_restore/psql musza sie z
+    nim polaczyc. Wywolujacy (gui/windows/widok_ustawien.py) jest
+    odpowiedzialny za PELNE zamkniecie i wymuszenie ponownego uruchomienia
+    appki PO powodzeniu tej funkcji - stan appki w pamieci (otwarte okna,
+    zaladowane dane) jest niespojny z nowa zawartoscia bazy."""
+    plik_kopii = Path(plik_kopii)
+    zip_bajty = _odszyfruj_archiwum(plik_kopii, haslo)
 
     with tempfile.TemporaryDirectory(prefix="fpro-restore-") as tmp_tekst:
         tmp = Path(tmp_tekst)

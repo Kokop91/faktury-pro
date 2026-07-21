@@ -36,6 +36,16 @@ class DialogPrzypomnieniaBackupu(ctk.CTkToplevel):
                 "kopię zapasową w Ustawieniach, żeby zabezpieczyć się przed "
                 "utratą danych przy awarii dysku."
             )
+        elif dni_od_ostatniego is None:
+            # Lokalizacja kopii JEST ustawiona (inaczej nigdy_skonfigurowano
+            # bylby True), ale zadna kopia jeszcze nie powstala - odrebny
+            # wariant od "nieaktualna", zeby nie interpolowac None w tresci.
+            tytul = "Nie wykonano jeszcze kopii zapasowej"
+            tresc = (
+                "Lokalizacja kopii zapasowych jest już ustawiona, ale nie "
+                "wykonano jeszcze żadnej kopii. Zalecamy wykonanie pierwszej "
+                "kopii w Ustawieniach."
+            )
         else:
             tytul = "Kopia zapasowa jest nieaktualna"
             tresc = (

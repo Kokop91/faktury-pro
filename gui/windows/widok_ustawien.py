@@ -1,3 +1,5 @@
+import os
+import shutil
 import webbrowser
 from datetime import date, datetime
 from pathlib import Path
@@ -5,8 +7,9 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
+from app import profil
 from app.wersja import WERSJA
-from gui import api_client, auth, formatowanie, nastawienia, styl
+from gui import api_client, auth, formatowanie, nastawienia, profile_rejestr, styl
 from gui import kopia_zapasowa as kz
 from gui.integracje_gui import pobierz_z_gus
 from gui.logo import wybierz_i_skopiuj_logo
@@ -72,6 +75,7 @@ class WidokUstawien(ctk.CTkFrame):
         self._zbuduj_karte_przypomnien(wrapper)
         self._zbuduj_karte_hasla(wrapper)
         self._zbuduj_karte_o_aplikacji(wrapper)
+        self._zbuduj_karte_usuwania_profilu(wrapper)
 
     def _zbuduj_karte_wygladu(self, master) -> None:
         karta = ctk.CTkFrame(
@@ -1537,5 +1541,136 @@ class WidokUstawien(ctk.CTkFrame):
         def blad(e) -> None:
             ustaw_tekst_ladowania(self._przycisk_sprawdz_aktualizacje, False, "Sprawdź aktualizacje")
             pokaz_toast(self, "Nie udało się sprawdzić dostępności aktualizacji.", typ="ostrzezenie")
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    # -- usuwanie profilu firmy (Faza 25) - NIEODWRACALNE: kasuje baze danych,
+    # katalog danych i wpis w rejestrze tego jednego profilu. Inne profile na
+    # tym komputerze pozostaja calkowicie nienaruszone. Ukryta w trybie
+    # deweloperskim (profil.id_profilu_aktywnego() is None), bo tam nie ma
+    # zadnego "profilu" do usuniecia. ------------------------------------
+
+    def _zbuduj_karte_usuwania_profilu(self, master) -> None:
+        if profil.id_profilu_aktywnego() is None:
+            return
+
+        karta = ctk.CTkFrame(
+            master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        karta.pack(pady=(styl.ODSTEP_SREDNI, 0), fill="x")
+
+        ctk.CTkLabel(
+            karta,
+            text="Usuń tę firmę",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+        ).pack(
+            padx=styl.ODSTEP_DUZY,
+            pady=(styl.ODSTEP_DUZY, styl.ODSTEP_SREDNI),
+            anchor="w",
+        )
+
+        wewnatrz = ctk.CTkFrame(karta, fg_color="transparent", width=320)
+        wewnatrz.pack(padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY), fill="x")
+
+        ostrzezenie = ctk.CTkFrame(
+            wewnatrz, fg_color=styl.KOLOR_BLAD_TLO, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        ostrzezenie.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+        ctk.CTkLabel(
+            ostrzezenie,
+            text=(
+                "Usunięcie firmy jest NIEODWRACALNE - kasuje jej bazę danych, "
+                "ustawienia, logo i dane KSeF zapisane na tym komputerze. Inne "
+                "firmy skonfigurowane w Faktury Pro NIE są naruszane."
+            ),
+            font=styl.CZCIONKA_TRESC_POGRUBIONA,
+            text_color=styl.KOLOR_BLAD,
+            wraplength=280,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", padx=styl.ODSTEP_SREDNI, pady=styl.ODSTEP_SREDNI)
+
+        self._etykieta_pola(wewnatrz, "Wpisz dokładną nazwę firmy, aby potwierdzić")
+        self._pole_potwierdzenia_usuniecia = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC)
+        self._pole_potwierdzenia_usuniecia.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+        self._pole_potwierdzenia_usuniecia.bind(
+            "<KeyRelease>", self._na_zmiane_potwierdzenia_usuniecia
+        )
+
+        self._przycisk_usun_profil = ctk.CTkButton(
+            wewnatrz,
+            text="Usuń tę firmę z listy profili",
+            fg_color="transparent",
+            border_width=1,
+            border_color=styl.KOLOR_BLAD,
+            text_color=styl.KOLOR_BLAD,
+            hover_color=styl.KOLOR_BLAD_TLO,
+            state="disabled",
+            command=self._usun_profil,
+        )
+        self._przycisk_usun_profil.pack(fill="x")
+
+    def _na_zmiane_potwierdzenia_usuniecia(self, _zdarzenie=None) -> None:
+        nazwa_oczekiwana = self._pola_firmy["nazwa"].get().strip()
+        wpisana = self._pole_potwierdzenia_usuniecia.get().strip()
+        aktywny = bool(nazwa_oczekiwana) and wpisana == nazwa_oczekiwana
+        self._przycisk_usun_profil.configure(state="normal" if aktywny else "disabled")
+
+    def _usun_profil(self) -> None:
+        if not messagebox.askyesno(
+            "Usunięcie firmy",
+            "Zamierzasz TRWALE usunąć tę firmę: jej bazę danych, ustawienia, "
+            "logo i dane KSeF zapisane na tym komputerze zostaną skasowane. "
+            "Tej operacji nie można cofnąć.\n\n"
+            "Czy na pewno chcesz kontynuować?",
+            icon="warning",
+            parent=self,
+        ):
+            return
+
+        profil_id = profil.id_profilu_aktywnego()
+        wpis_profilu = profile_rejestr.pobierz(profil_id)
+        if wpis_profilu is None:
+            komunikat_bledu(self, "Nie udało się odnaleźć tego profilu w rejestrze.")
+            return
+
+        self._przycisk_usun_profil.configure(state="disabled")
+
+        def zadanie():
+            from gui import proces_aplikacji
+
+            proces_aplikacji.zatrzymaj_serwer_fastapi()
+
+            from gui.postgres_serwer import usun_baze
+
+            usun_baze(wpis_profilu.nazwa_bazy)
+            shutil.rmtree(profil.katalog_profilu(profil_id), ignore_errors=True)
+            profile_rejestr.usun(profil_id)
+
+        def sukces(_wynik) -> None:
+            messagebox.showinfo(
+                "Firma usunięta",
+                "Firma została usunięta z listy profili. Aplikacja zostanie "
+                "teraz zamknięta.",
+                parent=self,
+            )
+            from gui import proces_aplikacji
+
+            # zatrzymaj_wszystko() zatrzymuje TAKZE prywatny Postgres (nie
+            # tylko watek FastAPI, ktory `zadanie()` juz zatrzymal wyzej, zeby
+            # DROP DATABASE mial sie do czego polaczyc) - bez tego wywolania
+            # proces postgres.exe zostawalby osierocony po os._exit() ponizej,
+            # dokladnie ten sam problem co installer.iss musial juz raz
+            # naprawiac dla awaryjnego zamkniecia appki (patrz CLAUDE.md,
+            # Faza 18C). Ten sam wzorzec co
+            # gui/windows/dialog_kopii_zapasowej.py:DialogPrzywrocBackup po
+            # udanym przywroceniu backupu.
+            proces_aplikacji.zatrzymaj_wszystko()
+            os._exit(0)
+
+        def blad(e) -> None:
+            self._przycisk_usun_profil.configure(state="normal")
+            komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)

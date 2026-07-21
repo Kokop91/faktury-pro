@@ -177,7 +177,10 @@ Przy 3-4 sesjach tygodniowo: realnie **4-6 tygodni kalendarzowych** do wersji te
 - **JPK_V7** — pełna zgodność ze schematem XML wymaga starannej weryfikacji aktualnych przepisów
 - Faktury cykliczne / subskrypcyjne
 - Automatyzacja WZ z faktury (Model A jako opcja, po ustabilizowaniu Modelu B)
-- Wielu użytkowników / multi-firma
+- ~~Wielu użytkowników / multi-firma~~ — zaimplementowane jako "wiele profili firm"
+  (Faza 25, w pełni niezależne profile: osobna baza + osobny katalog danych na
+  profil, bez współdzielenia danych biznesowych). Patrz `CLAUDE.md`, sekcja
+  "Wiele profili firm (Faza 25, zrobione)".
 - WDT, faktury eksportowe, faktury marża (nisza, do dodania na żądanie)
 - Split payment (mechanizm podzielonej płatności)
 - Integracje ze sklepami internetowymi (np. Shoper)

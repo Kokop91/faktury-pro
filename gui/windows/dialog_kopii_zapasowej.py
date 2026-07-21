@@ -14,8 +14,9 @@ from typing import Callable
 
 import customtkinter as ctk
 
+from app import profil
 from gui import kopia_zapasowa as kz
-from gui import styl
+from gui import profile_rejestr, styl
 from gui.api_client import ApiError
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import Banner, komunikat_bledu, ustaw_tekst_ladowania
@@ -208,16 +209,68 @@ class DialogPrzywrocBackup(OknoFormularza):
             return
         self._banner.ukryj()
 
-        if not messagebox.askyesno(
+        # Zanim appka cokolwiek nadpisze, podglada manifest kopii (Faza 25) -
+        # zeby ostrzec, jesli backup nalezy do INNEJ firmy niz aktywny profil
+        # (np. przez pomylke wybrano plik firmy A, majac otwarta firme B).
+        # Ten sam zestaw wyjatkow (zle haslo/uszkodzony plik) co przy
+        # docelowym przywroceniu ponizej - jesli podglad sie nie uda, samo
+        # przywrocenie i tak by sie nie udalo, wiec pokazujemy blad od razu.
+        ustaw_tekst_ladowania(
+            self._przycisk, True, "Przywróć (nadpisze bieżące dane)", "Sprawdzanie kopii zapasowej..."
+        )
+
+        def zadanie_podgladu():
+            try:
+                return kz.podejrzyj_manifest(self._plik, haslo)
+            except kz.NieprawidloweHaslo as e:
+                raise ApiError(str(e)) from e
+            except kz.BladKopiiZapasowej as e:
+                raise ApiError(str(e)) from e
+
+        def po_podgladzie(manifest: dict) -> None:
+            ustaw_tekst_ladowania(self._przycisk, False, "Przywróć (nadpisze bieżące dane)")
+            if not self._potwierdz_przywrocenie(manifest):
+                return
+            self._wykonaj_przywrocenie(haslo)
+
+        def blad_podgladu(e: ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk, False, "Przywróć (nadpisze bieżące dane)")
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie_podgladu, po_podgladzie, blad_podgladu)
+
+    def _potwierdz_przywrocenie(self, manifest: dict) -> bool:
+        nazwa_backupu = manifest.get("nazwa_firmy")
+        nazwa_aktywna = None
+        profil_id = profil.id_profilu_aktywnego()
+        if profil_id is not None:
+            wpis = profile_rejestr.pobierz(profil_id)
+            if wpis is not None:
+                nazwa_aktywna = wpis.nazwa_wyswietlana
+
+        if nazwa_backupu and nazwa_aktywna and nazwa_backupu != nazwa_aktywna:
+            if not messagebox.askyesno(
+                "Kopia zapasowa innej firmy",
+                f"Ta kopia zapasowa należy do firmy „{nazwa_backupu}”, a aktywna "
+                f"jest teraz firma „{nazwa_aktywna}”.\n\n"
+                "Przywrócenie NADPISZE dane aktywnej firmy danymi z INNEJ firmy. "
+                "Czy na pewno chcesz kontynuować?",
+                icon="warning",
+                default=messagebox.NO,
+                parent=self,
+            ):
+                return False
+
+        return messagebox.askyesno(
             "Potwierdź przywrócenie danych",
             "Zamierzasz nadpisać WSZYSTKIE bieżące dane aplikacji zawartością "
             f"kopii zapasowej „{self._plik.name}”. Tej operacji nie można cofnąć.\n\n"
             "Czy na pewno chcesz kontynuować?",
             icon="warning",
             parent=self,
-        ):
-            return
+        )
 
+    def _wykonaj_przywrocenie(self, haslo: str) -> None:
         ustaw_tekst_ladowania(
             self._przycisk, True, "Przywróć (nadpisze bieżące dane)", "Przywracanie danych..."
         )

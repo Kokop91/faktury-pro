@@ -1,12 +1,14 @@
 import json
-import os
 from pathlib import Path
 
-# Ustawienia integracji (Faza 14: srodowisko GUS + klucz produkcyjny) trzymane
-# lokalnie poza baza danych i poza repozytorium - ten sam wzorzec katalogu co
-# haslo appki w gui/auth.py, ale osobny plik i osobny proces (ten kod dziala
-# w backendzie/FastAPI, nie w GUI - to backend faktycznie wywoluje SOAP GUS).
-NAZWA_KATALOGU = "FakturyPro"
+from app.profil import katalog_aktywnego_profilu
+
+# Ustawienia integracji (Faza 14: srodowisko GUS + klucz produkcyjny) sa
+# daną PER-PROFILU (Faza 25) - kazda firma ma wlasny klucz produkcyjny GUS,
+# zyja w katalogu aktywnego profilu (app/profil.py:katalog_aktywnego_profilu),
+# ten sam katalog co haslo appki w gui/auth.py, ale osobny plik i osobny
+# proces (ten kod dziala w backendzie/FastAPI, nie w GUI - to backend
+# faktycznie wywoluje SOAP GUS).
 NAZWA_PLIKU = "integracje.json"
 
 DOMYSLNE_SRODOWISKO_GUS = "testowe"
@@ -20,11 +22,7 @@ KLUCZ_TESTOWY_GUS = "abcde12345abcde12345"
 
 
 def _katalog_konfiguracji() -> Path:
-    if os.name == "nt":
-        podstawa = os.environ.get("APPDATA") or str(Path.home())
-    else:
-        podstawa = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(podstawa) / NAZWA_KATALOGU
+    return katalog_aktywnego_profilu()
 
 
 def _plik_ustawien() -> Path:

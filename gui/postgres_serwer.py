@@ -20,7 +20,6 @@ przetrwac aktualizacje/reinstalacje samej appki, wiec nie moze siedziec w tym
 samym miejscu co jej pliki programu.
 """
 
-import os
 import subprocess
 import sys
 import time
@@ -33,6 +32,7 @@ from app.config import (
     POSTGRES_PRYWATNY_UZYTKOWNIK,
     adres_prywatnego_postgresa,
 )
+from app.profil import katalog_appdata_lokalny
 from app.sciezki import katalog_bazowy
 
 NAZWA_KATALOGU_DANYCH = "pgsql-data"
@@ -41,8 +41,9 @@ INTERWAL_POLLINGU_S = 0.3
 
 
 def _katalog_appdata() -> Path:
-    podstawa = os.environ.get("LOCALAPPDATA") or str(Path.home())
-    return Path(podstawa) / "FakturyPro"
+    # Katalog GLOBALNY (nie per-profil, Faza 25) - jedna instancja Postgresa
+    # obsluguje wiele baz, jedna na profil (patrz app/profil.py, app/config.py).
+    return katalog_appdata_lokalny()
 
 
 def _katalog_binariow() -> Path:
@@ -204,3 +205,26 @@ def upewnij_baze_i_migracje() -> None:
     cfg = Config(str(katalog_bazowy() / "alembic.ini"))
     cfg.set_main_option("script_location", str(katalog_bazowy() / "alembic"))
     command.upgrade(cfg, "head")
+
+
+def usun_baze(nazwa_bazy: str) -> None:
+    """DROP DATABASE na prywatnej instancji - wolane WYLACZNIE przy usuwaniu
+    profilu firmy (Faza 25, Ustawienia -> "Usun te firme"), PO zatrzymaniu
+    serwera FastAPI (patrz gui/proces_aplikacji.py:zatrzymaj_serwer_fastapi) -
+    dopoki jakiekolwiek polaczenie SQLAlchemy tej appki trzyma baze otwarta,
+    DROP DATABASE by sie nie udal. `WITH (FORCE)` (PostgreSQL 13+) rozlacza
+    dodatkowo wszelkie pozostale sesje jako ostatnia gwarancja.
+
+    `nazwa_bazy` NIGDY nie pochodzi bezposrednio od uzytkownika - zawsze z
+    wpisu w gui/profile_rejestr.py (wygenerowanego przy tworzeniu profilu),
+    wiec f-string bez parametryzacji ma ten sam profil bezpieczenstwa co
+    CREATE DATABASE kilka linii wyzej w tym samym pliku."""
+    import psycopg2
+
+    polaczenie = psycopg2.connect(adres_prywatnego_postgresa("postgres"))
+    polaczenie.autocommit = True
+    try:
+        with polaczenie.cursor() as kursor:
+            kursor.execute(f'DROP DATABASE IF EXISTS "{nazwa_bazy}" WITH (FORCE)')
+    finally:
+        polaczenie.close()

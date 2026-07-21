@@ -1,14 +1,22 @@
 import json
-import os
 from pathlib import Path
 
 import customtkinter as ctk
 
-# Ustawienia appki (na razie tylko tryb wygladu) trzymane lokalnie poza baza
-# i poza repozytorium - ten sam wzorzec katalogu co haslo appki w gui/auth.py,
-# ale osobny plik (auth.json zostaje wylacznie do hasla).
-NAZWA_KATALOGU = "FakturyPro"
+from app.profil import katalog_appdata_lokalny
+
+# Ustawienia appki trzymane lokalnie poza baza i poza repozytorium. W
+# odroznieniu od auth.json/ksef.json/ustawienia_profilu.json (per-profil,
+# Faza 25 - patrz gui/nastawienia_profilu.py), ten plik zostaje
+# GLOBALNY (wspolny dla wszystkich profili): tryb wygladu, geometria okna i
+# zapamietane filtry/sortowania list to preferencje UI/monitora, nie dane
+# firmy - ekran wyboru profilu (gui/windows/ekran_wyboru_profilu.py) tez
+# potrzebuje trybu wygladu, zanim jakikolwiek profil zostanie wybrany.
 NAZWA_PLIKU = "ustawienia.json"
+
+
+def _katalog_konfiguracji() -> Path:
+    return katalog_appdata_lokalny()
 
 DOMYSLNY_TRYB = "system"
 
@@ -25,14 +33,6 @@ ETYKIETY_TRYBOW_WYGLADU: dict[str, str] = {
     "ciemny": "Ciemny",
     "system": "Zgodnie z systemem",
 }
-
-
-def _katalog_konfiguracji() -> Path:
-    if os.name == "nt":
-        podstawa = os.environ.get("APPDATA") or str(Path.home())
-    else:
-        podstawa = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(podstawa) / NAZWA_KATALOGU
 
 
 def _plik_ustawien() -> Path:

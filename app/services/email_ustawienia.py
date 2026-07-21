@@ -16,7 +16,11 @@ import json
 import os
 from pathlib import Path
 
-NAZWA_KATALOGU = "FakturyPro"
+from app.profil import katalog_aktywnego_profilu
+
+# Ustawienia SMTP sa daną PER-PROFILU (Faza 25) - kazda firma ma wlasna
+# skrzynke nadawcza, zyja w katalogu aktywnego profilu (app/profil.py:
+# katalog_aktywnego_profilu).
 NAZWA_PLIKU = "email.json"
 
 DOMYSLNY_PORT = 587
@@ -28,11 +32,7 @@ _CRYPTPROTECT_UI_FORBIDDEN = 0x1
 
 
 def _katalog_konfiguracji() -> Path:
-    if os.name == "nt":
-        podstawa = os.environ.get("APPDATA") or str(Path.home())
-    else:
-        podstawa = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(podstawa) / NAZWA_KATALOGU
+    return katalog_aktywnego_profilu()
 
 
 def _plik_ustawien() -> Path:

@@ -379,6 +379,139 @@ z którym gada wyłącznie aplikacja desktopowa tego samego użytkownika, na tym
       pliku logo (`tkinter.filedialog`) wymagają jednego ręcznego przejścia
       przez człowieka przed uznaniem fazy za w pełni potwierdzoną.
 
+## Wiele profili firm (Faza 25, zrobione)
+
+**ZASADA NADRZĘDNA: profile firm są w PEŁNI NIEZALEŻNE — zero współdzielenia
+danych biznesowych.** To NIE jest wielofirmowość w sensie jednej wspólnej bazy
+z filtrowaniem po `firma_id` — modele biznesowe (`Faktura`, `Klient`,
+`Produkt`, `Magazyn`, `Oferta` itd.) są **całkowicie nietknięte** przez tę
+fazę. Każdy profil dostaje własną, osobną bazę danych i własny podkatalog
+plików; jedyne, co jest współdzielone między profilami, to sam proces
+prywatnego PostgreSQL (Faza 18B) i garstka globalnych ustawień UI (tryb
+wyglądu, geometria okna — patrz niżej).
+
+- **Mechanizm:** jedna instancja prywatnego Postgresa (bez zmian względem
+  Fazy 18B — ten sam port 55432, ten sam katalog danych
+  `%LOCALAPPDATA%/FakturyPro/pgsql-data/`), ale KAŻDY profil ma wewnątrz niej
+  własną bazę (`faktury_pro_<id_profilu>`, gdzie `id_profilu` to
+  `uuid.uuid4().hex`). Który profil jest aktywny w danym procesie appki
+  ustala `app/profil.py:ustaw_aktywny_profil(profil_id, nazwa_bazy)` przez
+  **zmienną środowiskową procesu** `FAKTURY_PRO_PROFIL_BAZA` — `app/config.py`
+  odczytuje ją przy obliczaniu `POSTGRES_PRYWATNY_BAZA`
+  (`os.environ.get(ZMIENNA_BAZA_PROFILU, "faktury_pro")`).
+  **KRYTYCZNE: `app.config` (i wszystko co go importuje, w tym
+  `app.database` z jego globalnym `engine`/`SessionLocal` tworzonym raz przy
+  imporcie) NIE MOŻE być zaimportowane nigdzie w procesie, zanim profil
+  zostanie wybrany** — moduł oblicza swoje stałe raz, przy pierwszym
+  imporcie, więc wcześniejszy import zamroziłby appkę na złej bazie (albo na
+  domyślnej `faktury_pro`) do końca życia procesu. `gui/main.py` pilnuje tego
+  porządku: ekran wyboru profilu (i `ustaw_aktywny_profil`) działa jeszcze
+  PRZED jakimkolwiek importem `app.config`/`gui.postgres_serwer` (te są i tak
+  importowane leniwie, dopiero wewnątrz `_uruchom_prywatny_postgres_jesli_trzeba`).
+  Dzięki temu `app/database.py`, `alembic/env.py` i
+  `gui/postgres_serwer.py:upewnij_baze_i_migracje()` (tworzenie
+  bazy + `alembic upgrade head`) działają dla profili **bez żadnej zmiany
+  własnej logiki** — po prostu zawsze widzą już poprawnie rozwiązaną nazwę
+  bazy.
+- **Tryb deweloperski bez zmian:** appka z jawnym `DATABASE_URL` w `.env`
+  (`app.profil.czy_tryb_deweloperski()`) w ogóle pomija ekran wyboru profilu
+  i całą resztę tej fazy — łączy się z bazą administrowaną ręcznie przez
+  dewelopera, dokładnie jak przed Fazą 25.
+- **Układ katalogów** (`app/profil.py` — jedno, wspólne źródło prawdy,
+  zastępuje 8 wcześniej niezależnie zduplikowanych helperów
+  `_katalog_appdata()`/`_katalog_konfiguracji()` w `gui/postgres_serwer.py`,
+  `gui/logo.py`, `gui/auth.py`, `gui/nastawienia.py`,
+  `app/services/ksef_ustawienia.py`, `app/services/email_ustawienia.py`,
+  `app/services/integracje_ustawienia.py`):
+  - `%LOCALAPPDATA%\FakturyPro\profiles.json` — rejestr profili
+    (`gui/profile_rejestr.py`): id, nazwa bazy, nazwa wyświetlana, daty
+    utworzenia/ostatniego użycia. Czysto lokalny plik, zero połączenia z bazą
+    — musi być czytelny, zanim jakikolwiek backend wystartuje.
+  - `%LOCALAPPDATA%\FakturyPro\profiles\<id>\` — dane PER-PROFILU: `auth.json`
+    (hasło appki, Faza 6), `ksef.json` (Faza 12A), `email.json` (SMTP, Faza
+    23), `integracje.json` (środowisko/klucz GUS, Faza 14), `logo/` (Faza
+    18D), `ustawienia_profilu.json` (katalog docelowy i data ostatniego
+    backupu, Faza 22 — `gui/nastawienia_profilu.py`). Każdy z tych plików
+    żył wcześniej płasko pod `%APPDATA%\FakturyPro` (małe, roamingowe) albo
+    `%LOCALAPPDATA%\FakturyPro` (logo) — od tej fazy wszystko per-profilowe
+    konsoliduje się pod jeden, wspólny korzeń w `%LOCALAPPDATA%`, niezależnie
+    od dawnego podziału roaming/local.
+  - `%LOCALAPPDATA%\FakturyPro\ustawienia.json` — zostaje GLOBALNE
+    (`gui/nastawienia.py`, bez zmian poza przeniesieniem katalogu z `%APPDATA%`
+    tutaj): tryb wyglądu, geometria głównego okna, zapamiętane
+    filtry/sortowania list. To preferencje UI/monitora, nie dane firmy — ekran
+    wyboru profilu też potrzebuje trybu wyglądu, zanim jakikolwiek profil
+    zostanie wybrany, więc nie może być per-profilowy. Świadomy,
+    zaakceptowany kompromis: otwarcie listy faktur w Firmie B może pokazać
+    filtr ostatnio używany w Firmie A — to nieszkodliwy stan UI, nie dane
+    biznesowe.
+  - `%LOCALAPPDATA%\FakturyPro\pgsql-data\` — bez zmian, współdzielone przez
+    wszystkie profile (jeden serwer, wiele baz).
+- **Kolejność startu** (`gui/main.py:main()`): blokada pojedynczej instancji →
+  tryb wyglądu (globalny) → *(tylko tryb produktowy)* migracja starej
+  instalacji (`gui/migracja_profili.py`) → ekran wyboru profilu
+  (`gui/windows/ekran_wyboru_profilu.py`) → `ustaw_aktywny_profil()` → *od
+  tego miejsca cały dotychczasowy ciąg startu (ekran hasła Fazy 6 → prywatny
+  Postgres + backend z paskiem postępu Fazy 18D → kreator pierwszego
+  uruchomienia → główne okno) działa bez ŻADNEJ zmiany wewnętrznej logiki*,
+  bo operuje na już rozwiązanym profilu.
+- **Tworzenie nowego profilu:** `gui/profile_rejestr.py:utworz_nowy_profil()`
+  generuje id i nazwę bazy (`faktury_pro_<id>` — jedyne miejsce z tą
+  konwencją zakodowaną) i dodaje wpis do rejestru; sama baza/migracje/katalog
+  danych powstają naturalnie w dalszym, niezmienionym cyklu startu (kreator
+  pierwszego uruchomienia z Fazy 18D uruchamia się dla tego profilu tak samo,
+  jak dla jedynej firmy przed Fazą 25).
+- **Blokada pojedynczej instancji (`gui/blokada_instancji.py`) zostaje
+  GLOBALNA — jeden proces Faktury Pro na raz, NIE per-profil.** Świadoma
+  decyzja: FastAPI nasłuchuje na sztywno zakodowanym porcie 8000
+  (`gui/main.py:PORT`, `gui/api_client.py:BASE_URL`) i istniejąca logika
+  `_serwer_odpowiada()` ("jeśli serwer już odpowiada na 8000, to poprzednia
+  sesja — przejmij ją zamiast startować własną") sprawiłaby, że drugi
+  równoległy proces dla innej firmy **cicho podłączyłby się do backendu
+  pierwszego procesu**, pokazując dane złej firmy pod etykietą dobrej — realne
+  złamanie zasady nadrzędnej. Obsługa prawdziwie równoległych okien
+  wymagałaby dynamicznego przydziału portów i przebudowy
+  `api_client.py`/`_serwer_odpowiada()` — poza zakresem tej fazy. **Żeby
+  zmienić firmę, użytkownik zamyka appkę i uruchamia ją ponownie** — trafia z
+  powrotem na ekran wyboru profilu. Appka NIE obsługuje przełączania profilu
+  w trakcie działania procesu — to celowe uproszczenie (patrz też
+  `app/database.py`: jeden globalny `engine`/`SessionLocal` tworzony raz przy
+  imporcie, więc przełączenie bazy w locie i tak byłoby bardzo kruche).
+- **Migracja instalacji sprzed Fazy 25** (`gui/migracja_profili.py:migruj_jesli_trzeba()`,
+  wołane raz na starcie, przed ekranem wyboru profilu): jeśli `profiles.json`
+  jeszcze nie istnieje, a stary, płaski `%APPDATA%\FakturyPro\auth.json`
+  istnieje — appka PRZENOSI (nie kopiuje) `auth.json`/`ksef.json`/
+  `email.json`/`integracje.json`/`logo/`/`ustawienia.json` (z wydzieleniem
+  kluczy backupu) do nowej struktury i rejestruje profil `"legacy"`
+  wskazujący na **niezmienioną** bazę `faktury_pro` (rename żywej bazy jest
+  niepotrzebnym ryzykiem — nazwa bazy jest zapisywana jawnie per-profil w
+  rejestrze, nie zawsze wyprowadzana z konwencji `faktury_pro_<id>`).
+  Idempotentne — każdy krok sam sprawdza, czy jest jeszcze co robić, więc
+  przerwana w połowie migracja bezpiecznie wznawia się przy kolejnym starcie.
+- **Backup/przywracanie (Faza 22) są per-profil "za darmo":**
+  `gui/kopia_zapasowa.py` już wcześniej derywowało nazwę/adres bazy z
+  `app.config.DATABASE_URL` i katalog logo z `gui/logo.py` — oba są teraz
+  poprawnie profilowo-świadome bez zmiany logiki, jedyna zmiana to
+  przeniesienie katalogu docelowego backupu/daty ostatniego backupu z
+  globalnego `nastawienia.py` do per-profilowego `nastawienia_profilu.py`.
+  Dodatkowo manifest kopii (`manifest.json` w archiwum `.fpbk`) zyskał pole
+  `nazwa_firmy` — przed przywróceniem appka podgląda je
+  (`kopia_zapasowa.py:podejrzyj_manifest()`, bez dotykania bazy/serwera) i
+  jeśli nie zgadza się z aktywnym profilem, pokazuje dodatkowe ostrzeżenie w
+  `gui/windows/dialog_kopii_zapasowej.py:DialogPrzywrocBackup` — chroni przed
+  przypadkowym przywróceniem backupu jednej firmy do profilu drugiej.
+- **Usuwanie profilu** (Ustawienia → karta "Usuń tę firmę", ukryta w trybie
+  deweloperskim): wymaga wpisania dokładnej nazwy firmy (przycisk nieaktywny,
+  dopóki tekst się nie zgadza) + drugiego potwierdzenia
+  (`messagebox.askyesno`). Po potwierdzeniu: zatrzymanie wątku FastAPI
+  (`gui/proces_aplikacji.py:zatrzymaj_serwer_fastapi`) → `DROP DATABASE ...
+  WITH (FORCE)` (`gui/postgres_serwer.py:usun_baze()`) → skasowanie katalogu
+  profilu → usunięcie wpisu z rejestru → wymuszone zamknięcie CAŁEJ appki
+  (`os._exit(0)`, appka NIE wraca do ekranu wyboru profilu w tym samym
+  procesie — spójnie z brakiem przełączania profilu w locie). Usuwa
+  WYŁĄCZNIE dane tego jednego profilu — inne bazy/katalogi profili są
+  całkowicie nienaruszone.
+
 ## Faza 19 — automatyczne generowanie WZ z faktury (Etap 3, zrobione)
 
 Świadomy, jednorazowy skrót dla użytkownika — przycisk "Wygeneruj WZ z tej

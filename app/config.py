@@ -2,6 +2,8 @@ import os
 
 from dotenv import load_dotenv
 
+from app.profil import ZMIENNA_BAZA_PROFILU
+
 load_dotenv()
 
 # Prywatna, wbudowana instancja PostgreSQL (Faza 18B) - appka zarzadza nia
@@ -12,7 +14,14 @@ load_dotenv()
 # (%LOCALAPPDATA%/FakturyPro/pgsql-data) i nasluchuje wylacznie na 127.0.0.1.
 POSTGRES_PRYWATNY_HOST = "127.0.0.1"
 POSTGRES_PRYWATNY_PORT = 55432
-POSTGRES_PRYWATNY_BAZA = "faktury_pro"
+# Wiele profili firm (Faza 25): kazdy profil ma WLASNA baze w tej samej
+# instancji Postgresa - nazwa bazy przychodzi ze zmiennej srodowiskowej
+# ustawionej PRZEZ gui/main.py (app/profil.py:ustaw_aktywny_profil), zanim
+# ten modul zostanie po raz pierwszy zaimportowany. Domyslna wartosc
+# "faktury_pro" to NIE profil - to zachowanie sprzed Fazy 25, uzywane w
+# trybie deweloperskim i jako nazwa bazy zmigrowanej instalacji "legacy"
+# (patrz gui/migracja_profili.py).
+POSTGRES_PRYWATNY_BAZA = os.environ.get(ZMIENNA_BAZA_PROFILU, "faktury_pro")
 POSTGRES_PRYWATNY_UZYTKOWNIK = "postgres"
 
 
