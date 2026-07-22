@@ -9,7 +9,7 @@ import customtkinter as ctk
 
 from app import profil
 from app.wersja import WERSJA
-from gui import api_client, auth, formatowanie, nastawienia, profile_rejestr, styl
+from gui import api_client, auth, diagnostyka, formatowanie, nastawienia, profile_rejestr, styl
 from gui import kopia_zapasowa as kz
 from gui.integracje_gui import pobierz_z_gus
 from gui.logo import wybierz_i_skopiuj_logo
@@ -75,6 +75,7 @@ class WidokUstawien(ctk.CTkFrame):
         self._zbuduj_karte_przypomnien(wrapper)
         self._zbuduj_karte_hasla(wrapper)
         self._zbuduj_karte_o_aplikacji(wrapper)
+        self._zbuduj_karte_diagnostyki(wrapper)
         self._zbuduj_karte_usuwania_profilu(wrapper)
 
     def _zbuduj_karte_wygladu(self, master) -> None:
@@ -1443,7 +1444,7 @@ class WidokUstawien(ctk.CTkFrame):
         karta = ctk.CTkFrame(
             master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
         )
-        karta.pack(fill="x")
+        karta.pack(pady=(0, styl.ODSTEP_SREDNI), fill="x")
 
         ctk.CTkLabel(
             karta,
@@ -1544,6 +1545,92 @@ class WidokUstawien(ctk.CTkFrame):
 
         uruchom_w_tle(self, zadanie, sukces, blad)
 
+    # -- pakiet diagnostyczny na potrzeby wsparcia zdalnego (Faza 26) - dla
+    # uzytkownika nietechnicznego, ktory nie potrafi opisac bledu ani znalezc
+    # pliku logow samodzielnie. Appka NIC nie wysyla sama - tylko przygotowuje
+    # plik ZIP na Pulpicie (patrz gui/diagnostyka.py po pelne uzasadnienie,
+    # w tym co CELOWO nie trafia do pakietu). ----------------------------
+
+    def _zbuduj_karte_diagnostyki(self, master) -> None:
+        karta = ctk.CTkFrame(
+            master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        karta.pack(pady=(0, styl.ODSTEP_SREDNI), fill="x")
+
+        ctk.CTkLabel(
+            karta,
+            text="Zgłoś problem",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+        ).pack(
+            padx=styl.ODSTEP_DUZY,
+            pady=(styl.ODSTEP_DUZY, styl.ODSTEP_SREDNI),
+            anchor="w",
+        )
+
+        wewnatrz = ctk.CTkFrame(karta, fg_color="transparent", width=320)
+        wewnatrz.pack(padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY), fill="x")
+
+        opis = (
+            "Jeśli coś w aplikacji nie działa, przygotuj pakiet diagnostyczny "
+            "i wyślij go mailem na adres wsparcia razem z krótkim opisem "
+            "problemu. Aplikacja NIC nie wysyła sama przez internet - tylko "
+            "zapisuje plik na Twoim Pulpicie, resztę robisz Ty."
+        )
+        profil_id = profil.id_profilu_aktywnego()
+        if profil_id is not None:
+            wpis_profilu = profile_rejestr.pobierz(profil_id)
+            nazwa_profilu = wpis_profilu.nazwa_wyswietlana if wpis_profilu else None
+            opis += (
+                f"\n\nPakiet będzie dotyczył BIEŻĄCO otwartej firmy: "
+                f"„{nazwa_profilu or 'nieskonfigurowana'}”."
+            )
+
+        ctk.CTkLabel(
+            wewnatrz,
+            text=opis,
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            wraplength=320,
+            justify="left",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._przycisk_diagnostyka = ctk.CTkButton(
+            wewnatrz,
+            text="Przygotuj pakiet diagnostyczny",
+            fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+            command=self._utworz_pakiet_diagnostyczny,
+        )
+        self._przycisk_diagnostyka.pack(fill="x")
+
+    def _utworz_pakiet_diagnostyczny(self) -> None:
+        ustaw_tekst_ladowania(
+            self._przycisk_diagnostyka, True, "Przygotuj pakiet diagnostyczny", "Przygotowywanie..."
+        )
+
+        def zadanie():
+            return diagnostyka.utworz_pakiet_diagnostyczny()
+
+        def sukces(plik: Path) -> None:
+            ustaw_tekst_ladowania(self._przycisk_diagnostyka, False, "Przygotuj pakiet diagnostyczny")
+            otworzyc = messagebox.askyesno(
+                "Pakiet diagnostyczny gotowy",
+                f"Plik zapisany na Pulpicie jako:\n„{plik.name}”.\n\n"
+                f"Wyślij go mailem na {diagnostyka.ADRES_WSPARCIA}, opisując "
+                "krótko, co się dzieje.\n\n"
+                "Czy otworzyć folder z tym plikiem?",
+                parent=self,
+            )
+            if otworzyc:
+                os.startfile(plik.parent)
+
+        def blad(e) -> None:
+            ustaw_tekst_ladowania(self._przycisk_diagnostyka, False, "Przygotuj pakiet diagnostyczny")
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
     # -- usuwanie profilu firmy (Faza 25) - NIEODWRACALNE: kasuje baze danych,
     # katalog danych i wpis w rejestrze tego jednego profilu. Inne profile na
     # tym komputerze pozostaja calkowicie nienaruszone. Ukryta w trybie
@@ -1557,7 +1644,7 @@ class WidokUstawien(ctk.CTkFrame):
         karta = ctk.CTkFrame(
             master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
         )
-        karta.pack(pady=(styl.ODSTEP_SREDNI, 0), fill="x")
+        karta.pack(fill="x")
 
         ctk.CTkLabel(
             karta,
