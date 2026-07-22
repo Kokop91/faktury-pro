@@ -504,13 +504,45 @@ wyglądu, geometria okna — patrz niżej).
   deweloperskim): wymaga wpisania dokładnej nazwy firmy (przycisk nieaktywny,
   dopóki tekst się nie zgadza) + drugiego potwierdzenia
   (`messagebox.askyesno`). Po potwierdzeniu: zatrzymanie wątku FastAPI
-  (`gui/proces_aplikacji.py:zatrzymaj_serwer_fastapi`) → `DROP DATABASE ...
+  (`gui/proces_aplikacji.py:zatrzymaj_serwer_fastapi`, żeby `DROP DATABASE`
+  miał się do czego podłączyć bez konfliktu połączeń) → `DROP DATABASE ...
   WITH (FORCE)` (`gui/postgres_serwer.py:usun_baze()`) → skasowanie katalogu
-  profilu → usunięcie wpisu z rejestru → wymuszone zamknięcie CAŁEJ appki
+  profilu → usunięcie wpisu z rejestru → **zatrzymanie też prywatnego
+  Postgresa** (`proces_aplikacji.zatrzymaj_wszystko()`, dopiero w tym
+  momencie — patrz błąd niżej) → wymuszone zamknięcie CAŁEJ appki
   (`os._exit(0)`, appka NIE wraca do ekranu wyboru profilu w tym samym
   procesie — spójnie z brakiem przełączania profilu w locie). Usuwa
   WYŁĄCZNIE dane tego jednego profilu — inne bazy/katalogi profili są
   całkowicie nienaruszone.
+- **Znalezione i naprawione na żywo w trakcie weryfikacji tej fazy** (dwa
+  osobne przeglądy z realnym klikaniem w izolowanym sandboxie —
+  `%LOCALAPPDATA%`/`%APPDATA%` przekierowane na katalog tymczasowy, prawdziwy
+  prywatny Postgres, `.env` chwilowo ukryte, żeby appka faktycznie weszła w
+  tryb produktowy z profilami):
+  - **Osierocony prywatny Postgres po usunięciu profilu.** Pierwsza wersja
+    `_usun_profil()` w `widok_ustawien.py` po udanym usunięciu wołała od razu
+    `os._exit(0)`, wołając PRZEDTEM tylko `zatrzymaj_serwer_fastapi()` (co
+    zostawia proces `postgres.exe` żywy celowo — `DROP DATABASE` potrzebuje
+    działającego serwera). Wykryte przez wymuszone zabicie procesu appki w
+    trakcie testu (symulacja awarii) — `Get-CimInstance Win32_Process`
+    pokazał osierocone `postgres.exe` wskazujące na katalog danych
+    właśnie skasowanego profilu, dokładnie ten sam rodzaj problemu, jaki
+    `installer.iss` musiał już raz naprawiać w Fazie 18C. Naprawione dodaniem
+    `proces_aplikacji.zatrzymaj_wszystko()` (ten sam wzorzec co
+    `DialogPrzywrocBackup` po udanym przywróceniu backupu) tuż przed
+    `os._exit(0)` — powtórzony na żywo test usunięcia profilu (zamknięcie
+    appki normalną ścieżką, nie zabite) potwierdził zero osieroconych
+    procesów.
+  - **Przypomnienie o backupie: "wykonana None dni temu"** — błąd sprzed tej
+    fazy (Faza 22), niezwiązany z profilami, ale trafiony po raz pierwszy
+    właśnie w tym sandboxie (katalog docelowy backupu ustawiony, ale jeszcze
+    żaden backup nie wykonany — kombinacja stanów, która wcześniej nie miała
+    okazji wystąpić w żadnym live-teście). `gui/windows/dialog_przypomnienia_backupu.py`
+    zakładał, że skoro `nigdy_skonfigurowano` jest `False`, to
+    `dni_od_ostatniego` jest zawsze liczbą — nieprawda, gdy katalog JEST
+    ustawiony, ale backup jeszcze nigdy nie powstał. Naprawione trzecim,
+    odrębnym wariantem tekstu ("Nie wykonano jeszcze kopii zapasowej") dla
+    tego dokładnie stanu.
 
 ## Faza 19 — automatyczne generowanie WZ z faktury (Etap 3, zrobione)
 
