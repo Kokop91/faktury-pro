@@ -22,10 +22,10 @@
 ; binaria PostgreSQL (patrz BUDOWANIE w faktury_pro.spec - najpierw
 ; pyinstaller, potem scripts/dolacz_postgres_do_buildu.py, DOPIERO potem to).
 ;
-; Wynik: Output/FakturyPro-Setup-1.0.0.exe
+; Wynik: Output/FakturyPro-Setup-{wersja z AppWersja ponizej}.exe
 
 #define AppNazwa "Faktury Pro"
-#define AppWersja "1.0.0"
+#define AppWersja "1.1.0"
 #define AppWydawca "Faktury Pro"
 #define AppExeNazwa "Faktury Pro.exe"
 
