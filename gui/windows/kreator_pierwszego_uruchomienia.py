@@ -22,7 +22,19 @@ from gui.ikona_okna import ustaw_ikone
 from gui.integracje_gui import pobierz_z_gus
 from gui.logo import wybierz_i_skopiuj_logo
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import Banner, formatuj_srodowisko_ksef, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import (
+    Banner,
+    formatuj_srodowisko_ksef,
+    przewin_na_gore,
+    ustaw_tekst_ladowania,
+)
+
+# Podpowiedzi formatu (Faza 27) - patrz gui/windows/formularz_klienta.py, ten
+# sam powod (backend ma wlasna walidacje formatu tych dwoch pol).
+_PLACEHOLDERY_FIRMY = {
+    "kod_pocztowy": "np. 00-950",
+    "telefon": "np. +48 123 456 789",
+}
 
 POLA_FIRMY_KREATORA = [
     ("nazwa", "Nazwa firmy *"),
@@ -142,7 +154,10 @@ class KrokFirma(_KrokBazowy):
                 )
                 self._przycisk_gus.grid(row=0, column=1)
             else:
-                pole = ctk.CTkEntry(self, font=styl.CZCIONKA_TRESC)
+                pole = ctk.CTkEntry(
+                    self, font=styl.CZCIONKA_TRESC,
+                    placeholder_text=_PLACEHOLDERY_FIRMY.get(klucz, ""),
+                )
                 pole.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
                 if klucz == "kraj":
                     pole.insert(0, "Polska")
@@ -521,6 +536,13 @@ class _Kreator(ctk.CTk):
             self._instancje_krokow[indeks] = klasa(self._kontener_tresci, self)
         self._krok_aktywny = self._instancje_krokow[indeks]
         self._krok_aktywny.pack(fill="both", expand=True)
+        # Bez tego: jesli poprzedni krok byl dluzszy i uzytkownik go przewinal
+        # w dol (np. wypelniajac opcjonalne pola adresu/banku w Kroku 1), nowy,
+        # krotszy krok (np. haslo w Kroku 2) renderuje sie poprawnie, ale
+        # POZA widocznym obszarem - customtkinter nie resetuje przewiniecia
+        # sam. Zweryfikowane jako realna przyczyna zgloszenia "pole hasla
+        # czasem sie nie pojawia".
+        przewin_na_gore(self._kontener_tresci)
 
         self._etykieta_krok.configure(text=f"Krok {indeks + 1} z {len(self._klasy_krokow)}")
         self._etykieta_tytul.configure(text=self._krok_aktywny.tytul)

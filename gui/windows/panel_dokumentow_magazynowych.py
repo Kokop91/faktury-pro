@@ -12,6 +12,7 @@ _KLUCZ_FILTR = "filtr_dokumenty_magazynowe"
 KOLUMNY = [
     ("numer", "Numer", 2),
     ("typ", "Typ", 2),
+    ("status", "Status", 1),
     ("data_dokumentu", "Data", 1),
     ("zrodlowy", "Magazyn źródłowy", 2),
     ("docelowy", "Magazyn docelowy", 2),
@@ -158,6 +159,9 @@ class PanelDokumentowMagazynowych(ctk.CTkFrame):
                 "typ": lambda d: formatowanie.formatuj_typ_dokumentu_magazynowego(
                     d["typ"]
                 ),
+                "status": lambda d: formatowanie.formatuj_status_dokumentu_magazynowego(
+                    d["status"]
+                ),
                 "data_dokumentu": lambda d: formatowanie.formatuj_date(
                     d["data_dokumentu"]
                 ),
@@ -172,7 +176,12 @@ class PanelDokumentowMagazynowych(ctk.CTkFrame):
                     else "—"
                 ),
             }
-            self._tabela.ustaw_dane(dokumenty, formatery=formatery)
+            kolory = {
+                "status": lambda d: formatowanie.kolor_statusu_dokumentu_magazynowego(
+                    d["status"]
+                ),
+            }
+            self._tabela.ustaw_dane(dokumenty, formatery=formatery, kolory=kolory)
 
         def blad(e: api_client.ApiError) -> None:
             komunikat_bledu(self, e.komunikat)
@@ -183,4 +192,6 @@ class PanelDokumentowMagazynowych(ctk.CTkFrame):
         FormularzDokumentuMagazynowego(self, on_zapisano=self.odswiez)
 
     def _otworz_szczegoly(self, wiersz: dict) -> None:
-        SzczegolyDokumentuMagazynowego(self, dokument_id=wiersz["id"])
+        SzczegolyDokumentuMagazynowego(
+            self, dokument_id=wiersz["id"], on_zmieniono=self.odswiez
+        )

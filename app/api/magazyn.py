@@ -8,6 +8,7 @@ from app.models.enums import TypDokumentuMagazynowego
 from app.schemas.magazyn import (
     DokumentMagazynowyCreate,
     DokumentMagazynowyOut,
+    DokumentMagazynowyUpdate,
     StanMagazynowyOut,
     UtworzenieDokumentuMagazynowegoOut,
 )
@@ -53,6 +54,27 @@ def szczegoly_dokumentu_magazynowego(
     dokument_id: int, db: Session = Depends(get_db)
 ):
     return magazyn_service.pobierz_dokument_magazynowy(db, dokument_id)
+
+
+@router.put(
+    "/dokumenty-magazynowe/{dokument_id}",
+    response_model=UtworzenieDokumentuMagazynowegoOut,
+)
+def aktualizuj_dokument_magazynowy(
+    dokument_id: int, dane: DokumentMagazynowyUpdate, db: Session = Depends(get_db)
+):
+    dokument, ostrzezenia = magazyn_service.aktualizuj_dokument_magazynowy(
+        db, dokument_id, dane
+    )
+    return UtworzenieDokumentuMagazynowegoOut(dokument=dokument, ostrzezenia=ostrzezenia)
+
+
+@router.post(
+    "/dokumenty-magazynowe/{dokument_id}/zatwierdz",
+    response_model=DokumentMagazynowyOut,
+)
+def zatwierdz_dokument_magazynowy(dokument_id: int, db: Session = Depends(get_db)):
+    return magazyn_service.zatwierdz_dokument_magazynowy(db, dokument_id)
 
 
 @router.get("/stany-magazynowe", response_model=list[StanMagazynowyOut])

@@ -19,14 +19,22 @@ class WierszPozycjiMagazynowej(ctk.CTkFrame):
         on_usun: Callable[["WierszPozycjiMagazynowej"], None],
         produkt_wybrany: str | None = None,
         ilosc_poczatkowa: str | None = None,
+        pokaz_cene_zakupu: bool = False,
+        cena_zakupu_poczatkowa_grosze: int | None = None,
     ):
         super().__init__(
             master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
         )
         self._on_usun = on_usun
         self._id_wg_etykiety = id_wg_etykiety
+        self._pokaz_cene_zakupu = pokaz_cene_zakupu
 
-        for kolumna, waga in enumerate([3, 1, 0]):
+        # Kolumna ceny zakupu (Faza 27) - opcjonalna, tylko dla PZ (patrz
+        # komentarz przy PozycjaDokumentuMagazynowego.cena_zakupu_netto_grosze) -
+        # dlatego jest wlaczana/wylaczana calym parametrem konstruktora, nie
+        # ukrywana warunkowo po fakcie.
+        wagi_kolumn = [3, 1, 1, 0] if pokaz_cene_zakupu else [3, 1, 0]
+        for kolumna, waga in enumerate(wagi_kolumn):
             self.grid_columnconfigure(kolumna, weight=waga)
 
         wartosc_poczatkowa = (
@@ -51,6 +59,18 @@ class WierszPozycjiMagazynowej(ctk.CTkFrame):
             self.pole_ilosc.insert(0, ilosc_poczatkowa)
         self.pole_ilosc.grid(row=0, column=1, sticky="ew", padx=styl.ODSTEP_MIKRO, pady=styl.ODSTEP_MALY)
 
+        self.pole_cena_zakupu: ctk.CTkEntry | None = None
+        if pokaz_cene_zakupu:
+            self.pole_cena_zakupu = ctk.CTkEntry(
+                self, placeholder_text="Cena zakupu netto (opcj.)", font=styl.CZCIONKA_TRESC
+            )
+            if cena_zakupu_poczatkowa_grosze is not None:
+                zlote, reszta_groszy = divmod(cena_zakupu_poczatkowa_grosze, 100)
+                self.pole_cena_zakupu.insert(0, f"{zlote},{reszta_groszy:02d}")
+            self.pole_cena_zakupu.grid(
+                row=0, column=2, sticky="ew", padx=styl.ODSTEP_MIKRO, pady=styl.ODSTEP_MALY
+            )
+
         ctk.CTkButton(
             self,
             text="✕",
@@ -59,11 +79,18 @@ class WierszPozycjiMagazynowej(ctk.CTkFrame):
             text_color=styl.KOLOR_BLAD,
             hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
             command=lambda: self._on_usun(self),
-        ).grid(row=0, column=2, padx=(styl.ODSTEP_MIKRO, styl.ODSTEP_MALY))
+        ).grid(row=0, column=(3 if pokaz_cene_zakupu else 2), padx=(styl.ODSTEP_MIKRO, styl.ODSTEP_MALY))
 
     def pobierz_dane(self) -> dict:
         produkt_id = self._id_wg_etykiety.get(self._var_produkt.get())
         if produkt_id is None:
             raise ValueError("wybierz produkt")
         ilosc = formatowanie.parsuj_ilosc(self.pole_ilosc.get())
-        return {"produkt_id": produkt_id, "ilosc": str(ilosc)}
+        dane = {"produkt_id": produkt_id, "ilosc": str(ilosc)}
+        if self.pole_cena_zakupu is not None:
+            tekst_ceny = self.pole_cena_zakupu.get().strip()
+            if tekst_ceny:
+                dane["cena_zakupu_netto_grosze"] = formatowanie.parsuj_kwote(
+                    tekst_ceny, wymagaj_dodatniej=False
+                )
+        return dane

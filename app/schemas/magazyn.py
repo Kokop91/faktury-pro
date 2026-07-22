@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import StawkaVat, TypDokumentuMagazynowego
+from app.models.enums import StatusDokumentuMagazynowego, StawkaVat, TypDokumentuMagazynowego
 
 
 class ProduktBase(BaseModel):
@@ -101,6 +101,10 @@ class PozycjaDokumentuMagazynowegoCreate(BaseModel):
     produkt_id: int
     ilosc: Decimal = Field(gt=0)
     notatka: str | None = Field(default=None, max_length=500)
+    # Faza 27 - sensowne wylacznie dla PZ (patrz uzasadnienie w modelu), ale
+    # pole jest tu wspolne dla wszystkich typow dokumentu - appka nie odrzuca
+    # go dla WZ/PW/RW/MM, po prostu rentownosc_service go wtedy ignoruje.
+    cena_zakupu_netto_grosze: int | None = Field(default=None, ge=0)
 
 
 class PozycjaDokumentuMagazynowegoOut(BaseModel):
@@ -110,6 +114,7 @@ class PozycjaDokumentuMagazynowegoOut(BaseModel):
     produkt_id: int
     ilosc: Decimal
     notatka: str | None
+    cena_zakupu_netto_grosze: int | None
 
 
 class DokumentMagazynowyCreate(BaseModel):
@@ -121,11 +126,27 @@ class DokumentMagazynowyCreate(BaseModel):
     pozycje: list[PozycjaDokumentuMagazynowegoCreate] = Field(min_length=1)
 
 
+class DokumentMagazynowyUpdate(BaseModel):
+    """Edycja mozliwa TYLKO w statusie 'roboczy' (patrz
+    app/services/magazyn_service.py:aktualizuj_dokument_magazynowy). Celowo
+    WAZSZY zakres niz Create - typ/magazyn_zrodlowy_id/magazyn_docelowy_id sa
+    niezmienne po utworzeniu (zmiana magazynu wymagalaby cofniecia efektu w
+    JEDNYM magazynie i naliczenia w INNYM, co jest oddzielnym, wiekszym
+    tematem niz "popraw pomylke w ilosci/cenie") - do zmiany magazynu appka
+    dalej wymaga usuniecia i utworzenia dokumentu od nowa, jak dzis."""
+
+    data_dokumentu: date | None = None
+    pozycje: list[PozycjaDokumentuMagazynowegoCreate] | None = Field(
+        default=None, min_length=1
+    )
+
+
 class DokumentMagazynowyOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     typ: TypDokumentuMagazynowego
+    status: StatusDokumentuMagazynowego
     numer: str
     data_dokumentu: date
     magazyn_zrodlowy_id: int | None

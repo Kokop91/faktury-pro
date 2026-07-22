@@ -87,6 +87,19 @@ class TypDokumentuMagazynowego(str, enum.Enum):
     MM = "mm"  # Przesuniecie Miedzymagazynowe
 
 
+class StatusDokumentuMagazynowego(str, enum.Enum):
+    """Blokada edycji dokumentow magazynowych po zatwierdzeniu - analogicznie
+    do StatusFaktury.ROBOCZA/WYSTAWIONA. Wplyw na stan magazynowy jest
+    naliczany NATYCHMIAST przy utworzeniu, niezaleznie od statusu (dokladnie
+    jak numer_faktury przy Fakturze) - "roboczy" jest wylacznie blokada
+    edycji, nie odracza faktycznego wplywu na stan. Tylko jedno mozliwe
+    przejscie (ROBOCZY -> ZATWIERDZONY), wiec nie ma tu osobnej mapy
+    dozwolonych przejsc jak przy StatusFaktury."""
+
+    ROBOCZY = "roboczy"
+    ZATWIERDZONY = "zatwierdzony"
+
+
 class TrybBlokadyStanu(str, enum.Enum):
     BLOKUJ = "blokuj"
     OSTRZEGAJ = "ostrzegaj"

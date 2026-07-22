@@ -6,8 +6,15 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import DokumentKosztowy, Faktura, KosztReczny, Produkt
-from app.models.enums import StatusFaktury
+from app.models import (
+    DokumentKosztowy,
+    DokumentMagazynowy,
+    Faktura,
+    KosztReczny,
+    PozycjaDokumentuMagazynowego,
+    Produkt,
+)
+from app.models.enums import StatusFaktury, TypDokumentuMagazynowego
 from app.schemas.rentownosc import (
     KubelekPrognozyOut,
     MarzaOkresuOut,
@@ -90,6 +97,30 @@ def _przychod_netto_grosze(db: Session, data_od: date, data_do: date) -> int:
     return sum(f.suma_netto_grosze for f in faktury)
 
 
+def _pozycje_pz_z_cena_zakupu(
+    db: Session, data_od: date, data_do: date
+) -> list[tuple[PozycjaDokumentuMagazynowego, date]]:
+    """Pozycje PZ z opcjonalnie wpisana cena zakupu netto (Faza 27), w podanym
+    okresie (wg daty dokumentu PZ). Zwraca pary (pozycja, data_dokumentu) -
+    wykres_przychody_koszty potrzebuje daty do przypisania do kubelka miesiaca,
+    marza_okresu jej nie potrzebuje, ale nie ma sensu pytac baze dwa razy."""
+    zapytanie = (
+        select(PozycjaDokumentuMagazynowego, DokumentMagazynowy.data_dokumentu)
+        .join(DokumentMagazynowy, PozycjaDokumentuMagazynowego.dokument_id == DokumentMagazynowy.id)
+        .where(
+            DokumentMagazynowy.typ == TypDokumentuMagazynowego.PZ,
+            PozycjaDokumentuMagazynowego.cena_zakupu_netto_grosze.is_not(None),
+            DokumentMagazynowy.data_dokumentu >= data_od,
+            DokumentMagazynowy.data_dokumentu <= data_do,
+        )
+    )
+    return list(db.execute(zapytanie).all())
+
+
+def _koszt_pozycji_pz_grosze(pozycja: PozycjaDokumentuMagazynowego) -> int:
+    return _zaokraglij_do_grosza(Decimal(pozycja.cena_zakupu_netto_grosze) * pozycja.ilosc)
+
+
 def marza_okresu(db: Session, data_od: date, data_do: date) -> MarzaOkresuOut:
     przychod_netto_grosze = _przychod_netto_grosze(db, data_od, data_do)
 
@@ -116,8 +147,11 @@ def marza_okresu(db: Session, data_od: date, data_do: date) -> MarzaOkresuOut:
     )
     koszty_reczne_grosze = sum(k.kwota_grosze for k in koszty_reczne)
 
-    ma_dane_kosztowe = bool(dokumenty_kosztowe or koszty_reczne)
-    koszty_razem_grosze = koszty_ksef_grosze + koszty_reczne_grosze
+    pozycje_pz = _pozycje_pz_z_cena_zakupu(db, data_od, data_do)
+    koszty_pz_grosze = sum(_koszt_pozycji_pz_grosze(pozycja) for pozycja, _data in pozycje_pz)
+
+    ma_dane_kosztowe = bool(dokumenty_kosztowe or koszty_reczne or pozycje_pz)
+    koszty_razem_grosze = koszty_ksef_grosze + koszty_reczne_grosze + koszty_pz_grosze
     marza_grosze = przychod_netto_grosze - koszty_razem_grosze
     marza_procent = (
         (marza_grosze / przychod_netto_grosze) * 100
@@ -129,6 +163,7 @@ def marza_okresu(db: Session, data_od: date, data_do: date) -> MarzaOkresuOut:
         przychod_netto_grosze=przychod_netto_grosze,
         koszty_ksef_grosze=koszty_ksef_grosze,
         koszty_reczne_grosze=koszty_reczne_grosze,
+        koszty_pz_grosze=koszty_pz_grosze,
         koszty_razem_grosze=koszty_razem_grosze,
         marza_grosze=marza_grosze,
         marza_procent=marza_procent,
@@ -190,6 +225,12 @@ def wykres_przychody_koszty(
         klucz = (koszt.data.year, koszt.data.month)
         if klucz in kubelki_kosztow:
             kubelki_kosztow[klucz] += koszt.kwota_grosze
+
+    pozycje_pz = _pozycje_pz_z_cena_zakupu(db, poczatek_okna, dzisiaj)
+    for pozycja, data_dokumentu in pozycje_pz:
+        klucz = (data_dokumentu.year, data_dokumentu.month)
+        if klucz in kubelki_kosztow:
+            kubelki_kosztow[klucz] += _koszt_pozycji_pz_grosze(pozycja)
 
     return [
         PunktWykresuPrzychodKosztOut(

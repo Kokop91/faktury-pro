@@ -25,9 +25,19 @@ _KLUCZE_WG_ETYKIETY_TYPU = {
 
 
 class FormularzDokumentuMagazynowego(OknoFormularza):
-    def __init__(self, master, on_zapisano: Callable[[], None]):
+    def __init__(self, master, on_zapisano: Callable[[], None], dokument: dict | None = None):
+        """`dokument` (Faza 27) - gdy podany, formularz dziala w trybie edycji
+        istniejacego dokumentu (musi byc w statusie 'roboczy' - wywolujacy
+        odpowiada za to, zeby przycisk otwierajacy ten formularz byl dostepny
+        tylko wtedy, backend i tak odrzuci probe edycji zatwierdzonego). Typ
+        dokumentu i magazyn(y) sa wtedy niezmienne (patrz
+        DokumentMagazynowyUpdate) - pola sa zablokowane, nie ukryte, zeby
+        uzytkownik nadal widzial kontekst edytowanego dokumentu."""
         super().__init__(master)
-        self.title("Nowy dokument magazynowy")
+        self._dokument_edytowany = dokument
+        self.title(
+            f"Edytuj dokument {dokument['numer']}" if dokument else "Nowy dokument magazynowy"
+        )
         self.geometry("700x760")
 
         self._on_zapisano = on_zapisano
@@ -105,8 +115,14 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
         przewijany.grid(row=1, column=0, sticky="nsew", padx=styl.ODSTEP_DUZY, pady=(styl.ODSTEP_DUZY, 0))
         przewijany.grid_columnconfigure(0, weight=1)
 
-        self._var_typ = ctk.StringVar(value=_ETYKIETY_TYPOW[0])
-        self._pole(
+        dok = self._dokument_edytowany
+        etykieta_typu_poczatkowa = (
+            formatowanie.ETYKIETY_TYPU_DOKUMENTU_MAGAZYNOWEGO.get(dok["typ"], _ETYKIETY_TYPOW[0])
+            if dok
+            else _ETYKIETY_TYPOW[0]
+        )
+        self._var_typ = ctk.StringVar(value=etykieta_typu_poczatkowa)
+        _ramka, pole_typ = self._pole(
             przewijany,
             0,
             "Typ dokumentu *",
@@ -118,6 +134,7 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
                 fg_color=styl.KOLOR_AKCENT,
                 button_color=styl.KOLOR_AKCENT,
                 button_hover_color=styl.KOLOR_AKCENT_HOVER,
+                state="disabled" if dok else "normal",
             ),
         )
 
@@ -125,14 +142,21 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
             przewijany, 1, "Data dokumentu * (DD.MM.RRRR)",
             lambda m: ctk.CTkEntry(m, font=styl.CZCIONKA_TRESC),
         )
-        self._pole_data.insert(0, formatowanie.formatuj_date(date.today()))
+        self._pole_data.insert(
+            0,
+            formatowanie.formatuj_date(dok["data_dokumentu"] if dok else date.today()),
+        )
 
         etykiety_magazynow = [m["nazwa"] for m in self._magazyny]
         self._id_magazynu_wg_etykiety = {m["nazwa"]: m["id"] for m in self._magazyny}
+        nazwa_wg_id_magazynu = {m["id"]: m["nazwa"] for m in self._magazyny}
 
-        self._var_zrodlowy = ctk.StringVar(
-            value=etykiety_magazynow[0] if etykiety_magazynow else ""
+        wartosc_zrodlowy = (
+            nazwa_wg_id_magazynu.get(dok["magazyn_zrodlowy_id"], "")
+            if dok and dok.get("magazyn_zrodlowy_id")
+            else (etykiety_magazynow[0] if etykiety_magazynow else "")
         )
+        self._var_zrodlowy = ctk.StringVar(value=wartosc_zrodlowy)
         self._ramka_zrodlowy, _ = self._pole(
             przewijany,
             2,
@@ -144,12 +168,16 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
                 fg_color=styl.KOLOR_AKCENT,
                 button_color=styl.KOLOR_AKCENT,
                 button_hover_color=styl.KOLOR_AKCENT_HOVER,
+                state="disabled" if dok else "normal",
             ),
         )
 
-        self._var_docelowy = ctk.StringVar(
-            value=etykiety_magazynow[0] if etykiety_magazynow else ""
+        wartosc_docelowy = (
+            nazwa_wg_id_magazynu.get(dok["magazyn_docelowy_id"], "")
+            if dok and dok.get("magazyn_docelowy_id")
+            else (etykiety_magazynow[0] if etykiety_magazynow else "")
         )
+        self._var_docelowy = ctk.StringVar(value=wartosc_docelowy)
         self._ramka_docelowy, _ = self._pole(
             przewijany,
             3,
@@ -161,6 +189,7 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
                 fg_color=styl.KOLOR_AKCENT,
                 button_color=styl.KOLOR_AKCENT,
                 button_hover_color=styl.KOLOR_AKCENT_HOVER,
+                state="disabled" if dok else "normal",
             ),
         )
 
@@ -170,6 +199,15 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
             "Numer powiązanej faktury (opcjonalnie, informacyjnie)",
             lambda m: ctk.CTkEntry(m, font=styl.CZCIONKA_TRESC, placeholder_text="np. FV/2026/0001"),
         )
+        if dok:
+            # Niezmienne przy edycji (patrz DokumentMagazynowyUpdate) - pole
+            # zablokowane, wypelnione dla kontekstu, jesli bylo ustawione.
+            if dok.get("faktura_powiazana_id"):
+                numer_wg_id_faktury = {f["id"]: f["numer"] for f in self._faktury}
+                numer = numer_wg_id_faktury.get(dok["faktura_powiazana_id"])
+                if numer:
+                    self._pole_faktura.insert(0, numer)
+            self._pole_faktura.configure(state="disabled")
 
         # Pozycje
         ramka_pozycji = ctk.CTkFrame(przewijany, fg_color="transparent")
@@ -221,7 +259,19 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
         self._przycisk_zapisz.grid(row=0, column=1, sticky="ew")
         self.ustaw_akcje_zapisu(self._zapisz, self._przycisk_zapisz)
 
-        self._dodaj_wiersz_pozycji()
+        if dok:
+            etykieta_wg_id_produktu = {
+                p["id"]: f"{p['nazwa']} ({p['jednostka_miary']})"
+                for p in self._produkty_magazynowe
+            }
+            for pozycja in dok["pozycje"]:
+                self._dodaj_wiersz_pozycji(
+                    produkt_wybrany=etykieta_wg_id_produktu.get(pozycja["produkt_id"]),
+                    ilosc_poczatkowa=formatowanie.formatuj_ilosc(pozycja["ilosc"]),
+                    cena_zakupu_poczatkowa_grosze=pozycja.get("cena_zakupu_netto_grosze"),
+                )
+        else:
+            self._dodaj_wiersz_pozycji()
         self._na_zmiane_typu(self._var_typ.get())
         self.zapamietaj_stan_poczatkowy()
 
@@ -243,7 +293,15 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
 
     # -- pozycje --------------------------------------------------
 
-    def _dodaj_wiersz_pozycji(self) -> None:
+    def _typ_biezacy(self) -> str:
+        return _KLUCZE_WG_ETYKIETY_TYPU.get(self._var_typ.get(), "pz")
+
+    def _dodaj_wiersz_pozycji(
+        self,
+        produkt_wybrany: str | None = None,
+        ilosc_poczatkowa: str | None = None,
+        cena_zakupu_poczatkowa_grosze: int | None = None,
+    ) -> None:
         etykiety_produktow = [
             f"{p['nazwa']} ({p['jednostka_miary']})" for p in self._produkty_magazynowe
         ]
@@ -256,6 +314,10 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
             etykiety_produktow=etykiety_produktow,
             id_wg_etykiety=id_wg_etykiety,
             on_usun=self._usun_wiersz_pozycji,
+            produkt_wybrany=produkt_wybrany,
+            ilosc_poczatkowa=ilosc_poczatkowa,
+            pokaz_cene_zakupu=(self._typ_biezacy() == "pz"),
+            cena_zakupu_poczatkowa_grosze=cena_zakupu_poczatkowa_grosze,
         )
         wiersz.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
         self._wiersze_pozycji.append(wiersz)
@@ -324,6 +386,11 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
             return None
         self._banner.ukryj()
 
+        if self._dokument_edytowany:
+            # DokumentMagazynowyUpdate - typ/magazyny/faktura sa niezmienne
+            # (patrz konstruktor), wiec nie sa czescia payloadu edycji.
+            return {"data_dokumentu": data_dokumentu.isoformat(), "pozycje": pozycje_dane}
+
         dane: dict = {
             "typ": typ,
             "data_dokumentu": data_dokumentu.isoformat(),
@@ -345,6 +412,10 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
         ustaw_tekst_ladowania(self._przycisk_zapisz, True, "Zapisz dokument")
 
         def zadanie():
+            if self._dokument_edytowany:
+                return api_client.aktualizuj_dokument_magazynowy(
+                    self._dokument_edytowany["id"], dane
+                )
             return api_client.utworz_dokument_magazynowy(dane)
 
         def sukces(wynik: dict) -> None:

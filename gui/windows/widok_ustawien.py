@@ -19,6 +19,7 @@ from gui.widgets_pomocnicze import (
     formatuj_srodowisko_ksef,
     komunikat_bledu,
     komunikat_info,
+    odswiez_obszar_przewijania,
     pokaz_toast,
     ustaw_tekst_ladowania,
 )
@@ -40,6 +41,13 @@ POLA_FIRMY = [
     ("bank_numer_konta_vat", "Numer rachunku VAT (do MPP)", False),
 ]
 
+# Podpowiedzi formatu (Faza 27) - patrz gui/windows/formularz_klienta.py, ten
+# sam powod (backend ma wlasna walidacje formatu tych dwoch pol).
+_PLACEHOLDERY_FIRMY: dict[str, str] = {
+    "kod_pocztowy": "np. 00-950",
+    "telefon": "np. +48 123 456 789",
+}
+
 ETYKIETA_JDG = "Osoba fizyczna (JDG)"
 ETYKIETA_SPOLKA = "Spółka / inna osoba niefizyczna"
 
@@ -60,10 +68,13 @@ class WidokUstawien(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        przewijany = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        przewijany.grid(row=0, column=0, sticky="nsew")
+        # Zapamietane jako atrybut (nie zmienna lokalna) - _na_zmiane_typ_podatnika
+        # potrzebuje do niej dostepu, zeby wymusic przeliczenie obszaru
+        # przewijania po programowej zmianie ukladu (patrz ta metoda nizej).
+        self._przewijany = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self._przewijany.grid(row=0, column=0, sticky="nsew")
 
-        wrapper = ctk.CTkFrame(przewijany, fg_color="transparent", width=360)
+        wrapper = ctk.CTkFrame(self._przewijany, fg_color="transparent", width=360)
         wrapper.pack(pady=styl.ODSTEP_DUZY)
 
         self._zbuduj_karte_wygladu(wrapper)
@@ -182,7 +193,10 @@ class WidokUstawien(ctk.CTkFrame):
                 )
                 self._przycisk_gus_firmy.grid(row=0, column=1)
             else:
-                pole = ctk.CTkEntry(wewnatrz, font=styl.CZCIONKA_TRESC)
+                pole = ctk.CTkEntry(
+                    wewnatrz, font=styl.CZCIONKA_TRESC,
+                    placeholder_text=_PLACEHOLDERY_FIRMY.get(klucz, ""),
+                )
                 pole.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
             self._pola_firmy[klucz] = pole
 
@@ -318,6 +332,14 @@ class WidokUstawien(ctk.CTkFrame):
             self._ramka_osoba_fizyczna.pack(fill="x", before=self._przycisk_firma)
         else:
             self._ramka_osoba_fizyczna.pack_forget()
+        # Ta zmiana ukladu bywa wywolywana ASYNCHRONICZNIE (przez _wczytaj_firme
+        # po wczytaniu danych firmy w tle, patrz nizej) - w nieprzewidywalnym
+        # momencie wzgledem tego, czy uzytkownik akurat aktywnie przewija cala
+        # (dluzsza niz okno) liste kart Ustawien. Bez wymuszenia przeliczenia
+        # scrollregion tutaj, CTkScrollableFrame polega wylacznie na zdarzeniu
+        # <Configure>, ktore przy szybkim przewijaniu moze sie "spoznic" -
+        # widoczny efekt to nieprawidlowe/nachodzace renderowanie kart.
+        odswiez_obszar_przewijania(self._przewijany)
 
     def _wczytaj_urzedy_skarbowe(self) -> None:
         def zadanie():
@@ -525,12 +547,21 @@ class WidokUstawien(ctk.CTkFrame):
         ctk.CTkLabel(
             wewnatrz,
             text=(
-                "Kopia obejmuje całą bazę danych (faktury, klientów, magazyn) "
-                "oraz logo firmy, zaszyfrowana hasłem, które ustawiasz osobno "
-                "od hasła logowania. Zalecane: wybierz lokalizację NA INNYM "
-                "nośniku niż ten komputer - dysk USB, dysk sieciowy albo "
-                "folder synchronizowany z chmurą (Google Drive/OneDrive/"
-                "Dropbox)."
+                "CO obejmuje kopia: całą bazę danych tej firmy (faktury, "
+                "klientów, magazyn) oraz logo, zaszyfrowane hasłem, które "
+                "ustawiasz tutaj - INNYM niż hasło logowania do aplikacji.\n\n"
+                "JAK: appka NIGDY nie robi kopii sama - wyłącznie ręcznie, "
+                "przyciskiem „Wykonaj kopię zapasową teraz” poniżej, kiedy Ty "
+                "o tym zdecydujesz.\n\n"
+                "CO ILE: zalecamy nie rzadziej niż raz w tygodniu. Appka "
+                "przypomni Ci przy starcie, jeśli minie więcej niż 7 dni od "
+                "ostatniej kopii - to tylko przypomnienie, appka nadal niczego "
+                "nie zrobi sama.\n\n"
+                "Zalecane: wybierz lokalizację NA INNYM nośniku niż ten "
+                "komputer - dysk USB, dysk sieciowy albo folder "
+                "synchronizowany z chmurą (Google Drive/OneDrive/Dropbox) - "
+                "kopia zapisana na tym samym dysku nie chroni przed jego "
+                "awarią."
             ),
             font=styl.CZCIONKA_DROBNA,
             text_color=styl.KOLOR_TEKST_DRUGORZEDNY,

@@ -12,7 +12,11 @@ from app.models import (
     Produkt,
     StanMagazynowy,
 )
-from app.models.enums import StatusInwentaryzacji, TypDokumentuMagazynowego
+from app.models.enums import (
+    StatusDokumentuMagazynowego,
+    StatusInwentaryzacji,
+    TypDokumentuMagazynowego,
+)
 from app.schemas.inwentaryzacja import (
     AktualizacjaPozycjiInwentaryzacji,
     InwentaryzacjaCreate,
@@ -232,6 +236,7 @@ def zamknij_inwentaryzacje(
                 pozycje=pozycje_niedobor,
             ),
             commit=False,
+            status_poczatkowy=StatusDokumentuMagazynowego.ZATWIERDZONY,
         )
         dokumenty_utworzone.append(dokument_rw)
         ostrzezenia.extend(ostrzezenia_rw)
@@ -246,6 +251,7 @@ def zamknij_inwentaryzacje(
                 pozycje=pozycje_nadwyzka,
             ),
             commit=False,
+            status_poczatkowy=StatusDokumentuMagazynowego.ZATWIERDZONY,
         )
         dokumenty_utworzone.append(dokument_pw)
         ostrzezenia.extend(ostrzezenia_pw)

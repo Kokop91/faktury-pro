@@ -71,6 +71,39 @@ class Banner(ctk.CTkFrame):
         self.grid_forget()
 
 
+def przewin_na_gore(ramka: ctk.CTkScrollableFrame) -> None:
+    """Resetuje pozycje przewiniecia CTkScrollableFrame do samej gory.
+
+    customtkinter NIE robi tego samo przy zmianie wysokosci zawartosci -
+    zweryfikowane wprost (reprodukcja w izolowanym skrypcie): po
+    pack_forget() dluzszej zawartosci i spakowaniu krotszej w tym samym
+    CTkScrollableFrame, scrollregion i pozycja przewiniecia (yview) NIE
+    kurcza sie razem z nowa, krotsza zawartoscia - jesli byla przewinieta w
+    dol, nowa (krotsza) zawartosc renderuje sie poprawnie, ale CALKOWICIE
+    poza widocznym obszarem (wyglada jak brakujace pole). Wlasciwe przy
+    przelaczaniu calych "krokow"/ekranow (np. kolejne kroki kreatora
+    pierwszego uruchomienia) - kazdy nowy krok powinien i tak zaczynac sie
+    od gory."""
+    ramka._parent_canvas.yview_moveto(0.0)
+
+
+def odswiez_obszar_przewijania(ramka: ctk.CTkScrollableFrame) -> None:
+    """Wymusza natychmiastowe przeliczenie scrollregion CTkScrollableFrame po
+    programowej zmianie ukladu (pack/pack_forget) WEWNATRZ jego zawartosci,
+    bez zmiany biezacej pozycji przewiniecia (w odroznieniu od przewin_na_gore
+    powyzej - tu przewijanie uzytkownika ma zostac tam, gdzie bylo).
+
+    Bez tego canvas polega wylacznie na zdarzeniu <Configure>, ktore przy
+    aktywnym, szybkim przewijaniu uzytkownika moze zdazyc sie PRZED albo w
+    trakcie zmiany geometrii wywolanej asynchronicznie (np. dane firmy
+    wczytane w tle po otwarciu Ustawien) - powoduje to widoczne bledy
+    renderowania (przesuniete/nachodzace karty), ten sam mechanizm co
+    przewin_na_gore, tylko wyzwalany asynchronicznie zamiast przy jawnej
+    zmianie ekranu."""
+    ramka.update_idletasks()
+    ramka._parent_canvas.configure(scrollregion=ramka._parent_canvas.bbox("all"))
+
+
 def formatuj_srodowisko_ksef(srodowisko: str) -> tuple[str, tuple, tuple]:
     """Tekst + (kolor_tekstu, kolor_tla) spojne w CALEJ appce dla oznaczenia
     aktywnego srodowiska KSeF (Faza 12D) - PRODUKCYJNE zawsze rzuca sie w

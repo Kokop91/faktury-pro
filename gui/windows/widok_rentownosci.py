@@ -197,8 +197,9 @@ class WidokRentownosci(ctk.CTkFrame):
             ctk.CTkLabel(
                 self._karta_marzy,
                 text=(
-                    "Brak dokumentów kosztowych z KSeF i kosztów wprowadzonych ręcznie w "
-                    "tym okresie — marża nie jest liczona (nie pokazujemy fałszywego zera)."
+                    "Brak dokumentów kosztowych z KSeF, kosztów wprowadzonych ręcznie ani "
+                    "cen zakupu na dokumentach PZ w tym okresie — marża nie jest liczona "
+                    "(nie pokazujemy fałszywego zera)."
                 ),
                 font=styl.CZCIONKA_DROBNA,
                 text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
@@ -213,6 +214,7 @@ class WidokRentownosci(ctk.CTkFrame):
             ("Przychód netto", formatowanie.formatuj_kwote(marza["przychod_netto_grosze"]), None),
             ("Koszty z KSeF", formatowanie.formatuj_kwote(marza["koszty_ksef_grosze"]), None),
             ("Koszty wprowadzone ręcznie", formatowanie.formatuj_kwote(marza["koszty_reczne_grosze"]), None),
+            ("Koszty zakupu z dokumentów PZ", formatowanie.formatuj_kwote(marza["koszty_pz_grosze"]), None),
             (
                 "Marża",
                 f"{formatowanie.formatuj_kwote(marza['marza_grosze'])} "

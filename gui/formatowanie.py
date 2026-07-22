@@ -87,6 +87,11 @@ ETYKIETY_TYPU_DOKUMENTU_MAGAZYNOWEGO: dict[str, str] = {
 
 KOLEJNOSC_TYPOW_DOKUMENTU_MAGAZYNOWEGO: list[str] = ["pz", "wz", "pw", "rw", "mm"]
 
+ETYKIETY_STATUSU_DOKUMENTU_MAGAZYNOWEGO: dict[str, str] = {
+    "roboczy": "Roboczy",
+    "zatwierdzony": "Zatwierdzony",
+}
+
 # Ktory z (magazyn_zrodlowy, magazyn_docelowy) jest wymagany dla danego typu -
 # mirror app/services/magazyn_service.py WYMAGANE_MAGAZYNY, zduplikowane w GUI
 # (osobny proces), zeby formularz mogl pokazywac/ukrywac wlasciwe pola bez
@@ -195,6 +200,16 @@ def kolor_statusu_ksef(status_ksef: str) -> tuple[str, str]:
 
 def formatuj_typ_dokumentu_magazynowego(typ: str) -> str:
     return ETYKIETY_TYPU_DOKUMENTU_MAGAZYNOWEGO.get(typ, typ)
+
+
+def formatuj_status_dokumentu_magazynowego(status: str) -> str:
+    return ETYKIETY_STATUSU_DOKUMENTU_MAGAZYNOWEGO.get(status, status)
+
+
+def kolor_statusu_dokumentu_magazynowego(status: str) -> str:
+    # Roboczy = wciaz edytowalny, neutralny kolor ostrzegawczy (jeszcze nie
+    # ostateczny); zatwierdzony = zielony, jak zakonczona inwentaryzacja.
+    return styl.KOLOR_OSTRZEZENIE if status == "roboczy" else styl.KOLOR_SUKCES
 
 
 def formatuj_status_inwentaryzacji(status: str) -> str:

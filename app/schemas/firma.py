@@ -3,7 +3,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import StawkaVat, TrybBlokadyStanu, TypPodatnika
-from app.schemas.klient import waliduj_nip
+from app.schemas.klient import waliduj_kod_pocztowy, waliduj_nip, waliduj_telefon
 
 
 class FirmaBase(BaseModel):
@@ -38,6 +38,8 @@ class FirmaBase(BaseModel):
     przypomnienia_szablon_tresc: str | None = Field(default=None, max_length=5000)
 
     _waliduj_nip = field_validator("nip")(waliduj_nip)
+    _waliduj_kod_pocztowy = field_validator("kod_pocztowy")(waliduj_kod_pocztowy)
+    _waliduj_telefon = field_validator("telefon")(waliduj_telefon)
 
 
 class FirmaCreate(FirmaBase):
@@ -72,6 +74,8 @@ class FirmaUpdate(BaseModel):
     przypomnienia_szablon_tresc: str | None = Field(default=None, max_length=5000)
 
     _waliduj_nip = field_validator("nip")(waliduj_nip)
+    _waliduj_kod_pocztowy = field_validator("kod_pocztowy")(waliduj_kod_pocztowy)
+    _waliduj_telefon = field_validator("telefon")(waliduj_telefon)
 
 
 class FirmaOut(FirmaBase):

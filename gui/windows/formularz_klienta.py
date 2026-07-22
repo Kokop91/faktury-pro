@@ -23,6 +23,15 @@ POLA = [
     ("domyslny_termin_platnosci_dni", "Termin płatności (dni)", "14"),
 ]
 
+# Podpowiedzi formatu (Faza 27) - wylacznie dla pol, gdzie backend ma wlasna
+# walidacje formatu (patrz app/schemas/klient.py waliduj_kod_pocztowy/
+# waliduj_telefon) - zeby uzytkownik nietechniczny widzial oczekiwany format
+# ZANIM dostanie blad, nie dopiero po nim.
+_PLACEHOLDERY: dict[str, str] = {
+    "kod_pocztowy": "np. 00-950",
+    "telefon": "np. +48 123 456 789",
+}
+
 
 class FormularzKlienta(OknoFormularza):
     def __init__(self, master, on_zapisano: Callable[[], None], klient: dict | None = None):
@@ -112,7 +121,10 @@ class FormularzKlienta(OknoFormularza):
                 )
                 self._przycisk_biala_lista.pack(anchor="w", pady=(styl.ODSTEP_MIKRO, 0))
             else:
-                wpis = ctk.CTkEntry(kontener, font=styl.CZCIONKA_TRESC)
+                wpis = ctk.CTkEntry(
+                    kontener, font=styl.CZCIONKA_TRESC,
+                    placeholder_text=_PLACEHOLDERY.get(klucz, ""),
+                )
                 wpis.pack(fill="x")
 
             if wartosc_startowa:

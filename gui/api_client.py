@@ -330,6 +330,18 @@ def utworz_dokument_magazynowy(dane: dict) -> dict:
     ).json()
 
 
+def aktualizuj_dokument_magazynowy(dokument_id: int, dane: dict) -> dict:
+    return _wykonaj(
+        "PUT", f"/dokumenty-magazynowe/{dokument_id}", TIMEOUT_ZAPIS, json=dane
+    ).json()
+
+
+def zatwierdz_dokument_magazynowy(dokument_id: int) -> dict:
+    return _wykonaj(
+        "POST", f"/dokumenty-magazynowe/{dokument_id}/zatwierdz", TIMEOUT_ZAPIS
+    ).json()
+
+
 def pobierz_stany_magazynowe(magazyn_id: int | None = None) -> list[dict]:
     parametry = {}
     if magazyn_id is not None:

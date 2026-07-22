@@ -14,9 +14,14 @@ from app.models import (
     Produkt,
     StanMagazynowy,
 )
-from app.models.enums import TrybBlokadyStanu, TypDokumentuMagazynowego
+from app.models.enums import (
+    StatusDokumentuMagazynowego,
+    TrybBlokadyStanu,
+    TypDokumentuMagazynowego,
+)
 from app.schemas.magazyn import (
     DokumentMagazynowyCreate,
+    DokumentMagazynowyUpdate,
     MagazynCreate,
     ProduktCreate,
     ProduktImportWiersz,
@@ -353,7 +358,11 @@ def _waliduj_magazyny_dokumentu(
 
 
 def utworz_dokument_magazynowy(
-    db: Session, dane: DokumentMagazynowyCreate, *, commit: bool = True
+    db: Session,
+    dane: DokumentMagazynowyCreate,
+    *,
+    commit: bool = True,
+    status_poczatkowy: StatusDokumentuMagazynowego = StatusDokumentuMagazynowego.ROBOCZY,
 ) -> tuple[DokumentMagazynowy, list[str]]:
     """Tworzy dokument magazynowy z pozycjami i aplikuje zmiany StanMagazynowy.
     Domyslnie cala operacja to jedna transakcja (jeden db.commit() na koncu) - kazdy
@@ -368,6 +377,13 @@ def utworz_dokument_magazynowy(
     dwoma niezaleznymi commitami (np. RW juz zapisane, PW jeszcze nie) prowadzi
     do podwojnego naliczenia korekty przy ponownej probie (kazdy dokument ma
     wlasny, juz zatwierdzony wplyw na stan, wiec retry tworzy je od nowa).
+
+    `status_poczatkowy` (Faza 27) - domyslnie ROBOCZY (edytowalny) dla zwyklego,
+    recznego tworzenia dokumentu. inwentaryzacja_service.zamknij_inwentaryzacje
+    przekazuje ZATWIERDZONY - korekty PW/RW generowane automatycznie przy
+    zamknieciu spisu sa nierozerwalnie zwiazane z JUZ zakonczonym, zablokowanym
+    spisem, wiec nie powinny zostac samodzielnie "do poprawki" niezaleznie od
+    niego (edycja niezgodna z migawka spisu byłaby myląca).
     """
     _waliduj_magazyny_dokumentu(
         dane.typ, dane.magazyn_zrodlowy_id, dane.magazyn_docelowy_id
@@ -411,6 +427,7 @@ def utworz_dokument_magazynowy(
 
     dokument = DokumentMagazynowy(
         typ=dane.typ,
+        status=status_poczatkowy,
         numer=numer,
         data_dokumentu=dane.data_dokumentu,
         magazyn_zrodlowy_id=dane.magazyn_zrodlowy_id,
@@ -429,6 +446,7 @@ def utworz_dokument_magazynowy(
                 produkt_id=produkt.id,
                 ilosc=pozycja_in.ilosc,
                 notatka=pozycja_in.notatka,
+                cena_zakupu_netto_grosze=pozycja_in.cena_zakupu_netto_grosze,
             )
         )
 
@@ -463,6 +481,122 @@ def pobierz_dokument_magazynowy(db: Session, dokument_id: int) -> DokumentMagazy
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Nie znaleziono dokumentu magazynowego o podanym id.",
         )
+    return dokument
+
+
+def _wymagaj_roboczego(dokument: DokumentMagazynowy) -> None:
+    if dokument.status != StatusDokumentuMagazynowego.ROBOCZY:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Nie mozna edytowac dokumentu w statusie '{dokument.status.value}' - "
+                "edycja jest mozliwa tylko dla dokumentow w statusie 'roboczy'."
+            ),
+        )
+
+
+def aktualizuj_dokument_magazynowy(
+    db: Session, dokument_id: int, dane: DokumentMagazynowyUpdate
+) -> tuple[DokumentMagazynowy, list[str]]:
+    """Edycja dokumentu magazynowego (Faza 27) - TYLKO w statusie 'roboczy'
+    (patrz _wymagaj_roboczego), mirror app/services/faktury.py:aktualizuj_fakture.
+
+    Typ dokumentu i magazyn(y) sa niezmienne (patrz DokumentMagazynowyUpdate) -
+    edycja pozycji cofa efekt STARYCH pozycji na stan magazynowy (dokladnie
+    odwrotna operacja niz przy tworzeniu) i nalicza go od nowa dla NOWYCH
+    pozycji, dokladnie ta sama logika (w tym tryb ostrzegaj/blokuj) co
+    utworz_dokument_magazynowy - appka NIGDY nie odracza wplywu na stan do
+    momentu zatwierdzenia (patrz status_dokumentu_magazynowego w modelu), wiec
+    kazda zmiana ilosci musi natychmiast skorygowac to, co juz zostalo
+    naliczone."""
+    dokument = pobierz_dokument_magazynowy(db, dokument_id)
+    _wymagaj_roboczego(dokument)
+
+    if dane.data_dokumentu is not None:
+        dokument.data_dokumentu = dane.data_dokumentu
+
+    ostrzezenia: list[str] = []
+    if dane.pozycje is not None:
+        firma = _pobierz_jedyna_firme(db)
+
+        produkty_wg_id: dict[int, Produkt] = {}
+        for pozycja_in in dane.pozycje:
+            if pozycja_in.produkt_id in produkty_wg_id:
+                continue
+            produkt = db.get(Produkt, pozycja_in.produkt_id)
+            if produkt is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Nie znaleziono produktu o id {pozycja_in.produkt_id}.",
+                )
+            if not produkt.jest_magazynowy:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Produkt '{produkt.nazwa}' jest usluga (jest_magazynowy=False) "
+                        "i nie moze wystepowac w dokumencie magazynowym."
+                    ),
+                )
+            produkty_wg_id[pozycja_in.produkt_id] = produkt
+
+        # Cofniecie efektu starych pozycji - dokladnie odwrotny kierunek delty
+        # niz przy tworzeniu (patrz utworz_dokument_magazynowy). Robione PRZED
+        # naliczeniem nowych pozycji, zeby np. zmiana ilosci tego samego
+        # produktu na tym samym dokumencie dala poprawny wynik koncowy, a nie
+        # przejsciowy blad o zejsciu ponizej zera w trybie "blokuj".
+        for stara in dokument.pozycje:
+            if dokument.typ in TYPY_ZMNIEJSZAJACE_ZRODLOWY:
+                _zmien_ilosc(db, stara.produkt_id, dokument.magazyn_zrodlowy_id, stara.ilosc)
+            if dokument.typ in TYPY_ZWIEKSZAJACE_DOCELOWY:
+                _zmien_ilosc(db, stara.produkt_id, dokument.magazyn_docelowy_id, -stara.ilosc)
+
+        dokument.pozycje.clear()
+        db.flush()
+
+        magazyn_zrodlowy = (
+            pobierz_magazyn(db, dokument.magazyn_zrodlowy_id)
+            if dokument.magazyn_zrodlowy_id is not None
+            else None
+        )
+
+        for pozycja_in in dane.pozycje:
+            produkt = produkty_wg_id[pozycja_in.produkt_id]
+            db.add(
+                PozycjaDokumentuMagazynowego(
+                    dokument_id=dokument.id,
+                    produkt_id=produkt.id,
+                    ilosc=pozycja_in.ilosc,
+                    notatka=pozycja_in.notatka,
+                    cena_zakupu_netto_grosze=pozycja_in.cena_zakupu_netto_grosze,
+                )
+            )
+
+            if dokument.typ in TYPY_ZMNIEJSZAJACE_ZRODLOWY:
+                stan = _zmien_ilosc(
+                    db, produkt.id, dokument.magazyn_zrodlowy_id, -pozycja_in.ilosc
+                )
+                ostrzezenie = _sprawdz_ujemny_stan(firma, stan, produkt, magazyn_zrodlowy)
+                if ostrzezenie:
+                    ostrzezenia.append(ostrzezenie)
+
+            if dokument.typ in TYPY_ZWIEKSZAJACE_DOCELOWY:
+                _zmien_ilosc(db, produkt.id, dokument.magazyn_docelowy_id, pozycja_in.ilosc)
+
+    db.commit()
+    db.refresh(dokument)
+    return dokument, ostrzezenia
+
+
+def zatwierdz_dokument_magazynowy(db: Session, dokument_id: int) -> DokumentMagazynowy:
+    """Jedyne mozliwe przejscie statusu (ROBOCZY -> ZATWIERDZONY, patrz
+    StatusDokumentuMagazynowego) - nieodwracalne, appka nie oferuje powrotu do
+    'roboczy'. Nie dotyka stanu magazynowego (juz naliczony przy utworzeniu/
+    kazdej edycji) - to WYLACZNIE blokada dalszej edycji."""
+    dokument = pobierz_dokument_magazynowy(db, dokument_id)
+    _wymagaj_roboczego(dokument)
+    dokument.status = StatusDokumentuMagazynowego.ZATWIERDZONY
+    db.commit()
+    db.refresh(dokument)
     return dokument
 
 

@@ -45,7 +45,13 @@ def pobierz_z_gus(
         elif e.status_code == 400:
             banner.pokaz(e.komunikat)
         else:
-            banner.pokaz("Brak połączenia z GUS — wpisz dane ręcznie.")
+            # Backend (app/services/gus_service.py) zwraca w e.komunikat
+            # KONKRETNY powod (nieprawidlowy klucz produkcyjny, timeout,
+            # nieoczekiwana odpowiedz GUS) - pokazujemy go wprost, zamiast
+            # jednego, zawsze takiego samego "brak polaczenia". Bez tego
+            # rzeczywista przyczyna bledu (np. zly klucz produkcyjny) byla
+            # nie do zdiagnozowania przez uzytkownika ani z jego relacji.
+            banner.pokaz(f"Nie udało się pobrać danych z GUS: {e.komunikat}")
 
     uruchom_w_tle(widget, zadanie, sukces, blad)
 

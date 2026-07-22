@@ -8,6 +8,9 @@ class MarzaOkresuOut(BaseModel):
     przychod_netto_grosze: int
     koszty_ksef_grosze: int
     koszty_reczne_grosze: int
+    # Faza 27 - trzecie, uzupelniajace zrodlo kosztow: cena zakupu netto wpisana
+    # opcjonalnie na pozycjach dokumentow PZ (patrz PozycjaDokumentuMagazynowego).
+    koszty_pz_grosze: int
     koszty_razem_grosze: int
     marza_grosze: int
     # None gdy ma_dane_kosztowe=False - nie ma sensu liczyc marzy/procentu bez
