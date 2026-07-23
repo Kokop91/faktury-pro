@@ -3,6 +3,7 @@ from typing import Any, Callable
 import customtkinter as ctk
 
 from gui import styl
+from gui.widgets_pomocnicze import odswiez_obszar_przewijania
 
 TEKST_BRAK_DANYCH = "Brak danych do wyświetlenia."
 TEKST_LADOWANIA = "Ładowanie..."
@@ -182,6 +183,7 @@ class Tabela(ctk.CTkScrollableFrame):
             row=1, column=0, columnspan=len(self.kolumny) + self._przesuniecie, pady=styl.ODSTEP_DUZY
         )
         self._indeks_zaznaczony = None
+        odswiez_obszar_przewijania(self)
 
     def ustaw_dane(
         self,
@@ -278,6 +280,8 @@ class Tabela(ctk.CTkScrollableFrame):
                     )
                 etykiety_w_wierszu.append(etykieta)
             self._wiersze.append(etykiety_w_wierszu)
+
+        odswiez_obszar_przewijania(self)
 
     def _kolor_wiersza(self, indeks_wiersza: int) -> str:
         return (

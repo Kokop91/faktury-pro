@@ -464,6 +464,18 @@ def pobierz_urzedy_skarbowe() -> list[dict]:
 TIMEOUT_INTEGRACJA = 15.0
 
 
+# Panel "Sprawdz integracje" (patrz app/services/integracje_status_service.py)
+# woła NBP + Biala Lista + GUS + pelny cykl uwierzytelnienia KSeF SEKWENCYJNIE
+# w jednym zadaniu backendu - stad wlasny, znacznie dluzszy timeout niz
+# pojedyncze wywolania ponizej (KSeF samo w sobie ma TIMEOUT_KSEF=45s przy
+# odpytywaniu statusu, patrz nizej).
+TIMEOUT_STATUS_INTEGRACJI = 90.0
+
+
+def sprawdz_status_integracji() -> list[dict]:
+    return _wykonaj("GET", "/integracje/status", TIMEOUT_STATUS_INTEGRACJI).json()
+
+
 def pobierz_ustawienia_gus() -> dict:
     return _wykonaj("GET", "/integracje/gus/ustawienia", TIMEOUT_ODCZYT).json()
 

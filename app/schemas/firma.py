@@ -3,7 +3,13 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import StawkaVat, TrybBlokadyStanu, TypPodatnika
-from app.schemas.klient import waliduj_kod_pocztowy, waliduj_nip, waliduj_telefon
+from app.schemas.klient import (
+    waliduj_email,
+    waliduj_kod_pocztowy,
+    waliduj_nip,
+    waliduj_numer_konta,
+    waliduj_telefon,
+)
 
 
 class FirmaBase(BaseModel):
@@ -37,9 +43,12 @@ class FirmaBase(BaseModel):
     przypomnienia_szablon_temat: str | None = Field(default=None, max_length=255)
     przypomnienia_szablon_tresc: str | None = Field(default=None, max_length=5000)
 
-    _waliduj_nip = field_validator("nip")(waliduj_nip)
+    _waliduj_nip = field_validator("nip", mode="before")(waliduj_nip)
     _waliduj_kod_pocztowy = field_validator("kod_pocztowy")(waliduj_kod_pocztowy)
     _waliduj_telefon = field_validator("telefon")(waliduj_telefon)
+    _waliduj_email = field_validator("email")(waliduj_email)
+    _waliduj_bank_numer_konta = field_validator("bank_numer_konta")(waliduj_numer_konta)
+    _waliduj_bank_numer_konta_vat = field_validator("bank_numer_konta_vat")(waliduj_numer_konta)
 
 
 class FirmaCreate(FirmaBase):
@@ -73,9 +82,12 @@ class FirmaUpdate(BaseModel):
     przypomnienia_szablon_temat: str | None = Field(default=None, max_length=255)
     przypomnienia_szablon_tresc: str | None = Field(default=None, max_length=5000)
 
-    _waliduj_nip = field_validator("nip")(waliduj_nip)
+    _waliduj_nip = field_validator("nip", mode="before")(waliduj_nip)
     _waliduj_kod_pocztowy = field_validator("kod_pocztowy")(waliduj_kod_pocztowy)
     _waliduj_telefon = field_validator("telefon")(waliduj_telefon)
+    _waliduj_email = field_validator("email")(waliduj_email)
+    _waliduj_bank_numer_konta = field_validator("bank_numer_konta")(waliduj_numer_konta)
+    _waliduj_bank_numer_konta_vat = field_validator("bank_numer_konta_vat")(waliduj_numer_konta)
 
 
 class FirmaOut(FirmaBase):

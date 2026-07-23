@@ -1,7 +1,16 @@
+import re
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from gui import styl
+
+# Sam ciag cyfr z opcjonalna czescia ulamkowa, PO normalizacji separatorow
+# (patrz parsuj_kwote/parsuj_liczbe_dodatnia nizej) - Decimal() sam w sobie
+# akceptuje tez notacje naukowa ("1e10"), co przy kwotach/ilosciach dawaloby
+# absurdalnie duze wartosci bez zadnego komunikatu bledu (np. "1e10" ->
+# 10 mld zl wpisane przez pomylke/wklejenie). Ograniczamy wejscie do tego,
+# co realnie moze wpisac uzytkownik w polu kwoty/ilosci.
+_LICZBA_REGEX = re.compile(r"^-?\d+(\.\d+)?$")
 
 ETYKIETY_STATUSU: dict[str, str] = {
     "robocza": "Robocza",
@@ -317,6 +326,8 @@ def parsuj_kwote(tekst: str, wymagaj_dodatniej: bool = True) -> int:
     tekst = tekst.strip().replace(" ", "").replace(",", ".")
     if not tekst:
         raise ValueError("kwota jest wymagana")
+    if not _LICZBA_REGEX.match(tekst):
+        raise ValueError("nieprawidłowa kwota")
     try:
         wartosc = Decimal(tekst)
     except InvalidOperation:
@@ -339,6 +350,8 @@ def parsuj_liczbe_dodatnia(
     tekst = tekst.strip().replace(" ", "").replace(",", ".")
     if not tekst:
         raise ValueError(f"{nazwa_pola} jest wymagana(y)")
+    if not _LICZBA_REGEX.match(tekst):
+        raise ValueError(f"nieprawidłowa wartość pola „{nazwa_pola}”")
     try:
         wartosc = Decimal(tekst)
     except InvalidOperation:

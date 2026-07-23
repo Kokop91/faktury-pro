@@ -7,6 +7,7 @@ from app.database import get_db
 from app.schemas.integracje import (
     GusPodmiotOut,
     KursWalutyOut,
+    StatusIntegracjiOut,
     UstawieniaGusIn,
     UstawieniaGusOut,
 )
@@ -14,7 +15,13 @@ from app.schemas.weryfikacja_bialej_listy import (
     SprawdzBialaListeIn,
     WeryfikacjaBialejListyOut,
 )
-from app.services import biala_lista_service, gus_service, integracje_ustawienia, nbp_service
+from app.services import (
+    biala_lista_service,
+    gus_service,
+    integracje_status_service,
+    integracje_ustawienia,
+    nbp_service,
+)
 
 router = APIRouter(prefix="/integracje", tags=["integracje"])
 
@@ -42,6 +49,14 @@ def szukaj_w_gus(nip: str = Query(min_length=10, max_length=10)):
             detail=f"Nie znaleziono podmiotu o NIP {nip} w rejestrze REGON.",
         )
     return podmiot
+
+
+@router.get("/status", response_model=list[StatusIntegracjiOut])
+def sprawdz_status_integracji(db: Session = Depends(get_db)):
+    """Test dostepnosci wszystkich czterech integracji zewnetrznych naraz -
+    panel 'Sprawdz integracje' w Ustawieniach (patrz
+    app/services/integracje_status_service.py)."""
+    return integracje_status_service.sprawdz_wszystkie(db)
 
 
 @router.get("/nbp/kurs", response_model=KursWalutyOut)

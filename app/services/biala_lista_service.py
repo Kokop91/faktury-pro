@@ -36,6 +36,16 @@ def _wykonaj_zapytanie(sciezka: str) -> dict:
     return odpowiedz.json()
 
 
+def sprawdz_polaczenie(nip: str) -> dict:
+    """Lekki test dostepnosci wykazu (metoda 'search', bez sprawdzenia rachunku
+    i BEZ zapisu do historii, w odroznieniu od sprawdz_nip ponizej) - do panelu
+    'Sprawdz integracje' (patrz app/services/integracje_status_service.py).
+    Rzuca HTTPException przy bledzie polaczenia/API, jak _wykonaj_zapytanie."""
+    wynik = _wykonaj_zapytanie(f"/search/nip/{nip}?date={date.today().isoformat()}")
+    podmiot = (wynik.get("result") or {}).get("subject")
+    return {"znaleziono": podmiot is not None, "nazwa_podmiotu": podmiot.get("name") if podmiot else None}
+
+
 def sprawdz_nip(
     db: Session,
     nip: str,

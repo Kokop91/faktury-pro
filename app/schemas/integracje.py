@@ -25,3 +25,9 @@ class KursWalutyOut(BaseModel):
     waluta: str
     kurs: str
     data_efektywna: date
+
+
+class StatusIntegracjiOut(BaseModel):
+    nazwa: str
+    dziala: bool | None  # None = nie da sie sprawdzic w obecnym stanie (patrz `komunikat`)
+    komunikat: str

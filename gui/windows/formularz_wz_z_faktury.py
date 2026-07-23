@@ -22,6 +22,7 @@ from gui.widgets_pomocnicze import (
     Banner,
     komunikat_bledu,
     komunikat_ostrzezenie,
+    odswiez_obszar_przewijania,
     pokaz_toast,
     ustaw_tekst_ladowania,
 )
@@ -128,6 +129,7 @@ class FormularzWzZFaktury(OknoFormularza):
         przewijany = ctk.CTkScrollableFrame(self, fg_color="transparent")
         przewijany.grid(row=1, column=0, sticky="nsew", padx=styl.ODSTEP_DUZY, pady=(styl.ODSTEP_DUZY, 0))
         przewijany.grid_columnconfigure(0, weight=1)
+        self._przewijany = przewijany
 
         wiersz = 0
         ramka_info = ctk.CTkFrame(przewijany, fg_color="transparent")
@@ -269,10 +271,12 @@ class FormularzWzZFaktury(OknoFormularza):
         )
         wiersz.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
         self._wiersze_pozycji.append(wiersz)
+        odswiez_obszar_przewijania(self._przewijany)
 
     def _usun_wiersz_pozycji(self, wiersz: WierszPozycjiMagazynowej) -> None:
         wiersz.destroy()
         self._wiersze_pozycji.remove(wiersz)
+        odswiez_obszar_przewijania(self._przewijany)
 
     # -- zapis --------------------------------------------------
 

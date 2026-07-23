@@ -9,12 +9,72 @@ KOD_POCZTOWY_REGEX = re.compile(r"^\d{2}-\d{3}$")
 # szeroko, zeby zaakceptowac zarowno numer kierunkowy kraju (+48 123 456 789),
 # jak i krajowy numer kierunkowy stacjonarny w nawiasie ((22) 123 45 67).
 TELEFON_REGEX = re.compile(r"^\+?[\d\s()-]{7,30}$")
+# Celowo liberalna (nie pelny RFC 5322) - odrzuca tylko oczywiste smieci (brak
+# "@", spacje w srodku), ten sam poziom rygoru co TELEFON_REGEX powyzej.
+EMAIL_REGEX = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 def waliduj_nip(nip: str | None) -> str | None:
-    if nip is not None and not NIP_REGEX.match(nip):
+    """Akceptuje NIP zapisany z myslnikami/spacjami (np. '525-239-98-25',
+    '525 239 98 25') - popularne formaty kopiowane z pism urzedowych/faktur -
+    obok golego ciagu 10 cyfr. Ten sam wzorzec co kod pocztowy/telefon
+    (Faza 27): appka usuwa separatory zamiast twardo odrzucac oczywisty,
+    latwy do naprawienia przypadek."""
+    if nip is None:
+        return None
+    nip = nip.strip()
+    if not nip:
+        return None
+    same_cyfry = re.sub(r"[\s-]", "", nip)
+    if not NIP_REGEX.match(same_cyfry):
         raise ValueError("NIP musi się składać z dokładnie 10 cyfr")
-    return nip
+    return same_cyfry
+
+
+def waliduj_email(email: str | None) -> str | None:
+    """Celowo liberalna walidacja (jak telefon powyzej) - odrzuca tylko
+    oczywiste smieci (brak '@', brak domeny), nie probuje wymuszac pelnego
+    RFC 5322. Uzywana wszedzie tam, gdzie appka faktycznie wysyla na ten
+    adres (przypomnienia o platnosciach, Faza 23) - bledny format
+    wykryty od razu przy zapisie, nie dopiero przy nieudanej probie wysylki."""
+    if email is None:
+        return None
+    email = email.strip()
+    if not email:
+        return None
+    if not EMAIL_REGEX.match(email):
+        raise ValueError("Nieprawidłowy format adresu email (oczekiwano np. jan@firma.pl)")
+    return email
+
+
+NUMER_KONTA_REGEX = re.compile(r"^[A-Za-z]{0,2}[\d\s-]{6,34}$")
+
+
+def waliduj_numer_konta(numer: str | None) -> str | None:
+    """Numer konta bankowego / IBAN - celowo liberalna walidacja (jak telefon
+    powyzej), zeby nie odrzucac zapisu ze spacjami co 4 znaki (popularny
+    sposob grupowania, np. 'PL61 1090 1014 0000 0712 1981 2874') ani bez
+    dwuliterowego prefiksu kraju (zwykly polski NRB, 26 cyfr). Appka
+    przechowuje oryginalne formatowanie (drukowane na fakturze do zaplaty),
+    walidacja tylko odrzuca oczywiste smieci - litery poza prefiksem kraju,
+    zbyt krotki/dlugi ciag. Sprawdzenie w Bialej Liscie VAT
+    (app/services/biala_lista_service.py) i tak usuwa spacje przed
+    zapytaniem, wiec nie robimy tego tutaj ponownie."""
+    if numer is None:
+        return None
+    numer = numer.strip()
+    if not numer:
+        return None
+    if not NUMER_KONTA_REGEX.match(numer):
+        raise ValueError(
+            "Numer konta bankowego może zawierać tylko cyfry, spacje, "
+            "myślniki i opcjonalny dwuliterowy kod kraju na początku "
+            "(np. PL61 1090 1014 0000 0712 1981 2874)"
+        )
+    same_cyfry = re.sub(r"\D", "", numer)
+    if not (6 <= len(same_cyfry) <= 32):
+        raise ValueError("Numer konta bankowego ma nieprawidłową długość")
+    return numer
 
 
 def waliduj_kod_pocztowy(kod: str | None) -> str | None:
@@ -69,9 +129,10 @@ class KlientBase(BaseModel):
     domyslna_waluta: str = Field(default="PLN", min_length=3, max_length=3)
     domyslny_termin_platnosci_dni: int = Field(default=14, ge=0)
 
-    _waliduj_nip = field_validator("nip")(waliduj_nip)
+    _waliduj_nip = field_validator("nip", mode="before")(waliduj_nip)
     _waliduj_kod_pocztowy = field_validator("kod_pocztowy")(waliduj_kod_pocztowy)
     _waliduj_telefon = field_validator("telefon")(waliduj_telefon)
+    _waliduj_email = field_validator("email")(waliduj_email)
 
 
 class KlientCreate(KlientBase):
@@ -91,9 +152,10 @@ class KlientUpdate(BaseModel):
     domyslny_termin_platnosci_dni: int | None = Field(default=None, ge=0)
     aktywny: bool | None = None
 
-    _waliduj_nip = field_validator("nip")(waliduj_nip)
+    _waliduj_nip = field_validator("nip", mode="before")(waliduj_nip)
     _waliduj_kod_pocztowy = field_validator("kod_pocztowy")(waliduj_kod_pocztowy)
     _waliduj_telefon = field_validator("telefon")(waliduj_telefon)
+    _waliduj_email = field_validator("email")(waliduj_email)
 
 
 class KlientOut(KlientBase):

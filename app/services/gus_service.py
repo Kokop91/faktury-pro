@@ -103,6 +103,17 @@ def _zbuduj_ulice(dane_el) -> str | None:
     return czesci or None
 
 
+def sprawdz_polaczenie() -> str:
+    """Sam krok logowania (bez wyszukiwania podmiotu) - lekki test dostepnosci
+    do panelu 'Sprawdz integracje' (patrz app/services/integracje_status_service.py).
+    Zwraca nazwe uzytego srodowiska; rzuca HTTPException jak _zaloguj powyzej,
+    jesli logowanie sie nie powiedzie."""
+    klucz, srodowisko = pobierz_dane_polaczenia_gus()
+    url = _adres_uslugi(srodowisko)
+    _zaloguj(url, klucz)
+    return srodowisko
+
+
 def szukaj_po_nip(nip: str) -> dict | None:
     """Zwraca dane podmiotu z rejestru REGON gotowe do wypelnienia formularza
     (nazwa, ulica, kod_pocztowy, miejscowosc) albo None, jesli GUS nie

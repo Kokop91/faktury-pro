@@ -49,6 +49,8 @@ POLA_FIRMY = [
 _PLACEHOLDERY_FIRMY: dict[str, str] = {
     "kod_pocztowy": "np. 00-950",
     "telefon": "np. +48 123 456 789",
+    "bank_numer_konta": "np. PL61 1090 1014 0000 0712 1981 2874",
+    "bank_numer_konta_vat": "np. PL61 1090 1014 0000 0712 1981 2874",
 }
 
 ETYKIETA_JDG = "Osoba fizyczna (JDG)"
@@ -85,6 +87,7 @@ class WidokUstawien(ctk.CTkFrame):
         self._zbuduj_karte_backupu(wrapper)
         self._zbuduj_karte_integracji_gus(wrapper)
         self._zbuduj_karte_ksef(wrapper)
+        self._zbuduj_karte_status_integracji(wrapper)
         self._zbuduj_karte_email(wrapper)
         self._zbuduj_karte_przypomnien(wrapper)
         self._zbuduj_karte_hasla(wrapper)
@@ -1034,6 +1037,97 @@ class WidokUstawien(ctk.CTkFrame):
         def blad(e: api_client.ApiError) -> None:
             ustaw_tekst_ladowania(self._przycisk_ksef_testuj, False, "Testuj połączenie z KSeF")
             self._banner_ksef.pokaz(e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+    # -- panel "Sprawdz integracje" - powstalo po tym, jak integracja z GUS
+    # przestala dzialac CICHO, bez niczyjej wiedzy (patrz CLAUDE.md, Faza 27) -
+    # zamiast czekac na kolejne takie zgloszenie, jedno klikniecie sprawdza
+    # naraz NBP/Biala Liste/GUS/KSeF prawdziwymi zapytaniami sieciowymi
+    # (app/services/integracje_status_service.py) -------------------------
+
+    def _zbuduj_karte_status_integracji(self, master) -> None:
+        karta = ctk.CTkFrame(
+            master, fg_color=styl.KOLOR_KARTA, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        karta.pack(pady=(0, styl.ODSTEP_SREDNI), fill="x")
+
+        ctk.CTkLabel(
+            karta,
+            text="Sprawdź integracje",
+            font=styl.NAGLOWEK_2,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+        ).pack(
+            padx=styl.ODSTEP_DUZY,
+            pady=(styl.ODSTEP_DUZY, styl.ODSTEP_SREDNI),
+            anchor="w",
+        )
+
+        wewnatrz = ctk.CTkFrame(karta, fg_color="transparent", width=320)
+        wewnatrz.pack(padx=styl.ODSTEP_DUZY, pady=(0, styl.ODSTEP_DUZY), fill="x")
+
+        ctk.CTkLabel(
+            wewnatrz,
+            text=(
+                "Jednym kliknięciem testuje rzeczywiste połączenie z NBP, Białą "
+                "Listą VAT, GUS i KSeF - żeby wykryć awarię którejś integracji "
+                "zanim zgłosi ją użytkownik."
+            ),
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY,
+            wraplength=320,
+            justify="left",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._ramka_statusow_integracji = ctk.CTkFrame(wewnatrz, fg_color="transparent")
+        self._ramka_statusow_integracji.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+        self._etykiety_statusow_integracji: list[ctk.CTkLabel] = []
+
+        self._przycisk_sprawdz_integracje = ctk.CTkButton(
+            wewnatrz,
+            text="Sprawdź integracje",
+            fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER,
+            command=self._sprawdz_status_integracji,
+        )
+        self._przycisk_sprawdz_integracje.pack(fill="x")
+
+    def _sprawdz_status_integracji(self) -> None:
+        for etykieta in self._etykiety_statusow_integracji:
+            etykieta.destroy()
+        self._etykiety_statusow_integracji = []
+        ustaw_tekst_ladowania(
+            self._przycisk_sprawdz_integracje, True, "Sprawdź integracje", "Sprawdzanie..."
+        )
+
+        def zadanie():
+            return api_client.sprawdz_status_integracji()
+
+        def sukces(wyniki: list[dict]) -> None:
+            ustaw_tekst_ladowania(self._przycisk_sprawdz_integracje, False, "Sprawdź integracje")
+            for wynik in wyniki:
+                if wynik["dziala"] is True:
+                    kolor, znak = styl.KOLOR_SUKCES, "●"
+                elif wynik["dziala"] is False:
+                    kolor, znak = styl.KOLOR_BLAD, "●"
+                else:
+                    kolor, znak = styl.KOLOR_OSTRZEZENIE, "●"
+                etykieta = ctk.CTkLabel(
+                    self._ramka_statusow_integracji,
+                    text=f"{znak} {wynik['nazwa']} — {wynik['komunikat']}",
+                    font=styl.CZCIONKA_DROBNA,
+                    text_color=kolor,
+                    anchor="w",
+                    justify="left",
+                    wraplength=320,
+                )
+                etykieta.pack(fill="x", pady=(0, 4), anchor="w")
+                self._etykiety_statusow_integracji.append(etykieta)
+            odswiez_obszar_przewijania(self._przewijany)
+
+        def blad(e: api_client.ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk_sprawdz_integracje, False, "Sprawdź integracje")
+            komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
 

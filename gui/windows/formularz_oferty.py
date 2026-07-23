@@ -5,7 +5,13 @@ import customtkinter as ctk
 
 from gui import api_client, formatowanie, ikony, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import Banner, komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import (
+    Banner,
+    komunikat_bledu,
+    odswiez_obszar_przewijania,
+    pokaz_toast,
+    ustaw_tekst_ladowania,
+)
 from gui.windows.baza_formularza import OknoFormularza
 from gui.windows.wiersz_pozycji import WierszPozycji
 
@@ -87,6 +93,7 @@ class FormularzOferty(OknoFormularza):
         przewijany.grid(row=1, column=0, sticky="nsew", padx=styl.ODSTEP_DUZY, pady=(styl.ODSTEP_DUZY, 0))
         przewijany.grid_columnconfigure(0, weight=1)
         przewijany.grid_columnconfigure(1, weight=1)
+        self._przewijany = przewijany
 
         etykiety_klientow = [self._etykieta_klienta(k) for k in self._klienci]
         self._klucze_wg_etykiety_klienta = {
@@ -312,11 +319,13 @@ class FormularzOferty(OknoFormularza):
         wiersz.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
         self._wiersze_pozycji.append(wiersz)
         self._odswiez_podsumowanie()
+        odswiez_obszar_przewijania(self._przewijany)
 
     def _usun_wiersz_pozycji(self, wiersz: WierszPozycji) -> None:
         wiersz.destroy()
         self._wiersze_pozycji.remove(wiersz)
         self._odswiez_podsumowanie()
+        odswiez_obszar_przewijania(self._przewijany)
 
     def _odswiez_podsumowanie(self) -> None:
         netto = vat = brutto = 0

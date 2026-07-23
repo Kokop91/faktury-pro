@@ -34,6 +34,8 @@ from gui.widgets_pomocnicze import (
 _PLACEHOLDERY_FIRMY = {
     "kod_pocztowy": "np. 00-950",
     "telefon": "np. +48 123 456 789",
+    "bank_numer_konta": "np. PL61 1090 1014 0000 0712 1981 2874",
+    "bank_numer_konta_vat": "np. PL61 1090 1014 0000 0712 1981 2874",
 }
 
 POLA_FIRMY_KREATORA = [
