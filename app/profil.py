@@ -25,6 +25,27 @@ zaleznosc byla by cyklem).
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# KRYTYCZNE (Faza 25, blad znaleziony po pierwszym realnym uzyciu): czy_tryb_deweloperski()
+# nizej sprawdza DATABASE_URL w os.environ, ale plik .env sam z siebie NIE trafia do
+# os.environ - trzeba go jawnie wczytac (python-dotenv). app/config.py robi to tez
+# (load_dotenv() na gorze tamtego modulu), ale ten modul (app/profil.py) jest CELOWO
+# importowany i uzywany (gui/main.py) PRZED jakimkolwiek importem app.config - inaczej
+# profil zostalby wybrany PO zamrozeniu POSTGRES_PRYWATNY_BAZA. Bez tego wywolania tutaj
+# czy_tryb_deweloperski() zwracalby False na czysto (mimo istniejacego .env z DATABASE_URL),
+# appka pokazywalaby ekran wyboru profilu i pisala haslo do auth.json per-profilu, a
+# PO ZAIMPORTOWANIU app.config kilka linijek pozniej (ktory dopiero wtedy wczytuje .env)
+# UZYWA_PRYWATNEGO_POSTGRESA nagle wychodzilo False - appka laczyla sie z ZUPELNIE INNA,
+# plaska baza deweloperska z .env, ignorujac wybrany profil. Skutek: haslo sprawdzane
+# wzgledem jednego profilu, dane firmy/faktur z zupelnie innej bazy - i przy kolejnym
+# uruchomieniu latwo trafic na inny profil w tym samym pickerze, co daje "nieprawidlowe
+# haslo" mimo poprawnego hasla ustawionego wczesniej. load_dotenv() jest idempotentne
+# (bezpieczne wywolac powtornie w app/config.py) i NIE nadpisuje juz ustawionych zmiennych
+# srodowiskowych, wiec to wywolanie nie zmienia zachowania appki u uzytkownika koncowego
+# (bez .env w ogole) ani gdy .env jest juz wczytany przez inny mechanizm (np. IDE).
+load_dotenv()
+
 NAZWA_KATALOGU = "FakturyPro"
 NAZWA_PODKATALOGU_PROFILI = "profiles"
 
