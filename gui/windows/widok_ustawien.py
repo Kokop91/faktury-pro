@@ -1,5 +1,8 @@
 import os
 import shutil
+import threading
+import time
+import tkinter as tk
 import webbrowser
 from datetime import date, datetime
 from pathlib import Path
@@ -9,7 +12,7 @@ import customtkinter as ctk
 
 from app import profil
 from app.wersja import WERSJA
-from gui import api_client, auth, diagnostyka, formatowanie, nastawienia, profile_rejestr, styl
+from gui import aktualizacje, api_client, auth, diagnostyka, formatowanie, nastawienia, profile_rejestr, styl
 from gui import kopia_zapasowa as kz
 from gui.integracje_gui import pobierz_z_gus
 from gui.logo import wybierz_i_skopiuj_logo
@@ -1500,17 +1503,23 @@ class WidokUstawien(ctk.CTkFrame):
         ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
 
         # Baner dostepnosci nowszej wersji - CELOWO trwaly (nie znikajacy
-        # sam, w odroznieniu od pokaz_toast ponizej), zeby link do pobrania
-        # zostal widoczny, dopoki uzytkownik sam nie zamknie karty Ustawien.
-        # Ukryty domyslnie - pokazywany tylko po sprawdzeniu, ktore faktycznie
-        # znajdzie nowsza wersje.
+        # sam, w odroznieniu od pokaz_toast ponizej), zeby zostal widoczny,
+        # dopoki uzytkownik sam nie pobierze/zainstaluje albo nie zamknie
+        # karty Ustawien. Ukryty domyslnie - pokazywany tylko po sprawdzeniu,
+        # ktore faktycznie znajdzie nowsza wersje. Przycisk wewnatrz jest
+        # maszyna stanow o 4 stanach (patrz _ustaw_stan_przycisku_aktualizacji):
+        # pobierz -> pobieranie (pasek postepu, Faza 28) -> zainstaluj, z
+        # osobnym stanem "blad" (nieblokujacy Banner, nie messagebox) na
+        # kazdym niepowodzeniu pobierania, z ktorego "Sprobuj ponownie"
+        # wraca do "pobierz" (i faktycznie WZNAWIA pobieranie, patrz
+        # gui/aktualizacje.py:pobierz_instalator).
         self._baner_aktualizacji = ctk.CTkFrame(
             wewnatrz, fg_color=styl.KOLOR_OSTRZEZENIE_TLO, corner_radius=styl.PROMIEN_NAROZNIKA
         )
         self._etykieta_baneru_aktualizacji = ctk.CTkLabel(
             self._baner_aktualizacji,
             text="",
-            font=styl.CZCIONKA_TRESC,
+            font=styl.CZCIONKA_TRESC_POGRUBIONA,
             text_color=styl.KOLOR_OSTRZEZENIE,
             anchor="w",
             justify="left",
@@ -1519,19 +1528,68 @@ class WidokUstawien(ctk.CTkFrame):
         self._etykieta_baneru_aktualizacji.pack(
             padx=styl.ODSTEP_SREDNI, pady=(styl.ODSTEP_MALY, 0), fill="x"
         )
-        ctk.CTkButton(
+        self._etykieta_zmian_aktualizacji = ctk.CTkLabel(
             self._baner_aktualizacji,
-            text="Pobierz nową wersję",
+            text="",
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_OSTRZEZENIE,
+            anchor="w",
+            justify="left",
+            wraplength=260,
+        )
+        # Nie .pack() tutaj - _pokaz_baner_aktualizacji() pokazuje go TYLKO
+        # gdy serwer faktycznie przyslal niepusty opis zmian.
+
+        self._pasek_postepu_aktualizacji = ctk.CTkProgressBar(
+            self._baner_aktualizacji, mode="determinate"
+        )
+        self._pasek_postepu_aktualizacji.set(0)
+        self._etykieta_postepu_aktualizacji = ctk.CTkLabel(
+            self._baner_aktualizacji,
+            text="",
+            font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_OSTRZEZENIE,
+            anchor="w",
+        )
+        # Zaden .pack() tutaj - tylko podczas pobierania, patrz _pokaz_pasek_postepu().
+
+        self._baner_bledu_aktualizacji = Banner(self._baner_aktualizacji)
+        self._baner_bledu_aktualizacji.ustaw_geometrie(
+            lambda: self._baner_bledu_aktualizacji.pack(
+                padx=styl.ODSTEP_SREDNI, pady=(0, styl.ODSTEP_MALY), fill="x",
+                before=self._przycisk_aktualizacji,
+            )
+        )
+
+        self._przycisk_aktualizacji = ctk.CTkButton(
+            self._baner_aktualizacji,
+            text="Pobierz aktualizację",
             font=styl.CZCIONKA_TRESC,
             fg_color="transparent",
             border_width=1,
             border_color=styl.KOLOR_OSTRZEZENIE,
             text_color=styl.KOLOR_OSTRZEZENIE,
             hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+        )
+        self._przycisk_aktualizacji.pack(padx=styl.ODSTEP_SREDNI, pady=styl.ODSTEP_MALY, fill="x")
+
+        ctk.CTkButton(
+            self._baner_aktualizacji,
+            text="Zobacz na GitHub",
+            font=styl.CZCIONKA_DROBNA,
+            fg_color="transparent",
+            border_width=0,
+            text_color=styl.KOLOR_OSTRZEZENIE,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY,
+            height=24,
             command=lambda: webbrowser.open(self._url_pobierania_aktualizacji),
-        ).pack(padx=styl.ODSTEP_SREDNI, pady=styl.ODSTEP_MALY, fill="x")
+        ).pack(padx=styl.ODSTEP_SREDNI, pady=(0, styl.ODSTEP_MALY), fill="x")
+
         self._url_pobierania_aktualizacji = ""
-        # Nie .pack() tutaj - dopiero _pokaz_baner_aktualizacji() go pokazuje.
+        self._url_instalatora_aktualizacji = ""
+        self._sciezka_pobranego_instalatora: Path | None = None
+        self._pobieranie_w_toku = False
+        # Nie .pack() self._baner_aktualizacji tutaj - dopiero _pokaz_baner_aktualizacji().
 
         self._przycisk_sprawdz_aktualizacje = ctk.CTkButton(
             wewnatrz,
@@ -1546,11 +1604,41 @@ class WidokUstawien(ctk.CTkFrame):
         )
         self._przycisk_sprawdz_aktualizacje.pack(fill="x")
 
-    def _pokaz_baner_aktualizacji(self, wersja_najnowsza: str, url_pobierania: str) -> None:
+    def _pokaz_baner_aktualizacji(
+        self, wersja_najnowsza: str, url_pobierania: str, url_instalatora: str, zmiany: str
+    ) -> None:
         self._url_pobierania_aktualizacji = url_pobierania
+        self._url_instalatora_aktualizacji = url_instalatora
         self._etykieta_baneru_aktualizacji.configure(
-            text=f"Dostępna nowsza wersja {wersja_najnowsza}."
+            text=f"Dostępna nowsza wersja {wersja_najnowsza}"
         )
+        if zmiany:
+            self._etykieta_zmian_aktualizacji.configure(text=f"Co nowego:\n{zmiany}")
+            # before=self._przycisk_aktualizacji (NIE pasek postepu ponizej) -
+            # przycisk jest JEDYNYM elementem tego banera spakowanym na stale
+            # od razu przy budowie karty (patrz konstruktor), wiec jest
+            # niezawodnym punktem odniesienia; pasek postepu/etykieta bledu sa
+            # pakowane/chowane dynamicznie i w momencie pierwszego wywolania
+            # tej metody moga jeszcze wcale nie byc spakowane - "before" na
+            # niespakowanym widgecie rzuca TclError ("isn't packed").
+            self._etykieta_zmian_aktualizacji.pack(
+                padx=styl.ODSTEP_SREDNI, pady=(styl.ODSTEP_MIKRO, 0), fill="x",
+                before=self._przycisk_aktualizacji,
+            )
+        else:
+            self._etykieta_zmian_aktualizacji.pack_forget()
+
+        # Jesli ten dokladnie plik zostal juz w calosci pobrany wczesniej
+        # (poprzednia sesja, albo appka zamknieta miedzy pobraniem a
+        # instalacja) - appka NIE pobiera ponownie, przechodzi prosto do
+        # "Zainstaluj aktualizacje".
+        if aktualizacje.czy_juz_pobrany(url_instalatora):
+            self._sciezka_pobranego_instalatora = aktualizacje.plik_docelowy(url_instalatora)
+            self._ustaw_stan_przycisku_aktualizacji("zainstaluj")
+        else:
+            self._sciezka_pobranego_instalatora = None
+            self._ustaw_stan_przycisku_aktualizacji("pobierz")
+
         self._baner_aktualizacji.pack(
             fill="x", pady=(0, styl.ODSTEP_SREDNI), before=self._przycisk_sprawdz_aktualizacje
         )
@@ -1566,7 +1654,12 @@ class WidokUstawien(ctk.CTkFrame):
         def sukces(wynik: dict) -> None:
             ustaw_tekst_ladowania(self._przycisk_sprawdz_aktualizacje, False, "Sprawdź aktualizacje")
             if wynik["dostepna_nowsza_wersja"]:
-                self._pokaz_baner_aktualizacji(wynik["wersja_najnowsza"], wynik["url_pobierania"])
+                self._pokaz_baner_aktualizacji(
+                    wynik["wersja_najnowsza"],
+                    wynik["url_pobierania"],
+                    wynik["url_instalatora"],
+                    wynik["zmiany"],
+                )
             else:
                 pokaz_toast(self, "Masz najnowszą wersję aplikacji.", typ="sukces")
 
@@ -1575,6 +1668,164 @@ class WidokUstawien(ctk.CTkFrame):
             pokaz_toast(self, "Nie udało się sprawdzić dostępności aktualizacji.", typ="ostrzezenie")
 
         uruchom_w_tle(self, zadanie, sukces, blad)
+
+    # -- pobieranie i instalacja aktualizacji (Faza 28) --------------------
+
+    def _ustaw_stan_przycisku_aktualizacji(self, stan: str) -> None:
+        """stan: 'pobierz' | 'pobieranie' | 'zainstaluj' | 'blad'."""
+        mapowanie = {
+            "pobierz": ("Pobierz aktualizację", self._na_klik_pobierz_aktualizacje, "normal"),
+            "pobieranie": ("Pobieranie...", None, "disabled"),
+            "zainstaluj": ("Zainstaluj aktualizację", self._zainstaluj_aktualizacje, "normal"),
+            "blad": ("Spróbuj ponownie", self._na_klik_pobierz_aktualizacje, "normal"),
+        }
+        tekst, komenda, stan_tk = mapowanie[stan]
+        if komenda is not None:
+            self._przycisk_aktualizacji.configure(command=komenda)
+        self._przycisk_aktualizacji.configure(text=tekst, state=stan_tk)
+
+    def _pokaz_pasek_postepu(self, widoczny: bool) -> None:
+        if widoczny:
+            # before=self._przycisk_aktualizacji - patrz komentarz w
+            # _pokaz_baner_aktualizacji (ten sam powod: jedyny niezawodnie
+            # juz-spakowany punkt odniesienia). Dwa kolejne wywolania pack()
+            # z tym samym before= ukladaja sie w kolejnosci wywolan tuz nad
+            # przyciskiem (pasek, potem etykieta pod paskiem), nie odwrotnie.
+            self._pasek_postepu_aktualizacji.pack(
+                padx=styl.ODSTEP_SREDNI, pady=(0, styl.ODSTEP_MIKRO), fill="x",
+                before=self._przycisk_aktualizacji,
+            )
+            self._etykieta_postepu_aktualizacji.pack(
+                padx=styl.ODSTEP_SREDNI, pady=(0, styl.ODSTEP_MALY), fill="x",
+                before=self._przycisk_aktualizacji,
+            )
+        else:
+            self._pasek_postepu_aktualizacji.stop()
+            self._pasek_postepu_aktualizacji.pack_forget()
+            self._etykieta_postepu_aktualizacji.pack_forget()
+
+    def _na_klik_pobierz_aktualizacje(self) -> None:
+        if self._pobieranie_w_toku:
+            return
+        self._pobieranie_w_toku = True
+        self._baner_bledu_aktualizacji.ukryj()
+        self._przycisk_sprawdz_aktualizacje.configure(state="disabled")
+        self._ustaw_stan_przycisku_aktualizacji("pobieranie")
+        self._pokaz_pasek_postepu(True)
+        self._pasek_postepu_aktualizacji.configure(mode="determinate")
+        self._pasek_postepu_aktualizacji.set(0)
+        self._etykieta_postepu_aktualizacji.configure(text="Rozpoczynanie pobierania...")
+
+        url = self._url_instalatora_aktualizacji
+        ostatnia_aktualizacja = {"czas": 0.0}
+
+        def na_postep(pobrane: int, calkowity: int | None) -> None:
+            # Throttling - callback leci z watku w tle za KAZDYM kawalkiem
+            # (256 KB), co przy szybkim laczu mogloby zalac kolejke zdarzen
+            # Tk dziesiatkami wywolan .after() na sekunde. Ostatni kawalek
+            # (pobrane==calkowity) zawsze przechodzi, zeby pasek na pewno
+            # doszedl do 100%, nie utknal tuz przed koncem przez throttling.
+            teraz = time.monotonic()
+            dotarto_do_konca = calkowity is not None and pobrane >= calkowity
+            if not dotarto_do_konca and teraz - ostatnia_aktualizacja["czas"] < 0.1:
+                return
+            ostatnia_aktualizacja["czas"] = teraz
+            try:
+                self.after(0, lambda: self._aktualizuj_postep_pobierania(pobrane, calkowity))
+            except tk.TclError:
+                pass  # okno Ustawien juz zniszczone
+
+        def watek() -> None:
+            try:
+                plik = aktualizacje.pobierz_instalator(url, na_postep)
+            except aktualizacje.BladPobieraniaAktualizacji as e:
+                komunikat = str(e)
+                try:
+                    self.after(0, lambda: self._pobieranie_aktualizacji_zakonczone_bledem(komunikat))
+                except tk.TclError:
+                    pass
+            except Exception as e:  # nieoczekiwany wyjatek - tez pokazujemy uzytkownikowi
+                komunikat = f"Nieoczekiwany błąd podczas pobierania: {e}"
+                try:
+                    self.after(0, lambda: self._pobieranie_aktualizacji_zakonczone_bledem(komunikat))
+                except tk.TclError:
+                    pass
+            else:
+                try:
+                    self.after(0, lambda: self._pobieranie_aktualizacji_zakonczone_sukcesem(plik))
+                except tk.TclError:
+                    pass
+
+        threading.Thread(target=watek, daemon=True).start()
+
+    def _aktualizuj_postep_pobierania(self, pobrane: int, calkowity: int | None) -> None:
+        if not self.winfo_exists():
+            return
+        if calkowity:
+            ulamek = min(pobrane / calkowity, 1.0)
+            self._pasek_postepu_aktualizacji.configure(mode="determinate")
+            self._pasek_postepu_aktualizacji.set(ulamek)
+            self._etykieta_postepu_aktualizacji.configure(
+                text=(
+                    f"Pobieranie... {ulamek * 100:.0f}% "
+                    f"({formatowanie.formatuj_rozmiar_bajtow(pobrane)} z "
+                    f"{formatowanie.formatuj_rozmiar_bajtow(calkowity)})"
+                )
+            )
+        else:
+            # Brak Content-Length z serwera (rzadkie dla GitHub Releases) -
+            # nie da sie policzyc procentu, wiec pasek przechodzi w tryb
+            # nieokreslony zamiast klamliwie pokazywac 0%.
+            self._pasek_postepu_aktualizacji.configure(mode="indeterminate")
+            self._pasek_postepu_aktualizacji.start()
+            self._etykieta_postepu_aktualizacji.configure(
+                text=f"Pobieranie... {formatowanie.formatuj_rozmiar_bajtow(pobrane)}"
+            )
+
+    def _pobieranie_aktualizacji_zakonczone_sukcesem(self, plik: Path) -> None:
+        if not self.winfo_exists():
+            return
+        self._pobieranie_w_toku = False
+        self._sciezka_pobranego_instalatora = plik
+        self._pokaz_pasek_postepu(False)
+        self._przycisk_sprawdz_aktualizacje.configure(state="normal")
+        self._ustaw_stan_przycisku_aktualizacji("zainstaluj")
+        pokaz_toast(self, "Aktualizacja pobrana - gotowa do zainstalowania.", typ="sukces")
+
+    def _pobieranie_aktualizacji_zakonczone_bledem(self, komunikat: str) -> None:
+        if not self.winfo_exists():
+            return
+        self._pobieranie_w_toku = False
+        self._pokaz_pasek_postepu(False)
+        self._przycisk_sprawdz_aktualizacje.configure(state="normal")
+        self._ustaw_stan_przycisku_aktualizacji("blad")
+        self._baner_bledu_aktualizacji.pokaz(komunikat)
+
+    def _zainstaluj_aktualizacje(self) -> None:
+        if self._sciezka_pobranego_instalatora is None:
+            return
+
+        potwierdzono = messagebox.askyesno(
+            "Zainstalować aktualizację?",
+            "Aplikacja zostanie teraz zamknięta, żeby instalator mógł ją "
+            "zaktualizować. Po zakończeniu instalacji uruchom aplikację "
+            "ponownie.\n\nKontynuować?",
+            parent=self,
+        )
+        if not potwierdzono:
+            return
+
+        aktualizacje.uruchom_instalator(self._sciezka_pobranego_instalatora)
+
+        from gui import proces_aplikacji
+
+        # Ten sam wzorzec zamkniecia co gui/windows/dialog_kopii_zapasowej.py
+        # po przywroceniu backupu i _usun_profil() nizej w tym pliku -
+        # zatrzymuje TAKZE prywatny Postgres (nie tylko FastAPI), zeby
+        # instalator (CloseApplications=yes w installer.iss) nie musial sam
+        # sprzatac po ewentualnie osieroconym postgres.exe.
+        proces_aplikacji.zatrzymaj_wszystko()
+        os._exit(0)
 
     # -- pakiet diagnostyczny na potrzeby wsparcia zdalnego (Faza 26) - dla
     # uzytkownika nietechnicznego, ktory nie potrafi opisac bledu ani znalezc

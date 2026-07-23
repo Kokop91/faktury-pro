@@ -14,11 +14,13 @@ Pełny opis mechanizmu: `CLAUDE.md`, sekcja "Wersjonowanie i aktualizacje".
 2. **`installer.iss`** — `#define AppWersja "X.Y.Z"` (linia 28). MUSI być
    identyczna z `app/wersja.py`, inaczej appka po instalacji pokazywałaby
    inny numer niż widniał w nazwie pobranego instalatora.
-3. **`wersja_aktualna.txt`** (korzeń repozytorium) — **JESZCZE NIE TERAZ**.
-   Ten plik zmieniasz dopiero w kroku 6, PO opublikowaniu instalatora — appka
-   porównuje się z nim przez internet (`app/services/aktualizacje_service.py`),
-   więc zmiana za wcześnie poinformowałaby już istniejących użytkowników
-   o wersji, której jeszcze nie da się pobrać.
+3. **`wersja_aktualna.txt` i `wersja_aktualna.json`** (korzeń repozytorium) —
+   **JESZCZE NIE TERAZ**. Te pliki zmieniasz dopiero w kroku 6, PO
+   opublikowaniu instalatora jako GitHub Release — appka porównuje się z
+   nimi przez internet (`app/services/aktualizacje_service.py`), więc zmiana
+   za wcześnie poinformowałaby już istniejących użytkowników o wersji,
+   której jeszcze nie da się pobrać (`.json` zawiera bezpośredni link do
+   assetu wydania, który w ogóle jeszcze nie istnieje przed krokiem 6).
 
 Numeracja: proste semver (`MAJOR.MINOR.PATCH`). Podnieś **MINOR** przy
 zamknięciu większej fazy/funkcjonalności, **PATCH** przy drobnej poprawce.
@@ -116,27 +118,63 @@ Wynik końcowy do wysłania: `Output\FakturyPro-Setup-X.Y.Z.exe`.
    problem" (Faza 26): czy tworzy plik ZIP na Pulpicie i czy jego zawartość
    nie zawiera niczego wrażliwego (patrz `gui/diagnostyka.py`).
 
-## 6. Opublikuj instalator i DOPIERO TERAZ zaktualizuj `wersja_aktualna.txt`
+## 6. Opublikuj instalator i DOPIERO TERAZ zaktualizuj pliki wersji
 
-1. Udostępnij `Output\FakturyPro-Setup-X.Y.Z.exe` w miejscu, skąd użytkownik
-   go pobierze (np. wydanie/release na GitHub w tym repozytorium).
-2. Zaktualizuj `wersja_aktualna.txt` (korzeń repozytorium — plik z JEDNĄ linią
-   tekstu, sam numer wersji) na nowy numer, zatwierdź (`git commit`) i wypchnij
-   (`git push`) do gałęzi `main`. Appka użytkownika pokaże baner "Dostępna
-   nowsza wersja" dopiero po tym kroku, przy najbliższym ręcznym kliknięciu
-   "Sprawdź aktualizacje" w Ustawieniach — appka nigdy nie sprawdza tego sama
-   w tle.
+Od Fazy 28 (pobieranie aktualizacji w appce) appka NIE czyta już samego
+numeru wersji — potrzebuje też bezpośredniego linku do pliku instalatora i
+opisu zmian. Kolejność jest sztywna, bo krok 2 wymaga linku, który powstaje
+dopiero w kroku 1:
+
+1. **Udostępnij instalator na GitHubie jako Release** (nie samo wgranie pliku
+   gdziekolwiek — appka pobiera go bezpośrednio z assetu wydania):
+   - `github.com/Kokop91/faktury-pro` → "Releases" → "Draft a new release".
+   - Tag np. `vX.Y.Z`, dołącz `Output\FakturyPro-Setup-X.Y.Z.exe` jako asset.
+   - Opublikuj wydanie. Skopiuj bezpośredni URL assetu — link pod prawym
+     klawiszem myszy na nazwie pliku na stronie wydania, w formacie
+     `https://github.com/Kokop91/faktury-pro/releases/download/vX.Y.Z/FakturyPro-Setup-X.Y.Z.exe`.
+2. **Zaktualizuj `wersja_aktualna.json`** (korzeń repozytorium) — TRZY pola:
+   ```json
+   {
+     "wersja": "X.Y.Z",
+     "url_instalatora": "<dokładny URL assetu skopiowany w kroku 1>",
+     "zmiany": "- Punkt pierwszy zmiany\n- Punkt drugi zmiany\n- ..."
+   }
+   ```
+   `zmiany` to changelog pokazywany w banerze aktualizacji w appce (patrz
+   `gui/windows/widok_ustawien.py`) — pisz po polsku, bez żargonu, z
+   perspektywy użytkownika ("Naprawiono błąd logowania po zmianie firmy", nie
+   "Naprawiono race condition w app/profil.py"). Nowe linie w polu `zmiany`
+   to dosłowne `\n` wewnątrz stringa JSON (jedna linia = jeden punkt).
+3. **Zaktualizuj TEŻ `wersja_aktualna.txt`** (JEDNA linia, sam numer wersji,
+   bez zmian od Fazy 6) — appki sprzed Fazy 28 (≤1.1.1) nadal czytają
+   WYŁĄCZNIE ten plik i nigdy nie zobaczą `.json`; musi zostać zsynchronizowany
+   z `wersja_aktualna.json`, żeby te starsze instalacje też wiedziały o
+   nowej wersji (bez changelogu/linku bezpośredniego — dostają tylko numer i
+   link do ogólnej strony wydań, tak jak przed Fazą 28).
+4. `git commit` + `git push` OBU plików razem na `main`. Appka użytkownika
+   (w wersji ≥ zawierającej Fazę 28) pokaże baner z changelogiem i przyciskiem
+   "Pobierz aktualizację" dopiero po tym kroku, przy najbliższym ręcznym
+   kliknięciu "Sprawdź aktualizacje" w Ustawieniach — appka nigdy nie
+   sprawdza tego sama w tle.
 
 ## 7. Co wysłać odbiorcy
 
-- **Zawsze**: sam plik `Output\FakturyPro-Setup-X.Y.Z.exe`. To jedyny plik,
-  jaki trzeba pobrać i uruchomić — instalacja jest per-użytkownik, bez
-  uprawnień administratora (`installer.iss`, `PrivilegesRequired=lowest`).
-- **Krótka informacja co robić**: jeśli odbiorca ma już starszą wersję
-  zainstalowaną, wystarczy uruchomić nowy instalator NAD istniejącą instalacją
-  — dane zostają zachowane, instalator sam poprosi o zamknięcie appki, jeśli
-  akurat działa (`CloseApplications=yes`). Nie trzeba nic odinstalowywać
-  ręcznie.
+- **Jeśli odbiorca ma już zainstalowaną wersję z Fazy 28 lub nowszą**: NIC
+  wysyłać nie trzeba — sam kliknie "Sprawdź aktualizacje" → "Pobierz
+  aktualizację" → "Zainstaluj aktualizację" w Ustawieniach, appka pobierze
+  instalator z Release i sama go uruchomi (patrz `gui/aktualizacje.py`).
+  Warto tylko dać znać, że nowa wersja jest dostępna (appka NIGDY nie
+  sprawdza automatycznie w tle).
+- **W przeciwnym razie (pierwsza instalacja, albo bardzo stara wersja
+  sprzed Fazy 28)**: wyślij sam plik `Output\FakturyPro-Setup-X.Y.Z.exe`. To
+  jedyny plik, jaki trzeba pobrać i uruchomić — instalacja jest
+  per-użytkownik, bez uprawnień administratora (`installer.iss`,
+  `PrivilegesRequired=lowest`).
+- **Krótka informacja co robić** (dla ręcznej instalacji): jeśli odbiorca ma
+  już starszą wersję zainstalowaną, wystarczy uruchomić nowy instalator NAD
+  istniejącą instalacją — dane zostają zachowane, instalator sam poprosi o
+  zamknięcie appki, jeśli akurat działa (`CloseApplications=yes`). Nie trzeba
+  nic odinstalowywać ręcznie.
 - **Nowa instrukcja obsługi — TYLKO jeśli coś zmieniło się w sposobie
   korzystania z appki** (nowy ekran, nowy krok w istniejącym procesie, nowa
   ważna funkcja — np. ekran wyboru profilu z Fazy 25 albo przycisk "Zgłoś

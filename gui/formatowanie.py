@@ -255,6 +255,18 @@ def formatuj_procent(wartosc: float | None) -> str:
     return f"{wartosc:.1f}".replace(".", ",") + "%"
 
 
+def formatuj_rozmiar_bajtow(bajty: int) -> str:
+    """Formatuje rozmiar pliku do czytelnej postaci ('43,1 MB', '512 KB') -
+    uzywane przy pobieraniu aktualizacji (Faza 28, gui/aktualizacje.py),
+    gdzie instalator to zwykle kilkadziesiat-kilkaset MB (bundlowany Postgres +
+    Python + zaleznosci)."""
+    megabajty = bajty / (1024 * 1024)
+    if megabajty >= 1:
+        return f"{megabajty:.1f}".replace(".", ",") + " MB"
+    kilobajty = bajty / 1024
+    return f"{kilobajty:.0f} KB"
+
+
 def formatuj_date(wartosc) -> str:
     if wartosc is None:
         return ""

@@ -6,3 +6,5 @@ class AktualizacjaOut(BaseModel):
     wersja_najnowsza: str
     dostepna_nowsza_wersja: bool
     url_pobierania: str
+    url_instalatora: str
+    zmiany: str

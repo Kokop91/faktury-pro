@@ -643,11 +643,17 @@ tests/
 
 ## Wersjonowanie i aktualizacje
 
-Appka ma świadomość własnej wersji i prosty, RĘCZNY mechanizm informowania
-użytkownika o dostępności nowszej wersji (przycisk "Sprawdź aktualizacje" w
-Ustawieniach) — CELOWO bez automatycznego pobierania/instalowania. Appka
-nigdy sama niczego nie instaluje; użytkownik zawsze pobiera i uruchamia nowy
-instalator ręcznie, tak jak za pierwszym razem.
+Appka ma świadomość własnej wersji i RĘCZNY (nie w pełni automatyczny)
+mechanizm dostarczania aktualizacji — CELOWO bez auto-update Poziomu 3
+(appka nigdy sama nie podmienia własnych plików w locie, świadomie odłożone
+na przyszłość). Appka SAMA, na żądanie użytkownika (przycisk "Sprawdź
+aktualizacje" w Ustawieniach), sprawdza dostępność nowszej wersji, pokazuje
+changelog, POBIERA gotowy instalator i go URUCHAMIA — ale sama podmiana
+plików programu nadal należy WYŁĄCZNIE do istniejącego, sprawdzonego
+instalatora Inno Setup (`installer.iss`), dokładnie tego samego, którego
+użytkownik uruchomiłby ręcznie po pobraniu ze strony wydań. Zobacz
+`app/services/aktualizacje_service.py` (sprawdzanie) i `gui/aktualizacje.py`
+(pobieranie + uruchomienie instalatora, Faza 28).
 
 **Trzy miejsca z numerem wersji — przy KAŻDYM wydaniu nowej wersji trzeba
 zaktualizować WSZYSTKIE TRZY, ręcznie, w tej kolejności:**
@@ -663,38 +669,51 @@ zaktualizować WSZYSTKIE TRZY, ręcznie, w tej kolejności:**
    z `app/wersja.py`, inaczej appka po instalacji pokazywałaby inny numer w
    Ustawieniach niż widniał w nazwie pobranego instalatora — myląco dla
    użytkownika.
-3. **`wersja_aktualna.txt`** (korzeń repozytorium) — plik z JEDNĄ LINIĄ
-   tekstu (sam numer wersji, np. `1.1.0`, nic więcej) — TO JEST plik, który
-   appka faktycznie odpytuje przez internet (surowy URL GitHub,
-   `https://raw.githubusercontent.com/Kokop91/faktury-pro/main/wersja_aktualna.txt`,
+3. **`wersja_aktualna.json`** (korzeń repozytorium, od Fazy 28) — plik JSON
+   z TRZEMA polami (`wersja`, `url_instalatora` — bezpośredni link do assetu
+   GitHub Release, `zmiany` — changelog po polsku pokazywany w appce) — TO
+   JEST plik, który appka faktycznie odpytuje przez internet (surowy URL
+   GitHub, `https://raw.githubusercontent.com/Kokop91/faktury-pro/main/wersja_aktualna.json`,
    patrz `app/services/aktualizacje_service.py`), żeby wiedzieć, czy istnieje
-   coś nowszego niż wersja zainstalowana u użytkownika. **To jedyny krok z
-   tej trójki, który trzeba zrobić PO zbudowaniu i opublikowaniu instalatora
-   (nie przed)** — dopóki nowy instalator nie jest jeszcze dostępny do
-   pobrania, ten plik powinien nadal wskazywać STARĄ wersję, żeby appka nie
-   informowała użytkowników o aktualizacji, której jeszcze nie da się pobrać.
+   coś nowszego niż wersja zainstalowana u użytkownika, i skąd to pobrać.
+   **To jedyny krok z tej trójki, który trzeba zrobić PO zbudowaniu I
+   opublikowaniu instalatora jako GitHub Release (nie przed)** — `url_instalatora`
+   wymaga już istniejącego assetu wydania, więc kolejność jest sztywna.
+   Dokładna procedura (w tym JEDNOCZESNA aktualizacja `wersja_aktualna.txt`
+   dla wstecznej zgodności) opisana krok po kroku w `CHECKLIST_WYDANIA.md`.
 
-**Krok po kroku przy publikowaniu poprawki (np. po zamknięciu kolejnej
-większej fazy):**
+**Wsteczna zgodność (Faza 28):** stary, płaski `wersja_aktualna.txt` (SAMA
+linia z numerem wersji, format sprzed Fazy 28) zostaje NIETKNIĘTY i nadal
+aktualizowany przy KAŻDYM wydaniu razem z `.json` — appki w wersji ≤1.1.1
+(sprzed pobierania w appce) nadal czytają wyłącznie ten plik i muszą go
+móc znaleźć aktualny, inaczej nigdy nie dowiedzą się o żadnej kolejnej
+wersji. Appka od Fazy 28 w górę czyta WYŁĄCZNIE `.json` (bez logiki
+"spróbuj JSON, spadnij na txt") — nie ma ryzyka rozjazdu, bo oba pliki są
+publikowane w tym samym kroku checklisty.
 
-1. Zaktualizuj `app/wersja.py:WERSJA` i `installer.iss:AppWersja` na nowy
-   numer (ta sama wartość w obu).
-2. Zbuduj appkę i instalator jak zwykle (`pyinstaller faktury_pro.spec` →
-   `scripts/dolacz_postgres_do_buildu.py` → `ISCC.exe installer.iss` — pełna
-   sekwencja opisana wyżej, sekcja "Instalator Windows").
-3. Udostępnij zbudowany `Output/FakturyPro-Setup-X.Y.Z.exe` w miejscu, skąd
-   użytkownicy go pobierają (np. wydanie/release na GitHub w tym
-   repozytorium).
-4. DOPIERO TERAZ zaktualizuj `wersja_aktualna.txt` na nowy numer, zatwierdź
-   (`git commit`) i wypchnij (`git push`) do gałęzi `main` tego repozytorium
-   — appki użytkowników zaczną pokazywać baner "Dostępna nowsza wersja"
-   przy najbliższym kliknięciu "Sprawdź aktualizacje" (appka nigdy nie
-   sprawdza tego sama/automatycznie w tle, wyłącznie na żądanie użytkownika).
+**Pobieranie i instalacja w appce (Faza 28, `gui/aktualizacje.py`):** po
+wykryciu nowszej wersji appka pokazuje baner z changelogiem i przyciskiem,
+który przechodzi przez stany Pobierz → Pobieranie (pasek postępu, wznawialne
+przez `Range`, plik zapisywany w `%LOCALAPPDATA%/FakturyPro/aktualizacje/`
+jako `<nazwa>.exe.czesciowy` aż do ukończenia, potem atomowy `rename` na
+`<nazwa>.exe` — sama obecność pliku bez przyrostka jest dowodem ukończonego
+pobrania, appka pomija ponowne pobieranie przy kolejnym otwarciu Ustawień)
+→ Zainstaluj (potwierdzenie → `subprocess.Popen` uruchamia pobrany
+instalator jako niezależny proces → appka zamyka się przez ten sam wzorzec
+co po przywróceniu kopii zapasowej/usunięciu profilu:
+`proces_aplikacji.zatrzymaj_wszystko()` + `os._exit(0)`). Błędy sieciowe
+(brak internetu, przerwane połączenie, brak miejsca na dysku) pokazywane
+nieblokującym Bannerem z osobnym, rozróżnialnym komunikatem dla każdego
+przypadku, przycisk wraca do stanu "Spróbuj ponownie" (klik ponawia
+DOKŁADNIE to samo pobieranie, wznawiając od miejsca przerwania).
 
 **Numeracja**: proste semver (`MAJOR.MINOR.PATCH`, np. `1.0.0` → `1.1.0`) —
 podnoś MINOR przy zamknięciu większej fazy/funkcjonalności, PATCH przy
 drobnej poprawce/naprawie błędu. Appka porównuje wersje NUMERYCZNIE (nie
 tekstowo), więc `1.10.0` jest poprawnie rozpoznawane jako nowsze niż `1.9.0`.
+
+Pełna procedura publikowania wydania (budowanie, testowanie, publikacja
+Release, aktualizacja obu plików wersji): `CHECKLIST_WYDANIA.md`.
 
 ## Zasady pracy w tej sesji
 - Nie implementuj więcej niż jedną fazę na raz (patrz `PLAN_PROJEKTU.md` za zakresem faz)
