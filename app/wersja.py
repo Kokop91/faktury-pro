@@ -13,4 +13,4 @@ Przy podnoszeniu wersji trzeba wiec recznie zaktualizowac WSZYSTKIE TRZY
 miejsca - pelna checklist w CLAUDE.md, sekcja "Wersjonowanie i aktualizacje".
 """
 
-WERSJA = "1.1.3"
+WERSJA = "1.1.4"
