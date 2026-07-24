@@ -1,5 +1,5 @@
 {
-  "wersja": "1.1.2",
-  "url_instalatora": "https://github.com/Kokop91/faktury-pro/releases/download/v1.1.2/FakturyPro-Setup-1.1.2.exe",
-  "zmiany": "- Naprawiono odrzucanie NIP-u wpisanego ze spacjami lub myślnikami\n- Dodano sprawdzanie poprawności adresu e-mail i numeru konta bankowego w formularzach\n- Aplikacja ostrzega teraz przed kwotami wpisanymi w notacji naukowej\n- Naprawiono znikające lub przesunięte pola przy przewijaniu w kilku formularzach (faktura, oferta, PZ/WZ, szablon cykliczny)\n- Nowy przycisk \"Sprawdź integracje\" w Ustawieniach — jednym kliknięciem sprawdza połączenie z NBP, Białą Listą, GUS i KSeF"
+  "wersja": "1.1.3",
+  "url_instalatora": "https://github.com/Kokop91/faktury-pro/releases/download/v1.1.3/FakturyPro-Setup-1.1.3.exe",
+  "zmiany": "- Naprawiono wolne ładowanie dashboardu (zduplikowane zapytanie o faktury)\n- Naprawiono bardzo wolne ładowanie i wyszukiwanie na liście Klientów i innych dużych listach\n- Kod pocztowy w formularzach wpisuje się teraz samymi cyframi — myślnik dokleja się sam\n- Pole NIP blokuje wpisanie więcej niż 10 cyfr zamiast zgłaszać błąd po fakcie\n- Naprawiono utrzymujące się błędy renderowania w Ustawieniach przy szybkim przewijaniu\n- Nowa opcja: automatyczne kopie zapasowe bez pytania za każdym razem"
 }
