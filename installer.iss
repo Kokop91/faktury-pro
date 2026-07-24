@@ -25,7 +25,7 @@
 ; Wynik: Output/FakturyPro-Setup-{wersja z AppWersja ponizej}.exe
 
 #define AppNazwa "Faktury Pro"
-#define AppWersja "1.1.2"
+#define AppWersja "1.1.3"
 #define AppWydawca "Faktury Pro"
 #define AppExeNazwa "Faktury Pro.exe"
 

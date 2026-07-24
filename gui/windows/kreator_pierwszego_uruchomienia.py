@@ -25,6 +25,8 @@ from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import (
     Banner,
     formatuj_srodowisko_ksef,
+    podepnij_limit_cyfr,
+    podepnij_maske_kodu_pocztowego,
     przewin_na_gore,
     ustaw_tekst_ladowania,
 )
@@ -142,6 +144,7 @@ class KrokFirma(_KrokBazowy):
                 wiersz.grid_columnconfigure(0, weight=1)
                 pole = ctk.CTkEntry(wiersz, font=styl.CZCIONKA_TRESC)
                 pole.grid(row=0, column=0, sticky="ew", padx=(0, styl.ODSTEP_MALY))
+                podepnij_limit_cyfr(pole, 10)
                 self._przycisk_gus = ctk.CTkButton(
                     wiersz,
                     text="Pobierz z GUS",
@@ -163,6 +166,8 @@ class KrokFirma(_KrokBazowy):
                 pole.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
                 if klucz == "kraj":
                     pole.insert(0, "Polska")
+                if klucz == "kod_pocztowy":
+                    podepnij_maske_kodu_pocztowego(pole)
             self._pola[klucz] = pole
 
         self._banner.ustaw_geometrie(

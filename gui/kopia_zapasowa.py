@@ -55,7 +55,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from app.sciezki import katalog_bazowy
-from gui import logo, nastawienia_profilu
+from gui import kopia_zapasowa_haslo, logo, nastawienia_profilu
 
 MAGIC = b"FPBK"
 WERSJA_FORMATU = 1
@@ -64,7 +64,12 @@ ITERACJE_PBKDF2 = 600_000  # zalecenie OWASP (2023+) dla PBKDF2-HMAC-SHA256
 
 KLUCZ_KATALOG_DOCELOWY = "backup_katalog_docelowy"
 KLUCZ_OSTATNI_BACKUP = "backup_ostatni_udany"
+KLUCZ_TRYB_BACKUPU = "backup_tryb"
 PROG_DNI_PRZETERMINOWANIA = 7
+
+TRYB_PYTAJ = "pytaj"
+TRYB_AUTOMATYCZNY = "automatyczny"
+DOMYSLNY_TRYB_BACKUPU = TRYB_PYTAJ  # bez zmiany zachowania dla juz istniejacych instalacji
 
 # Bez tego pg_dump/pg_restore/psql moglyby "zawiesic sie" bez konca (np.
 # katalog docelowy wskazuje na zerwany dysk sieciowy, zablokowana tabela) -
@@ -147,12 +152,22 @@ def stan_backupu() -> dict:
     ostatni_tekst = nastawienia_profilu.wczytaj(KLUCZ_OSTATNI_BACKUP)
     ostatni = datetime.fromisoformat(ostatni_tekst) if ostatni_tekst else None
     dni_od_ostatniego = (datetime.now(timezone.utc) - ostatni).days if ostatni else None
+    tryb = nastawienia_profilu.wczytaj(KLUCZ_TRYB_BACKUPU, DOMYSLNY_TRYB_BACKUPU)
     return {
         "katalog_docelowy": katalog,
         "ostatni_backup": ostatni_tekst,
         "dni_od_ostatniego": dni_od_ostatniego,
         "przeterminowany": (
             dni_od_ostatniego is None or dni_od_ostatniego >= PROG_DNI_PRZETERMINOWANIA
+        ),
+        "tryb": tryb,
+        # Automatyczne wykonanie potrzebuje OBU: katalogu i zapisanego hasla -
+        # wystawione tu, zeby wolajacy (glowne_okno.py) nie musial znac
+        # szczegolow modulu haslowego.
+        "gotowy_do_automatycznego_wykonania": (
+            tryb == TRYB_AUTOMATYCZNY
+            and bool(katalog)
+            and kopia_zapasowa_haslo.czy_zapisane()
         ),
     }
 
@@ -161,8 +176,39 @@ def ustaw_katalog_docelowy(sciezka: str) -> None:
     nastawienia_profilu.zapisz(KLUCZ_KATALOG_DOCELOWY, sciezka)
 
 
+def ustaw_tryb_backupu(tryb: str) -> None:
+    if tryb not in (TRYB_PYTAJ, TRYB_AUTOMATYCZNY):
+        raise ValueError(f"Nieznany tryb kopii zapasowej: {tryb}")
+    nastawienia_profilu.zapisz(KLUCZ_TRYB_BACKUPU, tryb)
+    if tryb == TRYB_PYTAJ:
+        # Powrot do pytania za kazdym razem - zapisane haslo nie ma juz
+        # zastosowania, wiec nie ma powodu trzymac go dalej na dysku.
+        kopia_zapasowa_haslo.usun_haslo()
+
+
 def _oznacz_wykonany_backup() -> None:
     nastawienia_profilu.zapisz(KLUCZ_OSTATNI_BACKUP, datetime.now(timezone.utc).isoformat())
+
+
+def wykonaj_backup_automatyczny() -> Path:
+    """Uzywane WYLACZNIE przez sprawdzenie przy starcie appki
+    (gui/windows/glowne_okno.py), gdy tryb='automatyczny' i haslo jest juz
+    zapisane (patrz stan_backupu()['gotowy_do_automatycznego_wykonania']).
+    Sama mechanika kopii jest DOKLADNIE ta sama funkcja co przy recznym
+    wykonaniu (wykonaj_backup) - jedyna roznica to skad bierze sie haslo."""
+    katalog = nastawienia_profilu.wczytaj(KLUCZ_KATALOG_DOCELOWY)
+    if not katalog:
+        raise BladKopiiZapasowej(
+            "Automatyczna kopia zapasowa nie ma ustawionego katalogu docelowego."
+        )
+    haslo = kopia_zapasowa_haslo.wczytaj_haslo()
+    if haslo is None:
+        raise BladKopiiZapasowej(
+            "Nie udało się odczytać zapisanego hasła automatycznej kopii zapasowej "
+            "(np. appka działa teraz na innym koncie Windows). Ustaw tryb automatyczny "
+            "ponownie w Ustawieniach."
+        )
+    return wykonaj_backup(Path(katalog), haslo)
 
 
 # -- tworzenie kopii ----------------------------------------------------

@@ -23,10 +23,16 @@ from gui.widgets_pomocnicze import (
     komunikat_bledu,
     komunikat_info,
     odswiez_obszar_przewijania,
+    podepnij_limit_cyfr,
+    podepnij_maske_kodu_pocztowego,
     pokaz_toast,
     ustaw_tekst_ladowania,
 )
-from gui.windows.dialog_kopii_zapasowej import DialogPrzywrocBackup, DialogWykonajBackup
+from gui.windows.dialog_kopii_zapasowej import (
+    DialogPrzywrocBackup,
+    DialogWlaczAutomatycznyBackup,
+    DialogWykonajBackup,
+)
 from gui.windows.dialog_wyboru_urzedu import DialogWyboruUrzeduSkarbowego
 
 # (klucz, etykieta, wymagane)
@@ -58,6 +64,9 @@ ETYKIETA_SPOLKA = "Spółka / inna osoba niefizyczna"
 
 ETYKIETA_OSTRZEGAJ = "Ostrzegaj"
 ETYKIETA_BLOKUJ = "Blokuj"
+
+ETYKIETA_BACKUP_PYTAJ = "Pytaj mnie za każdym razem"
+ETYKIETA_BACKUP_AUTOMATYCZNY = "Wykonuj automatycznie"
 
 _ETYKIETY_STAWEK_VAT = [
     formatowanie.ETYKIETY_STAWEK_VAT[s] for s in formatowanie.KOLEJNOSC_STAWEK_VAT
@@ -185,6 +194,7 @@ class WidokUstawien(ctk.CTkFrame):
                 wiersz_nip.grid_columnconfigure(0, weight=1)
                 pole = ctk.CTkEntry(wiersz_nip, font=styl.CZCIONKA_TRESC)
                 pole.grid(row=0, column=0, sticky="ew", padx=(0, styl.ODSTEP_MALY))
+                podepnij_limit_cyfr(pole, 10)
                 self._przycisk_gus_firmy = ctk.CTkButton(
                     wiersz_nip,
                     text="Pobierz z GUS",
@@ -204,6 +214,8 @@ class WidokUstawien(ctk.CTkFrame):
                     placeholder_text=_PLACEHOLDERY_FIRMY.get(klucz, ""),
                 )
                 pole.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+                if klucz == "kod_pocztowy":
+                    podepnij_maske_kodu_pocztowego(pole)
             self._pola_firmy[klucz] = pole
 
         # -- logo i domyslna stawka VAT (Faza 18D - najpierw wprowadzane w
@@ -554,15 +566,10 @@ class WidokUstawien(ctk.CTkFrame):
             wewnatrz,
             text=(
                 "CO obejmuje kopia: całą bazę danych tej firmy (faktury, "
-                "klientów, magazyn) oraz logo, zaszyfrowane hasłem, które "
-                "ustawiasz tutaj - INNYM niż hasło logowania do aplikacji.\n\n"
-                "JAK: appka NIGDY nie robi kopii sama - wyłącznie ręcznie, "
-                "przyciskiem „Wykonaj kopię zapasową teraz” poniżej, kiedy Ty "
-                "o tym zdecydujesz.\n\n"
+                "klientów, magazyn) oraz logo, zaszyfrowane hasłem.\n\n"
                 "CO ILE: zalecamy nie rzadziej niż raz w tygodniu. Appka "
-                "przypomni Ci przy starcie, jeśli minie więcej niż 7 dni od "
-                "ostatniej kopii - to tylko przypomnienie, appka nadal niczego "
-                "nie zrobi sama.\n\n"
+                "sprawdza to przy starcie, jeśli minie więcej niż 7 dni od "
+                "ostatniej kopii.\n\n"
                 "Zalecane: wybierz lokalizację NA INNYM nośniku niż ten "
                 "komputer - dysk USB, dysk sieciowy albo folder "
                 "synchronizowany z chmurą (Google Drive/OneDrive/Dropbox) - "
@@ -574,6 +581,23 @@ class WidokUstawien(ctk.CTkFrame):
             wraplength=320,
             justify="left",
         ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._etykieta_pola(wewnatrz, "Kiedy wykonywać kopię")
+        self._var_tryb_backupu = ctk.StringVar(value=ETYKIETA_BACKUP_PYTAJ)
+        ctk.CTkSegmentedButton(
+            wewnatrz,
+            values=[ETYKIETA_BACKUP_PYTAJ, ETYKIETA_BACKUP_AUTOMATYCZNY],
+            variable=self._var_tryb_backupu,
+            font=styl.CZCIONKA_TRESC,
+            selected_color=styl.KOLOR_AKCENT,
+            selected_hover_color=styl.KOLOR_AKCENT_HOVER,
+            command=self._na_zmiane_trybu_backupu,
+        ).pack(fill="x", pady=(0, styl.ODSTEP_MIKRO))
+        self._etykieta_opis_trybu_backupu = ctk.CTkLabel(
+            wewnatrz, text="", font=styl.CZCIONKA_DROBNA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY, wraplength=320, justify="left", anchor="w",
+        )
+        self._etykieta_opis_trybu_backupu.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
 
         self._etykieta_pola(wewnatrz, "Lokalizacja kopii zapasowych")
         wiersz_katalog = ctk.CTkFrame(wewnatrz, fg_color="transparent")
@@ -637,6 +661,21 @@ class WidokUstawien(ctk.CTkFrame):
 
     def _odswiez_stan_backupu(self) -> None:
         stan = kz.stan_backupu()
+        tryb_automatyczny = stan["tryb"] == kz.TRYB_AUTOMATYCZNY
+        self._var_tryb_backupu.set(
+            ETYKIETA_BACKUP_AUTOMATYCZNY if tryb_automatyczny else ETYKIETA_BACKUP_PYTAJ
+        )
+        self._etykieta_opis_trybu_backupu.configure(
+            text=(
+                "Appka sama wykona kopię przy starcie, gdy minie 7 dni od "
+                "poprzedniej - bez pytania, tylko krótkie potwierdzenie."
+                if tryb_automatyczny
+                else "Appka przypomni Ci przy starcie, jeśli kopia jest nieaktualna - "
+                "Ty decydujesz, kiedy ją wykonać."
+            )
+        )
+        odswiez_obszar_przewijania(self._przewijany)
+
         katalog = stan["katalog_docelowy"]
         if katalog:
             self._etykieta_katalog_backupu.configure(text=katalog, text_color=styl.KOLOR_TEKST_GLOWNY)
@@ -659,6 +698,25 @@ class WidokUstawien(ctk.CTkFrame):
             )
 
         self._przycisk_wykonaj_backup.configure(state="normal" if katalog else "disabled")
+
+    def _na_zmiane_trybu_backupu(self, etykieta: str) -> None:
+        if etykieta != ETYKIETA_BACKUP_AUTOMATYCZNY:
+            kz.ustaw_tryb_backupu(kz.TRYB_PYTAJ)
+            self._odswiez_stan_backupu()
+            return
+
+        stan = kz.stan_backupu()
+        if not stan["katalog_docelowy"]:
+            self._var_tryb_backupu.set(ETYKIETA_BACKUP_PYTAJ)
+            komunikat_bledu(self, "Najpierw wybierz lokalizację kopii zapasowych poniżej.")
+            return
+
+        DialogWlaczAutomatycznyBackup(
+            self,
+            stan["katalog_docelowy"],
+            on_wlaczono=self._odswiez_stan_backupu,
+            on_anulowano=self._odswiez_stan_backupu,
+        )
 
     def _wybierz_katalog_backupu(self) -> None:
         katalog = filedialog.askdirectory(parent=self, title="Wybierz lokalizację kopii zapasowych")
@@ -1736,6 +1794,13 @@ class WidokUstawien(ctk.CTkFrame):
         self._baner_aktualizacji.pack(
             fill="x", pady=(0, styl.ODSTEP_SREDNI), before=self._przycisk_sprawdz_aktualizacje
         )
+        # Ten caly baner (Faza 28) pojawia sie ASYNCHRONICZNIE - po odpowiedzi
+        # z sieci na klikniecie "Sprawdz aktualizacje" - dokladnie ten sam
+        # rodzaj wyscigu z aktywnym przewijaniem uzytkownika, ktory Faza 27
+        # naprawila dla danych firmy. Ta sciezka (dodana pozniej, w Fazie 28)
+        # nigdy nie dostala tego zabezpieczenia - stad wrazenie, ze naprawa z
+        # Fazy 27/27b "nie dziala", mimo ze tamten kod jest nietkniety.
+        odswiez_obszar_przewijania(self._przewijany)
 
     def _sprawdz_aktualizacje(self) -> None:
         ustaw_tekst_ladowania(
@@ -1797,6 +1862,9 @@ class WidokUstawien(ctk.CTkFrame):
             self._pasek_postepu_aktualizacji.stop()
             self._pasek_postepu_aktualizacji.pack_forget()
             self._etykieta_postepu_aktualizacji.pack_forget()
+        # Patrz komentarz w _pokaz_baner_aktualizacji - to samo dotyczy
+        # pojawienia/zniknienia paska postepu w trakcie pobierania w tle.
+        odswiez_obszar_przewijania(self._przewijany)
 
     def _na_klik_pobierz_aktualizacje(self) -> None:
         if self._pobieranie_w_toku:
@@ -1894,6 +1962,7 @@ class WidokUstawien(ctk.CTkFrame):
         self._przycisk_sprawdz_aktualizacje.configure(state="normal")
         self._ustaw_stan_przycisku_aktualizacji("blad")
         self._baner_bledu_aktualizacji.pokaz(komunikat)
+        odswiez_obszar_przewijania(self._przewijany)
 
     def _zainstaluj_aktualizacje(self) -> None:
         if self._sciezka_pobranego_instalatora is None:

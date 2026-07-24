@@ -1,4 +1,5 @@
 from tkinter import messagebox
+from typing import Callable
 
 import customtkinter as ctk
 
@@ -71,6 +72,49 @@ class Banner(ctk.CTkFrame):
         self.grid_forget()
 
 
+def podepnij_maske_kodu_pocztowego(pole: ctk.CTkEntry) -> None:
+    """Maska formatu XX-XXX (kod pocztowy) w trakcie pisania - uzytkownik
+    wpisuje same cyfry, myslnik po dwoch cyfrach dokleja sie sam, zamiast
+    tylko akceptowac myslnik jesli uzytkownik wpisze go recznie. Przy okazji
+    odrzuca kazdy znak, ktory nie jest cyfra (backend i tak wymaga formatu
+    XX-XXX - patrz app/schemas/firma.py i app/schemas/klient.py
+    waliduj_kod_pocztowy - to tylko przenosi te sama regule na wczesniej,
+    zanim uzytkownik dostanie blad walidacji)."""
+
+    def sformatuj(_zdarzenie=None) -> None:
+        cyfry = "".join(znak for znak in pole.get() if znak.isdigit())[:5]
+        sformatowany = f"{cyfry[:2]}-{cyfry[2:]}" if len(cyfry) > 2 else cyfry
+        if sformatowany != pole.get():
+            pole.delete(0, "end")
+            pole.insert(0, sformatowany)
+
+    pole.bind("<KeyRelease>", sformatuj)
+
+
+def podepnij_limit_cyfr(pole: ctk.CTkEntry, maks_cyfr: int) -> None:
+    """Blokuje wpisanie WIECEJ niz maks_cyfr cyfr do pola (np. NIP - polski
+    format ma dokladnie 10 cyfr) zamiast pozwalac wpisac za duzo i dopiero
+    walidowac po fakcie. Celowo obcina tylko NADMIAROWE znaki PO
+    maks_cyfr-tej cyfrze, nie usuwa myslnikow/spacji wpisanych WCZESNIEJ -
+    Faza 27b naprawila akceptowanie NIP-u sformatowanego myslnikami/spacjami
+    (patrz app/schemas/klient.py waliduj_nip), wiec ta maska nie powinna
+    tego cofac przez wymuszanie samych cyfr."""
+
+    def sformatuj(_zdarzenie=None) -> None:
+        tekst = pole.get()
+        cyfry_widziane = 0
+        for indeks, znak in enumerate(tekst):
+            if znak.isdigit():
+                cyfry_widziane += 1
+                if cyfry_widziane > maks_cyfr:
+                    obciety = tekst[:indeks]
+                    pole.delete(0, "end")
+                    pole.insert(0, obciety)
+                    return
+
+    pole.bind("<KeyRelease>", sformatuj)
+
+
 def przewin_na_gore(ramka: ctk.CTkScrollableFrame) -> None:
     """Resetuje pozycje przewiniecia CTkScrollableFrame do samej gory.
 
@@ -99,9 +143,35 @@ def odswiez_obszar_przewijania(ramka: ctk.CTkScrollableFrame) -> None:
     wczytane w tle po otwarciu Ustawien) - powoduje to widoczne bledy
     renderowania (przesuniete/nachodzace karty), ten sam mechanizm co
     przewin_na_gore, tylko wyzwalany asynchronicznie zamiast przy jawnej
-    zmianie ekranu."""
+    zmianie ekranu.
+
+    UWAGA - NIE uzywac dla duzych, w pelni wymienianych tabel (setki
+    wierszy, np. gui/windows/tabela.py:Tabela.ustaw_dane) - zmierzone przy
+    diagnozie wolnego ladowania listy Klientow: update_idletasks() na
+    CTkScrollableFrame z ~200 swiezo dograsowanymi wierszami kaskaduje przez
+    wlasny, zagniezdzony update_idletasks() w customtkinter
+    (CTkScrollbar._draw()), co potrafilo zablokowac GUI na kilkanascie
+    sekund. Tabela CELOWO tego nie wola - patrz komentarz w ustaw_dane."""
     ramka.update_idletasks()
     ramka._parent_canvas.configure(scrollregion=ramka._parent_canvas.bbox("all"))
+
+
+def debounce_wyszukiwania(
+    widget: ctk.CTkBaseClass, wywolaj: Callable[[], None], opoznienie_ms: int = 250
+) -> Callable[[object], None]:
+    """Zwraca handler do podpiecia pod <KeyRelease> pola wyszukiwania w
+    listach (Tabela) - odklada faktyczne przebudowanie tabeli o
+    opoznienie_ms od OSTATNIEGO nacisniecia klawisza, zamiast przebudowywac
+    setki widgetow wierszy na KAZDA wpisana literke. Kolejne nacisniecie
+    przed uplywem opoznienia anuluje poprzednio zaplanowane wywolanie."""
+    stan_id: dict[str, str | None] = {"after_id": None}
+
+    def handler(_zdarzenie=None) -> None:
+        if stan_id["after_id"] is not None:
+            widget.after_cancel(stan_id["after_id"])
+        stan_id["after_id"] = widget.after(opoznienie_ms, wywolaj)
+
+    return handler
 
 
 def formatuj_srodowisko_ksef(srodowisko: str) -> tuple[str, tuple, tuple]:

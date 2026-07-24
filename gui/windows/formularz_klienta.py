@@ -6,7 +6,14 @@ import customtkinter as ctk
 from gui import api_client, styl
 from gui.integracje_gui import pobierz_z_gus, sprawdz_biala_liste
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import Banner, komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import (
+    Banner,
+    komunikat_bledu,
+    podepnij_limit_cyfr,
+    podepnij_maske_kodu_pocztowego,
+    pokaz_toast,
+    ustaw_tekst_ladowania,
+)
 from gui.windows.baza_formularza import OknoFormularza
 
 # (klucz, etykieta, wartosc_domyslna)
@@ -85,6 +92,7 @@ class FormularzKlienta(OknoFormularza):
                 wiersz_nip.grid_columnconfigure(0, weight=1)
                 wpis = ctk.CTkEntry(wiersz_nip, font=styl.CZCIONKA_TRESC)
                 wpis.grid(row=0, column=0, sticky="ew", padx=(0, styl.ODSTEP_MALY))
+                podepnij_limit_cyfr(wpis, 10)
                 self._przycisk_gus = ctk.CTkButton(
                     wiersz_nip,
                     text="Pobierz z GUS",
@@ -126,6 +134,8 @@ class FormularzKlienta(OknoFormularza):
                     placeholder_text=_PLACEHOLDERY.get(klucz, ""),
                 )
                 wpis.pack(fill="x")
+                if klucz == "kod_pocztowy":
+                    podepnij_maske_kodu_pocztowego(wpis)
 
             if wartosc_startowa:
                 wpis.insert(0, wartosc_startowa)

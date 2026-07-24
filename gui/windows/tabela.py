@@ -3,7 +3,6 @@ from typing import Any, Callable
 import customtkinter as ctk
 
 from gui import styl
-from gui.widgets_pomocnicze import odswiez_obszar_przewijania
 
 TEKST_BRAK_DANYCH = "Brak danych do wyświetlenia."
 TEKST_LADOWANIA = "Ładowanie..."
@@ -183,7 +182,7 @@ class Tabela(ctk.CTkScrollableFrame):
             row=1, column=0, columnspan=len(self.kolumny) + self._przesuniecie, pady=styl.ODSTEP_DUZY
         )
         self._indeks_zaznaczony = None
-        odswiez_obszar_przewijania(self)
+        # BRAK odswiez_obszar_przewijania tutaj - patrz uzasadnienie w ustaw_dane ponizej.
 
     def ustaw_dane(
         self,
@@ -281,7 +280,21 @@ class Tabela(ctk.CTkScrollableFrame):
                 etykiety_w_wierszu.append(etykieta)
             self._wiersze.append(etykiety_w_wierszu)
 
-        odswiez_obszar_przewijania(self)
+        # CELOWO bez odswiez_obszar_przewijania (Faza 27b wpiela je tutaj,
+        # cofniete w tej sesji) - zmierzone na tabeli 200 wierszy: pojedyncze
+        # wywolanie potrafilo zablokowac GUI na kilkanascie-dwadziescia
+        # sekund. Przyczyna: CTkScrollbar._draw() (customtkinter, poza nasza
+        # kontrola) samo wola kolejny update_idletasks() przy kazdej zmianie
+        # scrollregion, wiec wymuszenie update_idletasks() tutaj kaskaduje
+        # przez biblioteke i rosnie z liczba wierszy. Ryzyko, ktore
+        # odswiez_obszar_przewijania mialo laowac (przewiniecie
+        # utrzymujace sie w trakcie AKTYWNEGO przewijania uzytkownika,
+        # podczas gdy dane doklejaja sie asynchronicznie w tle - patrz Faza
+        # 27/27b w Ustawieniach/kreatorze/formularzach pozycji) tutaj nie
+        # wystepuje - ustaw_dane wymienia WSZYSTKIE wiersze atomowo w jednym
+        # wywolaniu na watku glownym, nie w trakcie zywej interakcji
+        # przewijania, wiec bierny <Configure> CTkScrollableFrame (dziala
+        # od razu po nastepnym idle) wystarcza.
 
     def _kolor_wiersza(self, indeks_wiersza: int) -> str:
         return (

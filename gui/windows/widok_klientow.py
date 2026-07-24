@@ -3,7 +3,7 @@ import customtkinter as ctk
 from gui import api_client, ikony, nastawienia, styl
 from gui.eksport_csv import eksportuj_do_csv
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import debounce_wyszukiwania, komunikat_bledu, ustaw_tekst_ladowania
 from gui.windows.dialog_importu_klientow import DialogImportuKlientow
 from gui.windows.formularz_klienta import FormularzKlienta
 from gui.windows.tabela import Tabela
@@ -73,7 +73,11 @@ class WidokKlientow(ctk.CTkFrame):
             placeholder_text="Szukaj po nazwie...",
         )
         self._pole_szukaj.grid(row=0, column=1, padx=(0, styl.ODSTEP_SREDNI))
-        self._pole_szukaj.bind("<KeyRelease>", lambda _z: self._odswiez_tabele())
+        # Debounce (250ms) - bez tego kazde nacisniecie klawisza przebudowywalo
+        # cala tabele (do 200 wierszy) od zera, patrz diagnoza w CLAUDE.md.
+        self._pole_szukaj.bind(
+            "<KeyRelease>", debounce_wyszukiwania(self, self._odswiez_tabele)
+        )
 
         self._przycisk_eksportuj = ctk.CTkButton(
             pasek_naglowka,

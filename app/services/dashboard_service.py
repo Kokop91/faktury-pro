@@ -110,7 +110,13 @@ def pobierz_dashboard(db: Session, dzisiaj: date | None = None) -> DashboardOut:
     marza_biezacy_miesiac = rentownosc_service.marza_okresu(
         db, _poczatek_miesiaca, _koniec_miesiaca
     )
-    wykres_przychodow_kosztow = rentownosc_service.wykres_przychody_koszty(db, dzisiaj)
+    # faktury_okna to JUZ dokladnie ten sam 12-miesieczny zakres/filtr statusu,
+    # ktorego wykres_przychody_koszty by inaczej zapytal ponownie - podanie go
+    # tutaj oszczedza drugie zapytanie + hydratacje ORM (zmierzone jako ~30%
+    # calego czasu ladowania dashboardu przy wiekszej ilosci faktur).
+    wykres_przychodow_kosztow = rentownosc_service.wykres_przychody_koszty(
+        db, dzisiaj, faktury=faktury_okna
+    )
 
     kafelki = KafelkiDashboarduOut(
         przychod_biezacy_miesiac_grosze=przychod_biezacy_miesiac_grosze,

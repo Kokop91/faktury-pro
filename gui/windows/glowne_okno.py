@@ -6,6 +6,7 @@ import customtkinter as ctk
 from gui import api_client, ikony, nastawienia, styl
 from gui.ikona_okna import ustaw_ikone
 from gui.watki import uruchom_w_tle
+from gui.widgets_pomocnicze import komunikat_ostrzezenie, pokaz_toast
 from gui.windows.widok_dashboard import WidokDashboard
 from gui.windows.widok_dokumentow_kosztowych import WidokDokumentowKosztowych
 from gui.windows.widok_faktur import WidokFaktur
@@ -121,17 +122,57 @@ class GlowneOkno(ctk.CTk):
 
     def _sprawdz_backup(self) -> None:
         from gui import kopia_zapasowa as kz
-        from gui.windows.dialog_przypomnienia_backupu import DialogPrzypomnieniaBackupu
 
         stan = kz.stan_backupu()
         if not stan["przeterminowany"]:
             return
+
+        if stan["gotowy_do_automatycznego_wykonania"]:
+            self._wykonaj_backup_automatyczny()
+            return
+
+        from gui.windows.dialog_przypomnienia_backupu import DialogPrzypomnieniaBackupu
+
         DialogPrzypomnieniaBackupu(
             self,
             nigdy_skonfigurowano=stan["katalog_docelowy"] is None,
             dni_od_ostatniego=stan["dni_od_ostatniego"],
             on_przejdz=lambda: self._pokaz_widok("ustawienia"),
         )
+
+    def _wykonaj_backup_automatyczny(self) -> None:
+        """Tryb 'Wykonuj automatycznie' (rozszerzenie Fazy 22) - w
+        odroznieniu od DialogPrzypomnieniaBackupu powyzej appka NIE pyta,
+        tylko sama wykonuje kopie w tle, bez zadnego widocznego okna
+        modalnego. Sukces: krotki, nieinwazyjny toast (ten sam mechanizm co
+        reszta appki). Niepowodzenie: CELOWO NIE cichy jak inne sprawdzenia
+        startowe w tym pliku - uzytkownik musi sie dowiedziec, ze jego dane
+        NIE sa zabezpieczone, wiec nieblokujace ale WIDOCZNE ostrzezenie
+        (messagebox), nie tylko wpis w logu."""
+        from gui import kopia_zapasowa as kz
+        from gui.api_client import ApiError
+
+        def zadanie():
+            try:
+                return kz.wykonaj_backup_automatyczny()
+            except kz.BladKopiiZapasowej as e:
+                raise ApiError(str(e)) from e
+
+        def sukces(_plik) -> None:
+            pokaz_toast(self, "Kopia zapasowa wykonana pomyślnie.", typ="sukces")
+
+        def blad(e: ApiError) -> None:
+            _log.warning("Automatyczna kopia zapasowa nie powiodla sie: %s", e.komunikat)
+            komunikat_ostrzezenie(
+                self,
+                "Automatyczna kopia zapasowa nie powiodła się:\n\n"
+                f"{e.komunikat}\n\n"
+                "Sprawdź lokalizację docelową w Ustawieniach (np. czy dysk "
+                "sieciowy/USB jest podłączony) i spróbuj ponownie ręcznie.",
+                tytul="Kopia zapasowa nie powiodła się",
+            )
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _sprawdz_przypomnienia_platnosci(self) -> None:
         def zadanie():

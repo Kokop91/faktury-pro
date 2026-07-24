@@ -172,8 +172,17 @@ def marza_okresu(db: Session, data_od: date, data_do: date) -> MarzaOkresuOut:
 
 
 def wykres_przychody_koszty(
-    db: Session, dzisiaj: date | None = None, miesiace: int = LICZBA_MIESIECY_WYKRESU
+    db: Session,
+    dzisiaj: date | None = None,
+    miesiace: int = LICZBA_MIESIECY_WYKRESU,
+    faktury: list[Faktura] | None = None,
 ) -> list[PunktWykresuPrzychodKosztOut]:
+    """`faktury` pozwala wywolujacemu (dashboard_service.pobierz_dashboard)
+    podac juz zaladowana (ten sam zakres dat, ten sam filtr statusu) liste
+    faktur zamiast zlecac tu drugie, identyczne zapytanie + hydratacje ORM -
+    na dashboardzie z wieksza iloscia faktur to byl mierzalnie najdrozszy
+    pojedynczy krok calego ladowania. Domyslne None (zapytaj sama) zostaje
+    dla wywolan bez juz zaladowanych danych."""
     dzisiaj = dzisiaj or date.today()
     poczatek_biezacego_miesiaca = _pierwszy_dzien_miesiaca(dzisiaj)
     poczatek_okna = _przesun_miesiace(poczatek_biezacego_miesiaca, -(miesiace - 1))
@@ -186,19 +195,20 @@ def wykres_przychody_koszty(
         kubelki_kosztow[(kursor.year, kursor.month)] = 0
         kursor = _przesun_miesiace(kursor, 1)
 
-    faktury = (
-        db.execute(
-            select(Faktura)
-            .options(selectinload(Faktura.pozycje))
-            .where(
-                Faktura.status.notin_(STATUSY_WYLACZONE_Z_PRZYCHODU),
-                Faktura.data_wystawienia >= poczatek_okna,
+    if faktury is None:
+        faktury = (
+            db.execute(
+                select(Faktura)
+                .options(selectinload(Faktura.pozycje))
+                .where(
+                    Faktura.status.notin_(STATUSY_WYLACZONE_Z_PRZYCHODU),
+                    Faktura.data_wystawienia >= poczatek_okna,
+                )
             )
+            .scalars()
+            .unique()
+            .all()
         )
-        .scalars()
-        .unique()
-        .all()
-    )
     for faktura in faktury:
         klucz = (faktura.data_wystawienia.year, faktura.data_wystawienia.month)
         if klucz in kubelki_przychodu:

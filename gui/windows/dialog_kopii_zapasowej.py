@@ -16,6 +16,7 @@ import customtkinter as ctk
 
 from app import profil
 from gui import kopia_zapasowa as kz
+from gui import kopia_zapasowa_haslo as kz_haslo
 from gui import profile_rejestr, styl
 from gui.api_client import ApiError
 from gui.watki import uruchom_w_tle
@@ -114,6 +115,136 @@ class DialogWykonajBackup(OknoFormularza):
 
         def blad(e: ApiError) -> None:
             ustaw_tekst_ladowania(self._przycisk, False, "Wykonaj kopię zapasową")
+            komunikat_bledu(self, e.komunikat)
+
+        uruchom_w_tle(self, zadanie, sukces, blad)
+
+
+class DialogWlaczAutomatycznyBackup(OknoFormularza):
+    """Rozszerzenie Fazy 22 - wlaczenie trybu 'Wykonuj automatycznie'.
+    Haslo szyfrowania jest tu jedyny raz PROSZONE i od razu ZAPISYWANE
+    (Windows DPAPI, gui/kopia_zapasowa_haslo.py), zeby kolejne automatyczne
+    wykonania (gui/windows/glowne_okno.py:_sprawdz_backup) mogly dzialac bez
+    pytania. Swiadomy kompromis bezpieczenstwa wobec trybu 'Pytaj mnie za
+    kazdym razem' (haslo tam NIGDY nie jest zapisywane) - wyjasniony wprost
+    w tresci ponizej, nie ukryty. Po zapisaniu hasla od razu wykonuje
+    pierwsza kopie - potwierdza, ze haslo/katalog faktycznie dzialaja,
+    zamiast czekac w niepewnosci do nastepnego startu appki."""
+
+    def __init__(
+        self,
+        master,
+        katalog_docelowy: str,
+        on_wlaczono: Callable[[], None],
+        on_anulowano: Callable[[], None],
+    ):
+        super().__init__(master)
+        self.title("Wykonuj kopie zapasowe automatycznie")
+        self.geometry("440x420")
+        self.resizable(False, False)
+
+        self._katalog_docelowy = katalog_docelowy
+        self._on_wlaczono = on_wlaczono
+        self._on_anulowano = on_anulowano
+        self._zamkniete_bez_wlaczenia = True
+
+        kontener = ctk.CTkFrame(self, fg_color="transparent")
+        kontener.pack(fill="both", expand=True, padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY)
+
+        self._banner = Banner(kontener)
+        self._banner.ustaw_geometrie(
+            lambda: self._banner.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+        )
+
+        ctk.CTkLabel(
+            kontener,
+            text=(
+                f"Kopie będą zapisywane automatycznie w:\n{katalog_docelowy}\n\n"
+                "Ustaw hasło szyfrowania kopii. W tym trybie appka zapisze je "
+                "bezpiecznie na tym komputerze (Windows DPAPI), żeby móc "
+                "wykonywać kopie bez pytania Cię za każdym razem.\n\n"
+                "UWAGA: w odróżnieniu od trybu „Pytaj mnie za każdym razem”, "
+                "to hasło jest powiązane z TYM komputerem i kontem Windows - "
+                "przy awarii tego komputera będziesz musiał(a) je odtworzyć "
+                "z pamięci, żeby odszyfrować kopię gdzie indziej. Warto mimo "
+                "to je zapamiętać/zapisać osobno."
+            ),
+            font=styl.CZCIONKA_TRESC,
+            text_color=styl.KOLOR_TEKST_GLOWNY,
+            wraplength=380,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        ctk.CTkLabel(
+            kontener, text="Hasło szyfrowania *", font=styl.CZCIONKA_ETYKIETA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY, anchor="w",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
+        self._pole_haslo = ctk.CTkEntry(kontener, show="•", font=styl.CZCIONKA_TRESC)
+        self._pole_haslo.pack(fill="x", pady=(0, styl.ODSTEP_MALY))
+
+        ctk.CTkLabel(
+            kontener, text="Powtórz hasło *", font=styl.CZCIONKA_ETYKIETA,
+            text_color=styl.KOLOR_TEKST_DRUGORZEDNY, anchor="w",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_ETYKIETA))
+        self._pole_haslo2 = ctk.CTkEntry(kontener, show="•", font=styl.CZCIONKA_TRESC)
+        self._pole_haslo2.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        self._przycisk = ctk.CTkButton(
+            kontener, text="Włącz automatyczne kopie", fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER, command=self._wlacz,
+        )
+        self._przycisk.pack(fill="x")
+        self.ustaw_akcje_zapisu(self._wlacz, self._przycisk)
+        self.zapamietaj_stan_poczatkowy()
+
+    def destroy(self) -> None:
+        # Wolane niezaleznie od sciezki zamkniecia (Esc, X, potwierdzenie
+        # niezapisanych zmian z OknoFormularza) - jesli okno znika BEZ
+        # przejscia przez sukces() ponizej, przelacznik w Ustawieniach musi
+        # wrocic na "Pytaj mnie za kazdym razem" (inaczej pokazywalby tryb
+        # automatyczny, ktory nigdy faktycznie nie zostal wlaczony).
+        if self._zamkniete_bez_wlaczenia:
+            self._on_anulowano()
+        super().destroy()
+
+    def _wlacz(self) -> None:
+        haslo = self._pole_haslo.get()
+        haslo2 = self._pole_haslo2.get()
+        if len(haslo) < DLUGOSC_MIN_HASLA:
+            self._banner.pokaz(f"Hasło szyfrowania musi mieć co najmniej {DLUGOSC_MIN_HASLA} znaków.")
+            return
+        if haslo != haslo2:
+            self._banner.pokaz("Hasła nie są identyczne.")
+            return
+        self._banner.ukryj()
+
+        ustaw_tekst_ladowania(
+            self._przycisk, True, "Włącz automatyczne kopie", "Wykonywanie pierwszej kopii..."
+        )
+
+        def zadanie():
+            try:
+                plik = kz.wykonaj_backup(Path(self._katalog_docelowy), haslo)
+            except kz.BladKopiiZapasowej as e:
+                raise ApiError(str(e)) from e
+            kz_haslo.zapisz_haslo(haslo)
+            kz.ustaw_tryb_backupu(kz.TRYB_AUTOMATYCZNY)
+            return plik
+
+        def sukces(plik: Path) -> None:
+            self._zamkniete_bez_wlaczenia = False
+            self._on_wlaczono()
+            self.destroy()
+            messagebox.showinfo(
+                "Automatyczne kopie włączone",
+                f"Pierwsza kopia zapisana jako:\n{plik.name}\n\n"
+                "Kolejne appka wykona sama, gdy minie 7 dni od poprzedniej.",
+                parent=self.master,
+            )
+
+        def blad(e: ApiError) -> None:
+            ustaw_tekst_ladowania(self._przycisk, False, "Włącz automatyczne kopie")
             komunikat_bledu(self, e.komunikat)
 
         uruchom_w_tle(self, zadanie, sukces, blad)
