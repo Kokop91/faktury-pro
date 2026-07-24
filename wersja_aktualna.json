@@ -1,0 +1,5 @@
+{
+  "wersja": "1.1.2",
+  "url_instalatora": "https://github.com/Kokop91/faktury-pro/releases/download/v1.1.2/FakturyPro-Setup-1.1.2.exe",
+  "zmiany": "- Naprawiono odrzucanie NIP-u wpisanego ze spacjami lub myślnikami\n- Dodano sprawdzanie poprawności adresu e-mail i numeru konta bankowego w formularzach\n- Aplikacja ostrzega teraz przed kwotami wpisanymi w notacji naukowej\n- Naprawiono znikające lub przesunięte pola przy przewijaniu w kilku formularzach (faktura, oferta, PZ/WZ, szablon cykliczny)\n- Nowy przycisk \"Sprawdź integracje\" w Ustawieniach — jednym kliknięciem sprawdza połączenie z NBP, Białą Listą, GUS i KSeF"
+}
