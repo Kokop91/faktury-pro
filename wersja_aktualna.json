@@ -1,5 +1,5 @@
 {
-  "wersja": "1.1.3",
-  "url_instalatora": "https://github.com/Kokop91/faktury-pro/releases/download/v1.1.3/FakturyPro-Setup-1.1.3.exe",
-  "zmiany": "- Naprawiono wolne ładowanie dashboardu (zduplikowane zapytanie o faktury)\n- Naprawiono bardzo wolne ładowanie i wyszukiwanie na liście Klientów i innych dużych listach\n- Kod pocztowy w formularzach wpisuje się teraz samymi cyframi — myślnik dokleja się sam\n- Pole NIP blokuje wpisanie więcej niż 10 cyfr zamiast zgłaszać błąd po fakcie\n- Naprawiono utrzymujące się błędy renderowania w Ustawieniach przy szybkim przewijaniu\n- Nowa opcja: automatyczne kopie zapasowe bez pytania za każdym razem"
+  "wersja": "1.1.4",
+  "url_instalatora": "https://github.com/Kokop91/faktury-pro/releases/download/v1.1.4/FakturyPro-Setup-1.1.4.exe",
+  "zmiany": "- Naprawiono nieodświeżające się zakładki \"Produkty\" i \"Stany magazynowe\" po zapisaniu dokumentu magazynowego (PZ/WZ/PW/RW/MM) albo zamknięciu spisu z natury\n- Pole \"Numer powiązanej faktury\" przy WZ nie blokuje już zapisu, gdy numer nie zostanie odnaleziony w systemie — zapisuje się jako zwykły tekst z łagodnym ostrzeżeniem\n- Ujednolicony, spójny wygląd okien dialogowych i komunikatów w całej aplikacji (m.in. poprawiona ikonka w tytule okna kopii zapasowej)"
 }
