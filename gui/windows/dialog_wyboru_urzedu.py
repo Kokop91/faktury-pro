@@ -3,9 +3,10 @@ from typing import Callable
 import customtkinter as ctk
 
 from gui import styl
+from gui.windows.baza_formularza import OknoDialogu
 
 
-class DialogWyboruUrzeduSkarbowego(ctk.CTkToplevel):
+class DialogWyboruUrzeduSkarbowego(OknoDialogu):
     """Wyszukiwarka urzedu skarbowego (Faza 13) - 400 pozycji to za duzo dla
     zwyklego OptionMenu, a kod urzedu jest 4-cyfrowym, scisle enumerowanym
     polem w schemacie JPK_V7 (KodUrzedu), wiec uzytkownik NIE powinien go
@@ -15,11 +16,6 @@ class DialogWyboruUrzeduSkarbowego(ctk.CTkToplevel):
         super().__init__(master)
         self.title("Wybierz urząd skarbowy")
         self.geometry("480x560")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
-        self.bind("<Escape>", lambda _z: self.destroy())
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
 
         self._urzedy = urzedy
         self._on_wybierz = on_wybierz

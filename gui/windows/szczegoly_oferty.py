@@ -1,12 +1,12 @@
 import os
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 from typing import Callable
 
 import customtkinter as ctk
 
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import komunikat_bledu, potwierdz, ustaw_tekst_ladowania
 from gui.windows.baza_formularza import OknoFormularza
 from gui.windows.formularz_faktury import FormularzFaktury
 from gui.windows.formularz_oferty import FormularzOferty
@@ -312,8 +312,12 @@ class SzczegolyOferty(OknoFormularza):
             except OSError as e:
                 komunikat_bledu(self, f"Nie udało się zapisać pliku: {e}")
                 return
-            if messagebox.askyesno(
-                "Zapisano", f"Zapisano plik:\n{sciezka}\n\nOtworzyć go teraz?", parent=self
+            if potwierdz(
+                self,
+                f"Zapisano plik:\n{sciezka}\n\nOtworzyć go teraz?",
+                tytul="Zapisano",
+                tekst_tak="Otwórz",
+                tekst_nie="Zamknij",
             ):
                 os.startfile(sciezka)
 
@@ -325,11 +329,11 @@ class SzczegolyOferty(OknoFormularza):
 
     def _zmien_status(self, nowy_status: str) -> None:
         etykieta = formatowanie.formatuj_status_oferty(nowy_status)
-        if not messagebox.askyesno(
-            "Potwierdzenie",
+        if not potwierdz(
+            self,
             f"Oznaczyć ofertę {self._oferta['numer']} jako „{etykieta}”?\n\n"
             "To rejestruje decyzję klienta podjętą poza aplikacją.",
-            parent=self,
+            tytul="Potwierdzenie",
         ):
             return
 

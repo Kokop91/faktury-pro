@@ -1,12 +1,12 @@
 import os
 from datetime import datetime
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 
 import customtkinter as ctk
 
 from gui import api_client, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import komunikat_bledu, potwierdz, ustaw_tekst_ladowania
 from gui.windows.dialog_gotowosci_jpk import DialogGotowosciJPK
 
 MIESIACE = [
@@ -176,8 +176,12 @@ class PanelRaportuJPK(ctk.CTkFrame):
             except OSError as e:
                 komunikat_bledu(self, f"Nie udało się zapisać pliku: {e}")
                 return
-            if messagebox.askyesno(
-                "Zapisano", f"Zapisano plik:\n{sciezka}\n\nOtworzyć folder z plikiem?", parent=self
+            if potwierdz(
+                self,
+                f"Zapisano plik:\n{sciezka}\n\nOtworzyć folder z plikiem?",
+                tytul="Zapisano",
+                tekst_tak="Otwórz folder",
+                tekst_nie="Zamknij",
             ):
                 os.startfile(os.path.dirname(sciezka))
 

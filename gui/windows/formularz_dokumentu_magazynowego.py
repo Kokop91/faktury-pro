@@ -47,6 +47,11 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
         self._faktury: list[dict] = []
         self._id_faktury_wg_numeru: dict[str, int] = {}
         self._wiersze_pozycji: list[WierszPozycjiMagazynowej] = []
+        # Ustawiane w _zbierz_i_zwaliduj(), gdy numer faktury zostal wpisany, ale
+        # nie dopasowany do zadnej faktury w systemie - pole jest "opcjonalne,
+        # informacyjne", wiec to tylko LAGODNE ostrzezenie, nigdy blokada zapisu
+        # (patrz tam po pelne uzasadnienie).
+        self._ostrzezenie_faktury: str | None = None
 
         self._etykieta_ladowania = ctk.CTkLabel(
             self,
@@ -367,13 +372,24 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
             bledy.append("Magazyn źródłowy i docelowy muszą być różne.")
 
         faktura_powiazana_id = None
+        numer_faktury_tekst = None
+        self._ostrzezenie_faktury = None
         numer_faktury = self._pole_faktura.get().strip()
         if numer_faktury:
             faktura_powiazana_id = self._id_faktury_wg_numeru.get(numer_faktury)
             if faktura_powiazana_id is None:
-                bledy.append(
-                    f"Nie znaleziono faktury o numerze „{numer_faktury}” - "
-                    "sprawdź numer albo zostaw pole puste."
+                # Pole jest oznaczone jako "opcjonalnie, informacyjnie" - NIE
+                # powinno wiec blokowac zapisu, gdy numer nie zostanie
+                # dopasowany do zadnej faktury w systemie (uzytkownik moze
+                # referencjonowac fakture spoza systemu - papierowa, z innego
+                # okresu). Zapisywany jako zwykly tekst (numer_faktury_tekst),
+                # z lagodnym ostrzezeniem pokazanym PO udanym zapisie (patrz
+                # sukces() ponizej), zamiast twardego bledu w bannerze.
+                numer_faktury_tekst = numer_faktury
+                self._ostrzezenie_faktury = (
+                    f"Nie znaleziono faktury o numerze „{numer_faktury}” w "
+                    "systemie - zapisano jako informacyjny tekst, bez "
+                    "powiązania z fakturą."
                 )
 
         if not self._wiersze_pozycji:
@@ -406,6 +422,8 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
             dane["magazyn_docelowy_id"] = magazyn_docelowy_id
         if faktura_powiazana_id is not None:
             dane["faktura_powiazana_id"] = faktura_powiazana_id
+        elif numer_faktury_tekst is not None:
+            dane["numer_faktury_tekst"] = numer_faktury_tekst
         return dane
 
     def _zapisz(self) -> None:
@@ -424,7 +442,9 @@ class FormularzDokumentuMagazynowego(OknoFormularza):
 
         def sukces(wynik: dict) -> None:
             master = self.master
-            ostrzezenia = wynik.get("ostrzezenia") or []
+            ostrzezenia = list(wynik.get("ostrzezenia") or [])
+            if self._ostrzezenie_faktury:
+                ostrzezenia.append(self._ostrzezenie_faktury)
             self._on_zapisano()
             self.destroy()
             if ostrzezenia:

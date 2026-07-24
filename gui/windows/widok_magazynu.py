@@ -69,13 +69,17 @@ class WidokMagazynu(ctk.CTkFrame):
         self._panel_magazynow = PanelMagazynow(tab_magazyny)
         self._panel_magazynow.grid(row=0, column=0, sticky="nsew")
 
-        self._panel_dokumentow = PanelDokumentowMagazynowych(tab_dokumenty)
+        self._panel_dokumentow = PanelDokumentowMagazynowych(
+            tab_dokumenty, on_zmiana_stanu=self.odswiez
+        )
         self._panel_dokumentow.grid(row=0, column=0, sticky="nsew")
 
         self._panel_stanow = PanelStanowMagazynowych(tab_stany)
         self._panel_stanow.grid(row=0, column=0, sticky="nsew")
 
-        self._panel_inwentaryzacji = PanelInwentaryzacji(tab_inwentaryzacja)
+        self._panel_inwentaryzacji = PanelInwentaryzacji(
+            tab_inwentaryzacja, on_zmiana_stanu=self.odswiez
+        )
         self._panel_inwentaryzacji.grid(row=0, column=0, sticky="nsew")
 
         self._panel_raportow = PanelRaportow(tab_raporty)

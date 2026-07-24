@@ -1,11 +1,10 @@
 from typing import Callable
 
 import customtkinter as ctk
-from tkinter import messagebox
 
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import komunikat_bledu, pokaz_toast, potwierdz, ustaw_tekst_ladowania
 from gui.windows.baza_formularza import OknoFormularza
 from gui.windows.formularz_dokumentu_magazynowego import FormularzDokumentuMagazynowego
 from gui.windows.tabela import Tabela
@@ -130,6 +129,14 @@ class SzczegolyDokumentuMagazynowego(OknoFormularza):
             )
         if faktura_numer:
             wiersze_info.append(("Powiązana faktura", faktura_numer))
+        elif dokument.get("numer_faktury_tekst"):
+            # Numer wpisany przez uzytkownika, ktory nie zostal dopasowany do
+            # zadnej faktury w systemie (patrz app/models/dokument_magazynowy.py)
+            # - pokazany jako zwykly tekst, wyraznie odroznialny od prawdziwego
+            # powiazania powyzej.
+            wiersze_info.append(
+                ("Numer faktury (poza systemem)", dokument["numer_faktury_tekst"])
+            )
 
         for etykieta, wartosc in wiersze_info:
             wiersz = ctk.CTkFrame(naglowek, fg_color="transparent")
@@ -224,11 +231,12 @@ class SzczegolyDokumentuMagazynowego(OknoFormularza):
             self._on_zmieniono()
 
     def _zatwierdz(self) -> None:
-        if not messagebox.askyesno(
-            "Zatwierdź dokument",
+        if not potwierdz(
+            self,
             f"Zatwierdzić dokument {self._dokument['numer']}? Po zatwierdzeniu "
             "nie będzie już można go edytować.",
-            parent=self,
+            tytul="Zatwierdź dokument",
+            tekst_tak="Zatwierdź",
         ):
             return
 

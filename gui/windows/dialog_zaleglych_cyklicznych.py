@@ -5,9 +5,10 @@ import customtkinter as ctk
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
+from gui.windows.baza_formularza import OknoDialogu
 
 
-class DialogZaleglychCyklicznych(ctk.CTkToplevel):
+class DialogZaleglychCyklicznych(OknoDialogu):
     """Okno startowe (Faza 15, KLUCZOWE wymaganie) - appka jest desktopowa i
     nie dziala 24/7, wiec zamiast systemowego harmonogramu sprawdzamy zaleglosci
     RAZ, przy kazdym uruchomieniu (patrz glowne_okno.py). Nigdy nie generuje nic
@@ -19,11 +20,6 @@ class DialogZaleglychCyklicznych(ctk.CTkToplevel):
         super().__init__(master)
         self.title("Faktury cykliczne do wygenerowania")
         self.geometry("620x560")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
-        self.bind("<Escape>", lambda _z: self.destroy())
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
 
         self._zalegle = zalegle
         self._on_wygenerowano = on_wygenerowano

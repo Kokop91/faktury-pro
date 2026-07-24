@@ -9,7 +9,7 @@ z nowa zawartoscia bazy - bezpieczniej zaczac od czystego startu niz probowac
 "na zywo" odswiezyc kazde otwarte okno)."""
 import os
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 from typing import Callable
 
 import customtkinter as ctk
@@ -20,7 +20,7 @@ from gui import kopia_zapasowa_haslo as kz_haslo
 from gui import profile_rejestr, styl
 from gui.api_client import ApiError
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import Banner, komunikat_bledu, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import Banner, komunikat_bledu, pokaz_alert, potwierdz, ustaw_tekst_ladowania
 from gui.windows.baza_formularza import OknoFormularza
 
 DLUGOSC_MIN_HASLA = 8
@@ -107,10 +107,11 @@ class DialogWykonajBackup(OknoFormularza):
             master = self.master
             self._on_wykonano()
             self.destroy()
-            messagebox.showinfo(
-                "Kopia zapasowa wykonana",
+            pokaz_alert(
+                master,
                 f"Kopia zapisana jako:\n{plik.name}\n\nw katalogu:\n{plik.parent}",
-                parent=master,
+                tytul="Kopia zapasowa wykonana",
+                typ="sukces",
             )
 
         def blad(e: ApiError) -> None:
@@ -236,11 +237,12 @@ class DialogWlaczAutomatycznyBackup(OknoFormularza):
             self._zamkniete_bez_wlaczenia = False
             self._on_wlaczono()
             self.destroy()
-            messagebox.showinfo(
-                "Automatyczne kopie włączone",
+            pokaz_alert(
+                self.master,
                 f"Pierwsza kopia zapisana jako:\n{plik.name}\n\n"
                 "Kolejne appka wykona sama, gdy minie 7 dni od poprzedniej.",
-                parent=self.master,
+                tytul="Automatyczne kopie włączone",
+                typ="sukces",
             )
 
         def blad(e: ApiError) -> None:
@@ -380,25 +382,24 @@ class DialogPrzywrocBackup(OknoFormularza):
                 nazwa_aktywna = wpis.nazwa_wyswietlana
 
         if nazwa_backupu and nazwa_aktywna and nazwa_backupu != nazwa_aktywna:
-            if not messagebox.askyesno(
-                "Kopia zapasowa innej firmy",
+            if not potwierdz(
+                self,
                 f"Ta kopia zapasowa należy do firmy „{nazwa_backupu}”, a aktywna "
                 f"jest teraz firma „{nazwa_aktywna}”.\n\n"
                 "Przywrócenie NADPISZE dane aktywnej firmy danymi z INNEJ firmy. "
                 "Czy na pewno chcesz kontynuować?",
-                icon="warning",
-                default=messagebox.NO,
-                parent=self,
+                tytul="Kopia zapasowa innej firmy",
+                niebezpieczne=True,
             ):
                 return False
 
-        return messagebox.askyesno(
-            "Potwierdź przywrócenie danych",
+        return potwierdz(
+            self,
             "Zamierzasz nadpisać WSZYSTKIE bieżące dane aplikacji zawartością "
             f"kopii zapasowej „{self._plik.name}”. Tej operacji nie można cofnąć.\n\n"
             "Czy na pewno chcesz kontynuować?",
-            icon="warning",
-            parent=self,
+            tytul="Potwierdź przywrócenie danych",
+            niebezpieczne=True,
         )
 
     def _wykonaj_przywrocenie(self, haslo: str) -> None:
@@ -415,12 +416,13 @@ class DialogPrzywrocBackup(OknoFormularza):
                 raise ApiError(str(e)) from e
 
         def sukces(_wynik) -> None:
-            messagebox.showinfo(
-                "Dane przywrócone",
+            pokaz_alert(
+                self,
                 "Dane zostały przywrócone z kopii zapasowej.\n\n"
                 "Aplikacja zostanie teraz zamknięta - uruchom ją ponownie, "
                 "aby zobaczyć przywrócone dane.",
-                parent=self,
+                tytul="Dane przywrócone",
+                typ="sukces",
             )
             from gui import proces_aplikacji
 

@@ -50,6 +50,16 @@ class DokumentMagazynowy(Base):
     faktura_powiazana_id: Mapped[int | None] = mapped_column(
         ForeignKey("faktury.id"), nullable=True
     )
+    # Numer faktury wpisany przez uzytkownika, gdy NIE udalo sie go dopasowac do
+    # zadnej faktury w systemie (naprawa zgloszonego bledu: pole oznaczone jako
+    # "opcjonalnie, informacyjnie" twardo blokowalo zapis dokumentu, jesli numer
+    # nie zostal znaleziony - GUI robi dopasowanie po stronie klienta, patrz
+    # gui/windows/formularz_dokumentu_magazynowego.py). Wzajemnie wykluczajace
+    # sie z faktura_powiazana_id - ten sam dokument ma zawsze co najwyzej JEDNO
+    # z tych dwoch pol ustawione (dopasowana faktura ALBO wolny tekst), nigdy
+    # oba naraz. Uzytkownik moze referencjonowac fakture spoza systemu (np.
+    # papierowa, z innego okresu) - to pole istnieje wylacznie do tego celu.
+    numer_faktury_tekst: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     utworzono: Mapped[datetime] = mapped_column(server_default=func.now())
     zaktualizowano: Mapped[datetime] = mapped_column(

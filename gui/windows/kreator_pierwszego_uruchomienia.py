@@ -12,7 +12,6 @@ pierwszego wciaz brakujacego kroku, nie od poczatku.
 """
 
 from pathlib import Path
-from tkinter import messagebox
 
 import customtkinter as ctk
 
@@ -27,6 +26,7 @@ from gui.widgets_pomocnicze import (
     formatuj_srodowisko_ksef,
     podepnij_limit_cyfr,
     podepnij_maske_kodu_pocztowego,
+    potwierdz,
     przewin_na_gore,
     ustaw_tekst_ladowania,
 )
@@ -419,14 +419,16 @@ class KrokUstawienia(_KrokBazowy):
 
     def _na_zmiane_srodowiska(self, wartosc: str) -> None:
         if wartosc == "Produkcyjne":
-            potwierdzono = messagebox.askyesno(
-                "Przełączenie na środowisko produkcyjne KSeF",
+            potwierdzono = potwierdz(
+                self.kreator,
                 "Zamierzasz przełączyć integrację KSeF na ŚRODOWISKO PRODUKCYJNE.\n\n"
                 "Od tego momentu żądania będą wysyłane do prawdziwego systemu "
                 "Ministerstwa Finansów, z rzeczywistymi konsekwencjami prawnymi i "
                 "finansowymi.\n\n"
                 "Czy na pewno chcesz kontynuować?",
-                parent=self.kreator,
+                tytul="Przełączenie na środowisko produkcyjne KSeF",
+                tekst_tak="Przełącz na produkcję",
+                niebezpieczne=True,
             )
             if not potwierdzono:
                 self._var_srodowisko.set("Testowe")
@@ -592,12 +594,13 @@ class _Kreator(ctk.CTk):
         ustaw_tekst_ladowania(self._przycisk_dalej, zajety, tekst_zwykly, "Zapisywanie...")
 
     def _na_zamkniecie(self) -> None:
-        potwierdzono = messagebox.askyesno(
-            "Przerwać konfigurację?",
+        potwierdzono = potwierdz(
+            self,
             "Na pewno przerwać konfigurację?\n\n"
             "Będziesz mógł/mogła dokończyć przy następnym uruchomieniu aplikacji — "
             "nic, co już zapisano, nie zostanie utracone.",
-            parent=self,
+            tytul="Przerwać konfigurację?",
+            tekst_tak="Przerwij",
         )
         if potwierdzono:
             self.ukonczono = False

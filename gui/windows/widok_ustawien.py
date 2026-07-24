@@ -6,7 +6,7 @@ import tkinter as tk
 import webbrowser
 from datetime import date, datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 
 import customtkinter as ctk
 
@@ -25,7 +25,9 @@ from gui.widgets_pomocnicze import (
     odswiez_obszar_przewijania,
     podepnij_limit_cyfr,
     podepnij_maske_kodu_pocztowego,
+    pokaz_alert,
     pokaz_toast,
+    potwierdz,
     ustaw_tekst_ladowania,
 )
 from gui.windows.dialog_kopii_zapasowej import (
@@ -983,14 +985,16 @@ class WidokUstawien(ctk.CTkFrame):
 
     def _na_zmiane_srodowiska_ksef(self, wartosc: str) -> None:
         if wartosc == "Produkcyjne":
-            potwierdzono = messagebox.askyesno(
-                "Przełączenie na środowisko produkcyjne KSeF",
+            potwierdzono = potwierdz(
+                self,
                 "Zamierzasz przełączyć integrację KSeF na ŚRODOWISKO PRODUKCYJNE.\n\n"
                 "Od tego momentu żądania (w tym test połączenia) będą wysyłane do "
                 "prawdziwego systemu Ministerstwa Finansów, z rzeczywistymi "
                 "konsekwencjami prawnymi i finansowymi.\n\n"
                 "Czy na pewno chcesz kontynuować?",
-                parent=self,
+                tytul="Przełączenie na środowisko produkcyjne KSeF",
+                tekst_tak="Przełącz na produkcję",
+                niebezpieczne=True,
             )
             if not potwierdzono:
                 self._przelacznik_srodowiska_ksef.set("Testowe")
@@ -1968,12 +1972,13 @@ class WidokUstawien(ctk.CTkFrame):
         if self._sciezka_pobranego_instalatora is None:
             return
 
-        potwierdzono = messagebox.askyesno(
-            "Zainstalować aktualizację?",
+        potwierdzono = potwierdz(
+            self,
             "Aplikacja zostanie teraz zamknięta, żeby instalator mógł ją "
             "zaktualizować. Po zakończeniu instalacji uruchom aplikację "
             "ponownie.\n\nKontynuować?",
-            parent=self,
+            tytul="Zainstalować aktualizację?",
+            tekst_tak="Zainstaluj i zamknij",
         )
         if not potwierdzono:
             return
@@ -2059,13 +2064,15 @@ class WidokUstawien(ctk.CTkFrame):
 
         def sukces(plik: Path) -> None:
             ustaw_tekst_ladowania(self._przycisk_diagnostyka, False, "Przygotuj pakiet diagnostyczny")
-            otworzyc = messagebox.askyesno(
-                "Pakiet diagnostyczny gotowy",
+            otworzyc = potwierdz(
+                self,
                 f"Plik zapisany na Pulpicie jako:\n„{plik.name}”.\n\n"
                 f"Wyślij go mailem na {diagnostyka.ADRES_WSPARCIA}, opisując "
                 "krótko, co się dzieje.\n\n"
                 "Czy otworzyć folder z tym plikiem?",
-                parent=self,
+                tytul="Pakiet diagnostyczny gotowy",
+                tekst_tak="Otwórz folder",
+                tekst_nie="Zamknij",
             )
             if otworzyc:
                 os.startfile(plik.parent)
@@ -2150,14 +2157,15 @@ class WidokUstawien(ctk.CTkFrame):
         self._przycisk_usun_profil.configure(state="normal" if aktywny else "disabled")
 
     def _usun_profil(self) -> None:
-        if not messagebox.askyesno(
-            "Usunięcie firmy",
+        if not potwierdz(
+            self,
             "Zamierzasz TRWALE usunąć tę firmę: jej bazę danych, ustawienia, "
             "logo i dane KSeF zapisane na tym komputerze zostaną skasowane. "
             "Tej operacji nie można cofnąć.\n\n"
             "Czy na pewno chcesz kontynuować?",
-            icon="warning",
-            parent=self,
+            tytul="Usunięcie firmy",
+            tekst_tak="Usuń trwale",
+            niebezpieczne=True,
         ):
             return
 
@@ -2181,11 +2189,12 @@ class WidokUstawien(ctk.CTkFrame):
             profile_rejestr.usun(profil_id)
 
         def sukces(_wynik) -> None:
-            messagebox.showinfo(
-                "Firma usunięta",
+            pokaz_alert(
+                self,
                 "Firma została usunięta z listy profili. Aplikacja zostanie "
                 "teraz zamknięta.",
-                parent=self,
+                tytul="Firma usunięta",
+                typ="sukces",
             )
             from gui import proces_aplikacji
 

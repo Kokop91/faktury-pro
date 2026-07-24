@@ -9,19 +9,15 @@ from typing import Callable
 import customtkinter as ctk
 
 from gui import styl
+from gui.windows.baza_formularza import OknoDialogu
 
 
-class DialogPrzypomnieniaBackupu(ctk.CTkToplevel):
+class DialogPrzypomnieniaBackupu(OknoDialogu):
     def __init__(self, master, nigdy_skonfigurowano: bool, dni_od_ostatniego: int | None, on_przejdz: Callable[[], None]):
         super().__init__(master)
         self.title("Kopia zapasowa")
         self.geometry("440x220")
         self.resizable(False, False)
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
-        self.bind("<Escape>", lambda _z: self.destroy())
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
 
         self._on_przejdz = on_przejdz
 

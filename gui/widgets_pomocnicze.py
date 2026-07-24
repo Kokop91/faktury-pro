@@ -1,21 +1,169 @@
-from tkinter import messagebox
 from typing import Callable
 
 import customtkinter as ctk
 
 from gui import styl
+from gui.windows.baza_formularza import OknoDialogu
+
+_KOLORY_ALERTU = {
+    "info": (styl.KOLOR_TEKST_GLOWNY, styl.KOLOR_KARTA),
+    "sukces": (styl.KOLOR_SUKCES, styl.KOLOR_SUKCES_TLO),
+    "blad": (styl.KOLOR_BLAD, styl.KOLOR_BLAD_TLO),
+    "ostrzezenie": (styl.KOLOR_OSTRZEZENIE, styl.KOLOR_OSTRZEZENIE_TLO),
+}
+
+
+class DialogAlertu(OknoDialogu):
+    """Wlasny, stylizowany odpowiednik messagebox.show{info,error,warning}
+    (Faza 16C, rozszerzone przy audycie spojnosci wizualnej) - jedyny OK,
+    kolorowany wg `typ` tokenami z 16A zamiast natywnej ramki Windows/Tk."""
+
+    def __init__(self, master, tytul: str, tekst: str, typ: str = "info"):
+        super().__init__(master)
+        self.title(tytul)
+        self.resizable(False, False)
+
+        kolor_tekstu, kolor_tla = _KOLORY_ALERTU.get(typ, _KOLORY_ALERTU["info"])
+
+        kontener = ctk.CTkFrame(self, fg_color="transparent")
+        kontener.pack(fill="both", expand=True, padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY)
+
+        pasek_tytulu = ctk.CTkFrame(
+            kontener, fg_color=kolor_tla, corner_radius=styl.PROMIEN_NAROZNIKA
+        )
+        pasek_tytulu.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+        ctk.CTkLabel(
+            pasek_tytulu, text=tytul, font=styl.CZCIONKA_TRESC_POGRUBIONA,
+            text_color=kolor_tekstu, anchor="w", wraplength=400, justify="left",
+        ).pack(fill="x", padx=styl.ODSTEP_SREDNI, pady=styl.ODSTEP_MALY)
+
+        ctk.CTkLabel(
+            kontener, text=tekst, font=styl.CZCIONKA_TRESC,
+            text_color=styl.KOLOR_TEKST_GLOWNY, wraplength=400,
+            justify="left", anchor="w",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        przycisk = ctk.CTkButton(
+            kontener, text="OK", fg_color=styl.KOLOR_AKCENT,
+            hover_color=styl.KOLOR_AKCENT_HOVER, command=self.destroy,
+        )
+        przycisk.pack(fill="x")
+        self.bind("<Return>", lambda _z: self.destroy())
+        przycisk.focus_set()
+
+
+def pokaz_alert(rodzic, tekst: str, tytul: str = "Informacja", typ: str = "info") -> None:
+    """Wlasny, blokujacy odpowiednik messagebox.show{info,error,warning}.
+    Celowo NADAL blokujacy (jak natywny messagebox), w odroznieniu od
+    `pokaz_toast` - kilka wywolan tuz PRZED zamknieciem calej aplikacji
+    (np. po przywroceniu kopii zapasowej) potrzebuje potwierdzenia, ktore
+    uzytkownik na pewno zobaczy, zanim proces sie zakonczy; nieblokujacy
+    toast znikalby razem z procesem niezauwazony."""
+    dialog = DialogAlertu(rodzic, tytul, tekst, typ)
+    dialog.wait_window()
 
 
 def komunikat_bledu(rodzic, tekst: str, tytul: str = "Błąd") -> None:
-    messagebox.showerror(tytul, tekst, parent=rodzic)
+    pokaz_alert(rodzic, tekst, tytul, typ="blad")
 
 
 def komunikat_info(rodzic, tekst: str, tytul: str = "Informacja") -> None:
-    messagebox.showinfo(tytul, tekst, parent=rodzic)
+    pokaz_alert(rodzic, tekst, tytul, typ="info")
 
 
 def komunikat_ostrzezenie(rodzic, tekst: str, tytul: str = "Ostrzeżenie") -> None:
-    messagebox.showwarning(tytul, tekst, parent=rodzic)
+    pokaz_alert(rodzic, tekst, tytul, typ="ostrzezenie")
+
+
+class DialogPotwierdzenia(OknoDialogu):
+    """Wlasny, stylizowany odpowiednik messagebox.askyesno (Faza 16C,
+    rozszerzone przy audycie spojnosci wizualnej) - dla potwierdzen
+    destrukcyjnych/znaczacych akcji. `niebezpieczne=True` koloruje przycisk
+    potwierdzenia na czerwono (KOLOR_BLAD) I przenosi domyslny fokus/Enter
+    na przycisk odmowy - przypadkowe Enter/spacja nie powinno moc samo z
+    siebie potwierdzic nieodwracalnej akcji."""
+
+    def __init__(
+        self,
+        master,
+        tytul: str,
+        tekst: str,
+        tekst_tak: str = "Tak",
+        tekst_nie: str = "Nie",
+        niebezpieczne: bool = False,
+    ):
+        super().__init__(master)
+        self.title(tytul)
+        self.resizable(False, False)
+        self.wynik = False
+
+        kontener = ctk.CTkFrame(self, fg_color="transparent")
+        kontener.pack(fill="both", expand=True, padx=styl.ODSTEP_DUZY, pady=styl.ODSTEP_DUZY)
+
+        if niebezpieczne:
+            pasek_ostrzezenia = ctk.CTkFrame(
+                kontener, fg_color=styl.KOLOR_BLAD_TLO, corner_radius=styl.PROMIEN_NAROZNIKA
+            )
+            pasek_ostrzezenia.pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+            ctk.CTkLabel(
+                pasek_ostrzezenia, text=tytul, font=styl.CZCIONKA_TRESC_POGRUBIONA,
+                text_color=styl.KOLOR_BLAD, anchor="w", wraplength=400, justify="left",
+            ).pack(fill="x", padx=styl.ODSTEP_SREDNI, pady=styl.ODSTEP_MALY)
+
+        ctk.CTkLabel(
+            kontener, text=tekst, font=styl.CZCIONKA_TRESC,
+            text_color=styl.KOLOR_TEKST_GLOWNY, wraplength=400,
+            justify="left", anchor="w",
+        ).pack(fill="x", pady=(0, styl.ODSTEP_SREDNI))
+
+        pasek = ctk.CTkFrame(kontener, fg_color="transparent")
+        pasek.pack(fill="x")
+        pasek.grid_columnconfigure((0, 1), weight=1)
+
+        przycisk_nie = ctk.CTkButton(
+            pasek, text=tekst_nie, fg_color="transparent", border_width=1,
+            border_color=styl.KOLOR_OBRAMOWANIE, text_color=styl.KOLOR_TEKST_GLOWNY,
+            hover_color=styl.KOLOR_WIERSZ_NIEPARZYSTY, command=self._na_nie,
+        )
+        przycisk_nie.grid(row=0, column=0, sticky="ew", padx=(0, styl.ODSTEP_MALY))
+
+        kolor_tak = styl.KOLOR_BLAD if niebezpieczne else styl.KOLOR_AKCENT
+        hover_tak = styl.KOLOR_BLAD if niebezpieczne else styl.KOLOR_AKCENT_HOVER
+        przycisk_tak = ctk.CTkButton(
+            pasek, text=tekst_tak, fg_color=kolor_tak, hover_color=hover_tak,
+            command=self._na_tak,
+        )
+        przycisk_tak.grid(row=0, column=1, sticky="ew")
+
+        domyslny = self._na_nie if niebezpieczne else self._na_tak
+        self.bind("<Return>", lambda _z: domyslny())
+        (przycisk_nie if niebezpieczne else przycisk_tak).focus_set()
+
+    def _na_tak(self) -> None:
+        self.wynik = True
+        self.destroy()
+
+    def _na_nie(self) -> None:
+        self.wynik = False
+        self.destroy()
+
+
+def potwierdz(
+    rodzic,
+    tekst: str,
+    tytul: str = "Potwierdź",
+    tekst_tak: str = "Tak",
+    tekst_nie: str = "Nie",
+    niebezpieczne: bool = False,
+) -> bool:
+    """Wlasny, stylizowany odpowiednik messagebox.askyesno - patrz
+    DialogPotwierdzenia. Blokuje (wait_window) i zwraca decyzje uzytkownika
+    dokladnie jak natywny askyesno, wiec istniejace wywolania `if not
+    messagebox.askyesno(...)` zamieniaja sie na `if not potwierdz(...)` bez
+    zmiany reszty logiki wywolujacej."""
+    dialog = DialogPotwierdzenia(rodzic, tytul, tekst, tekst_tak, tekst_nie, niebezpieczne)
+    dialog.wait_window()
+    return dialog.wynik
 
 
 def ustaw_tekst_ladowania(

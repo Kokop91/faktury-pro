@@ -1,12 +1,11 @@
 from datetime import date
-from tkinter import messagebox
 from typing import Callable
 
 import customtkinter as ctk
 
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
-from gui.widgets_pomocnicze import Banner, komunikat_bledu, pokaz_toast, ustaw_tekst_ladowania
+from gui.widgets_pomocnicze import Banner, komunikat_bledu, pokaz_toast, potwierdz, ustaw_tekst_ladowania
 from gui.windows.baza_formularza import OknoFormularza
 
 
@@ -99,8 +98,12 @@ class FormularzKosztuRecznego(OknoFormularza):
         self.zapamietaj_stan_poczatkowy()
 
     def _usun(self) -> None:
-        if not messagebox.askyesno(
-            "Potwierdzenie", "Usunąć ten koszt? Tej operacji nie można cofnąć.", parent=self
+        if not potwierdz(
+            self,
+            "Usunąć ten koszt? Tej operacji nie można cofnąć.",
+            tytul="Potwierdzenie",
+            tekst_tak="Usuń",
+            niebezpieczne=True,
         ):
             return
 

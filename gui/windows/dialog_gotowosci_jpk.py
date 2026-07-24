@@ -3,6 +3,7 @@ from typing import Callable
 import customtkinter as ctk
 
 from gui import styl
+from gui.windows.baza_formularza import OknoDialogu
 
 _OPISY_PROBLEMOW = {
     "robocza": "Faktura robocza — zostanie POMINIĘTA w ewidencji (nie ma jeszcze mocy prawnej)",
@@ -10,7 +11,7 @@ _OPISY_PROBLEMOW = {
 }
 
 
-class DialogGotowosciJPK(ctk.CTkToplevel):
+class DialogGotowosciJPK(OknoDialogu):
     """Ostrzezenie PRZED wygenerowaniem JPK_V7 (wymagane w specyfikacji Fazy 13) -
     appka NIGDY nie generuje "po cichu" pliku pomijajacego faktury robocze albo
     z niekompletnymi danymi klienta; uzytkownik musi to swiadomie zobaczyc i
@@ -20,11 +21,6 @@ class DialogGotowosciJPK(ctk.CTkToplevel):
         super().__init__(master)
         self.title("Sprawdzenie okresu przed generowaniem JPK_V7")
         self.geometry("620x480")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
-        self.bind("<Escape>", lambda _z: self.destroy())
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
 
         self._on_kontynuuj = on_kontynuuj
 

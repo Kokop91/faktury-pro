@@ -123,6 +123,10 @@ class DokumentMagazynowyCreate(BaseModel):
     magazyn_zrodlowy_id: int | None = None
     magazyn_docelowy_id: int | None = None
     faktura_powiazana_id: int | None = None
+    # Wzajemnie wykluczajace sie z faktura_powiazana_id - patrz uzasadnienie w
+    # app/models/dokument_magazynowy.py. Wypelniane przez GUI TYLKO gdy numer
+    # zostal wpisany, ale nie dopasowany do zadnej faktury w systemie.
+    numer_faktury_tekst: str | None = Field(default=None, max_length=100)
     pozycje: list[PozycjaDokumentuMagazynowegoCreate] = Field(min_length=1)
 
 
@@ -152,6 +156,7 @@ class DokumentMagazynowyOut(BaseModel):
     magazyn_zrodlowy_id: int | None
     magazyn_docelowy_id: int | None
     faktura_powiazana_id: int | None
+    numer_faktury_tekst: str | None
     pozycje: list[PozycjaDokumentuMagazynowegoOut]
     utworzono: datetime
     zaktualizowano: datetime

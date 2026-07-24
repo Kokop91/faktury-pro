@@ -433,6 +433,7 @@ def utworz_dokument_magazynowy(
         magazyn_zrodlowy_id=dane.magazyn_zrodlowy_id,
         magazyn_docelowy_id=dane.magazyn_docelowy_id,
         faktura_powiazana_id=dane.faktura_powiazana_id,
+        numer_faktury_tekst=dane.numer_faktury_tekst,
     )
     db.add(dokument)
     db.flush()

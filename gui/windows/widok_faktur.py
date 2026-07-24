@@ -1,5 +1,3 @@
-from tkinter import messagebox
-
 import customtkinter as ctk
 
 from gui import api_client, formatowanie, ikony, nastawienia, styl
@@ -8,6 +6,7 @@ from gui.widgets_pomocnicze import (
     formatuj_srodowisko_ksef,
     komunikat_bledu,
     komunikat_info,
+    potwierdz,
     ustaw_tekst_ladowania,
 )
 from gui.windows.formularz_faktury import FormularzFaktury
@@ -351,12 +350,14 @@ class WidokFaktur(ctk.CTkFrame):
 
         def sukces_sprawdz(srodowisko: str) -> None:
             self._srodowisko_ksef = srodowisko
-            if srodowisko == "produkcyjne" and not messagebox.askyesno(
-                "Wysyłka do środowiska produkcyjnego KSeF",
+            if srodowisko == "produkcyjne" and not potwierdz(
+                self,
                 f"Zamierzasz wysłać {len(zaznaczone_id)} faktur(y) do PRODUKCYJNEGO "
                 "systemu KSeF, z rzeczywistymi konsekwencjami prawnymi i finansowymi.\n\n"
                 "Czy na pewno chcesz kontynuować?",
-                parent=self,
+                tytul="Wysyłka do środowiska produkcyjnego KSeF",
+                tekst_tak="Wyślij do produkcji",
+                niebezpieczne=True,
             ):
                 return
             self._wyslij_zaznaczone_do_ksef_faktycznie(zaznaczone_id)

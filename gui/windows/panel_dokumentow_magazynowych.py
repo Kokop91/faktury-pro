@@ -1,3 +1,5 @@
+from typing import Callable
+
 import customtkinter as ctk
 
 from gui import api_client, formatowanie, ikony, nastawienia, styl
@@ -30,11 +32,26 @@ _KLUCZE_WG_ETYKIETY_TYPU = {WSZYSTKIE_TYPY: None, **{
 
 
 class PanelDokumentowMagazynowych(ctk.CTkFrame):
-    def __init__(self, master):
+    def __init__(self, master, on_zmiana_stanu: Callable[[], None] | None = None):
+        """`on_zmiana_stanu` (naprawa zgloszonego bledu "Stany magazynowe/
+        Produkty pokazuja nieaktualne dane po zapisaniu PZ") - tworzenie,
+        edycja I zatwierdzenie dokumentu magazynowego zmieniaja StanMagazynowy
+        (patrz app/services/magazyn_service.py - stan zmienia sie NATYCHMIAST
+        przy zapisaniu/edycji, zatwierdzenie samo w sobie juz nic nie zmienia,
+        tylko blokuje dalsza edycje). Odswiezenie WYLACZNIE tabeli tego panelu
+        (jak bylo wczesniej) zostawialo zakladki "Produkty"/"Stany magazynowe"
+        (osobne panele w tym samym gui/windows/widok_magazynu.py) z danymi
+        sprzed zapisu, dopoki uzytkownik nie opuscil calej sekcji Magazyn w
+        pasku bocznym i nie wrocil (jedyne miejsce, ktore woła pelne
+        WidokMagazynu.odswiez() - zakladki CTkTabview same w sobie nie maja
+        wlasnego odswiezania przy przelaczeniu). `on_zmiana_stanu`, gdy
+        podany przez WidokMagazynu, to WLASNIE ten szerszy odswiez - domyslny
+        fallback na self.odswiez zostaje dla uzycia poza WidokMagazynu (testy)."""
         super().__init__(master, fg_color="transparent")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
+        self._on_zmiana_stanu = on_zmiana_stanu or self.odswiez
         self._magazyny_wg_id: dict[int, str] = {}
 
         pasek_naglowka = ctk.CTkFrame(self, fg_color="transparent")
@@ -189,9 +206,9 @@ class PanelDokumentowMagazynowych(ctk.CTkFrame):
         uruchom_w_tle(self, zadanie, sukces, blad, wskaznik=self._tabela)
 
     def _otworz_formularz(self) -> None:
-        FormularzDokumentuMagazynowego(self, on_zapisano=self.odswiez)
+        FormularzDokumentuMagazynowego(self, on_zapisano=self._on_zmiana_stanu)
 
     def _otworz_szczegoly(self, wiersz: dict) -> None:
         SzczegolyDokumentuMagazynowego(
-            self, dokument_id=wiersz["id"], on_zmieniono=self.odswiez
+            self, dokument_id=wiersz["id"], on_zmieniono=self._on_zmiana_stanu
         )

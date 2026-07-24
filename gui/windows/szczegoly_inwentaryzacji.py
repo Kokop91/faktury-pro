@@ -1,5 +1,4 @@
 from decimal import Decimal
-from tkinter import messagebox
 from typing import Callable
 
 import customtkinter as ctk
@@ -11,6 +10,7 @@ from gui.widgets_pomocnicze import (
     komunikat_bledu,
     komunikat_ostrzezenie,
     pokaz_toast,
+    potwierdz,
     ustaw_tekst_ladowania,
 )
 from gui.windows.baza_formularza import OknoFormularza
@@ -359,10 +359,11 @@ class SzczegolyInwentaryzacji(OknoFormularza):
                 "zostaną pominięte (bez korekty)."
             )
 
-        if not messagebox.askyesno(
-            "Zamknąć spis?",
+        if not potwierdz(
+            self,
             f"{tresc}\n\nPo zamknięciu spis nie będzie już edytowalny. Kontynuować?",
-            parent=self,
+            tytul="Zamknąć spis?",
+            tekst_tak="Zamknij spis",
         ):
             return
 

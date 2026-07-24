@@ -1,4 +1,3 @@
-from tkinter import messagebox
 from typing import Callable
 
 import customtkinter as ctk
@@ -12,6 +11,7 @@ from gui.widgets_pomocnicze import (
     podepnij_limit_cyfr,
     podepnij_maske_kodu_pocztowego,
     pokaz_toast,
+    potwierdz,
     ustaw_tekst_ladowania,
 )
 from gui.windows.baza_formularza import OknoFormularza
@@ -264,12 +264,13 @@ class FormularzKlienta(OknoFormularza):
         uruchom_w_tle(self, zadanie, sukces, blad)
 
     def _dezaktywuj(self) -> None:
-        if not messagebox.askyesno(
-            "Dezaktywować klienta?",
+        if not potwierdz(
+            self,
             f"Czy na pewno dezaktywować klienta „{self._klient['nazwa']}”?\n\n"
             "Klient zniknie z domyślnej listy, ale jego dane i historia faktur "
             "pozostaną nietknięte. Będzie można go później przywrócić.",
-            parent=self,
+            tytul="Dezaktywować klienta?",
+            tekst_tak="Dezaktywuj",
         ):
             return
 

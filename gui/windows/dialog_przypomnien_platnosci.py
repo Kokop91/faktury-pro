@@ -5,9 +5,10 @@ import customtkinter as ctk
 from gui import api_client, formatowanie, styl
 from gui.watki import uruchom_w_tle
 from gui.widgets_pomocnicze import komunikat_bledu, komunikat_ostrzezenie, pokaz_toast, ustaw_tekst_ladowania
+from gui.windows.baza_formularza import OknoDialogu
 
 
-class DialogPrzypomnienPlatnosci(ctk.CTkToplevel):
+class DialogPrzypomnienPlatnosci(OknoDialogu):
     """Okno startowe (Faza 23) - ten sam wzorzec co
     DialogZaleglychCyklicznych (Faza 15): appka desktopowa nie dziala 24/7,
     wiec zamiast systemowego harmonogramu sprawdzamy kandydatow RAZ, przy
@@ -19,11 +20,6 @@ class DialogPrzypomnienPlatnosci(ctk.CTkToplevel):
         super().__init__(master)
         self.title("Przypomnienia o płatnościach do wysłania")
         self.geometry("680x560")
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
-        self.bind("<Escape>", lambda _z: self.destroy())
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
 
         self._kandydaci = kandydaci
         self._on_wyslano = on_wyslano

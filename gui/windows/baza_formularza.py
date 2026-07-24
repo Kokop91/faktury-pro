@@ -1,16 +1,45 @@
 import tkinter as tk
-from tkinter import messagebox
 from typing import Callable
 
 import customtkinter as ctk
 
 from gui import styl
+from gui.ikona_okna import ustaw_ikone
 
 
-class OknoFormularza(ctk.CTkToplevel):
-    """Wspolna baza dla wszystkich modalnych okien (formularzy i szczegolow) -
-    Faza 16C. Ujednolica to, co kazde z nich dotad powtarzalo osobno
-    (transient/grab_set) i dodaje:
+class OknoDialogu(ctk.CTkToplevel):
+    """Wspolna baza dla WSZYSTKICH modalnych okien Toplevel w aplikacji
+    (Faza 16C, rozszerzone przy audycie spojnosci wizualnej) - ujednolica
+    tlo wg tokenow motywu (16A), transient/grab_set, zamykanie klawiszem Esc
+    i - co NAJWAZNIEJSZE - poprawna ikone okna w tytule.
+
+    Bez `ustaw_ikone(self)` ponizej kazde okno tego typu dostaje PRAWIDLOWA
+    ikone Faktury Pro tylko na chwile: customtkinter samo planuje
+    `self.after(200, self._windows_set_titlebar_icon)` w konstruktorze
+    KAZDEGO CTkToplevel i po 200ms podmienia ikone z powrotem na wlasna,
+    ogolna ikonke customtkinter (piorko) - ALE tylko jesli `.iconbitmap()`
+    nie zostal jeszcze wywolany na TEJ KONKRETNEJ instancji (customtkinter
+    sledzi to per-instancja flaga `_iconbitmap_method_called`, patrz
+    customtkinter/windows/ctk_toplevel.py). Ustawienie ikony `default=True`
+    na glownym oknie (gui/ikona_okna.py) NIE wystarcza - dziedziczy ja tylko
+    sam WM, a nie ta wewnetrzna flaga customtkinter, wiec kazdy nastepny
+    CTkToplevel i tak nadpisuje ja po 200ms. To byla przyczyna zgloszonej
+    "genericznej ikonki" w oknie automatycznego backupu - i dotyczyla
+    KAZDEGO okna Toplevel w calej appce, nie tylko tego jednego."""
+
+    def __init__(self, master):
+        super().__init__(master)
+        self.configure(fg_color=styl.KOLOR_TLO)
+        ustaw_ikone(self)
+        self.transient(master)
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.bind("<Escape>", lambda _z: self.destroy())
+
+
+class OknoFormularza(OknoDialogu):
+    """Wspolna baza dla wiekszych, edytowalnych modalnych okien (formularzy i
+    szczegolow) - Faza 16C. Rozszerza OknoDialogu (tlo/ikona/transient/Esc) o:
     - Esc oraz klikniecie X pytaja o potwierdzenie, jesli sa niezapisane zmiany
     - Ctrl+S wywoluje zarejestrowana akcje zapisu (jesli formularz ja rejestruje)
 
@@ -24,9 +53,6 @@ class OknoFormularza(ctk.CTkToplevel):
 
     def __init__(self, master):
         super().__init__(master)
-        self.configure(fg_color=styl.KOLOR_TLO)
-        self.transient(master)
-        self.grab_set()
 
         self._stan_poczatkowy: dict | None = None
         self._akcja_zapisu: Callable[[], None] | None = None
@@ -89,10 +115,20 @@ class OknoFormularza(ctk.CTkToplevel):
             self._zbierz_zrzut(dziecko, sciezka_dziecka, zrzut)
 
     def _zamknij_z_potwierdzeniem(self) -> None:
-        if self.ma_niezapisane_zmiany() and not messagebox.askyesno(
-            "Niezapisane zmiany",
-            "Masz niezapisane zmiany. Zamknąć bez zapisywania?",
-            parent=self,
-        ):
-            return
+        if self.ma_niezapisane_zmiany():
+            # Import odroczony do wnetrza metody - widgets_pomocnicze.potwierdz
+            # jest zbudowany na OknoDialogu z tego samego modulu, wiec import
+            # na gorze pliku stworzylby cykl (baza_formularza -> widgets_pomocnicze
+            # -> baza_formularza).
+            from gui.widgets_pomocnicze import potwierdz
+
+            if not potwierdz(
+                self,
+                "Masz niezapisane zmiany. Zamknąć bez zapisywania?",
+                tytul="Niezapisane zmiany",
+                tekst_tak="Zamknij bez zapisywania",
+                tekst_nie="Wróć do edycji",
+                niebezpieczne=True,
+            ):
+                return
         self.destroy()

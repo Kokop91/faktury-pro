@@ -1,5 +1,5 @@
 import os
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 from typing import Callable
 
 import customtkinter as ctk
@@ -11,6 +11,7 @@ from gui.widgets_pomocnicze import (
     etykieta_srodowiska_ksef,
     komunikat_bledu,
     komunikat_info,
+    potwierdz,
     ustaw_tekst_ladowania,
 )
 from gui.windows.baza_formularza import OknoFormularza
@@ -603,8 +604,12 @@ class SzczegolyFaktury(OknoFormularza):
             except OSError as e:
                 komunikat_bledu(self, f"Nie udało się zapisać pliku: {e}")
                 return
-            if messagebox.askyesno(
-                "Zapisano", f"Zapisano plik:\n{sciezka}\n\nOtworzyć go teraz?", parent=self
+            if potwierdz(
+                self,
+                f"Zapisano plik:\n{sciezka}\n\nOtworzyć go teraz?",
+                tytul="Zapisano",
+                tekst_tak="Otwórz",
+                tekst_nie="Zamknij",
             ):
                 os.startfile(sciezka)
 
@@ -629,12 +634,14 @@ class SzczegolyFaktury(OknoFormularza):
 
         def sukces_sprawdz(srodowisko: str) -> None:
             self._srodowisko_ksef = srodowisko
-            if srodowisko == "produkcyjne" and not messagebox.askyesno(
-                "Wysyłka do środowiska produkcyjnego KSeF",
+            if srodowisko == "produkcyjne" and not potwierdz(
+                self,
                 "Zamierzasz wysłać tę fakturę do PRODUKCYJNEGO systemu KSeF, z "
                 "rzeczywistymi konsekwencjami prawnymi i finansowymi.\n\n"
                 "Czy na pewno chcesz kontynuować?",
-                parent=self,
+                tytul="Wysyłka do środowiska produkcyjnego KSeF",
+                tekst_tak="Wyślij do produkcji",
+                niebezpieczne=True,
             ):
                 return
             self._wyslij_do_ksef_faktycznie(tekst_zwykly)
@@ -701,8 +708,12 @@ class SzczegolyFaktury(OknoFormularza):
             except OSError as e:
                 komunikat_bledu(self, f"Nie udało się zapisać pliku: {e}")
                 return
-            if messagebox.askyesno(
-                "Zapisano", f"Zapisano plik:\n{sciezka}\n\nOtworzyć go teraz?", parent=self
+            if potwierdz(
+                self,
+                f"Zapisano plik:\n{sciezka}\n\nOtworzyć go teraz?",
+                tytul="Zapisano",
+                tekst_tak="Otwórz",
+                tekst_nie="Zamknij",
             ):
                 os.startfile(sciezka)
 

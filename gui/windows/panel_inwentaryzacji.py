@@ -1,3 +1,5 @@
+from typing import Callable
+
 import customtkinter as ctk
 
 from gui import api_client, formatowanie, ikony, styl
@@ -17,11 +19,17 @@ KOLUMNY = [
 
 
 class PanelInwentaryzacji(ctk.CTkFrame):
-    def __init__(self, master):
+    def __init__(self, master, on_zmiana_stanu: Callable[[], None] | None = None):
+        """`on_zmiana_stanu` - mirror gui/windows/panel_dokumentow_magazynowych.py
+        (patrz tam po pelne uzasadnienie): zamkniecie spisu generuje korekty
+        PW/RW ktore zmieniaja StanMagazynowy (app/services/inwentaryzacja_service.py),
+        wiec odswiezenie WYLACZNIE tabeli spisow zostawialoby zakladki
+        "Produkty"/"Stany magazynowe" z nieaktualnymi danymi."""
         super().__init__(master, fg_color="transparent")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
+        self._on_zmiana_stanu = on_zmiana_stanu or self.odswiez
         self._magazyny_wg_id: dict[int, str] = {}
 
         pasek_naglowka = ctk.CTkFrame(self, fg_color="transparent")
@@ -88,6 +96,9 @@ class PanelInwentaryzacji(ctk.CTkFrame):
         FormularzInwentaryzacji(self, on_zapisano=self.odswiez)
 
     def _otworz_szczegoly(self, wiersz: dict) -> None:
+        # on_zmiana pokrywa i "zapisz postep" (nie zmienia stanu) i "zamknij
+        # spis" (generuje PW/RW - ZMIENIA stan) - nie da sie ich tu rozroznic,
+        # wiec bezpiecznie zawsze odswiezamy szerzej (self._on_zmiana_stanu).
         SzczegolyInwentaryzacji(
-            self, inwentaryzacja_id=wiersz["id"], on_zmiana=self.odswiez
+            self, inwentaryzacja_id=wiersz["id"], on_zmiana=self._on_zmiana_stanu
         )
